@@ -1,7 +1,8 @@
-# HollyCast
-Hollycast is a Fork of Flycast, That is kept up to date consistantly to Flycast, but has
 
 **Hollycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**Flycast**](https://github.com/flyinghead/flycast)..
+
+
+
 # HollyCast
 
 HollyCast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator, derived of [Flycast](https://github.com/flyinghead/flycast), the open-source Sega Dreamcast emulator.  
@@ -14,7 +15,7 @@ We aim to follow Flycast closely and regularly pull upstream changes. HollyCast 
 - Reduce friction for users (better UX, clearer settings, sane defaults)
 - Experiment with features that may not fit upstream’s goals
 - Ship improvements that the community has been requesting
-- allow a little bit more freedom to developers, *while* maintaing high standards to ensure **NO RESRESSIONS**
+- Allow a little bit more freedom to developers, *while* maintaing high standards to ensure **NO RESRESSIONS**
 
 ### Performance & accuracy are non-negotiable
 We treat performance drops and accuracy regressions as bugs. While any software can regress during development, our goal is:
@@ -28,7 +29,7 @@ Flycast is intentionally selective about what gets merged. HollyCast is where we
 - Explore requested features
 - Iterate faster
 - Add optional enhancements behind toggles when appropriate
--Make large changes that Flycast won't allow
+- Make large changes that Flycast won't allow
 - Bring some things up to date, as the emulator is getting up there in age, and some parts have not seen much attention.
 
 ## What’s different?
