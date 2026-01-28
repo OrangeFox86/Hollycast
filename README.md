@@ -1,6 +1,5 @@
 
-**Hollycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**Flycast**](https://github.com/flyinghead/flycast)..
-
+**Hollycast**
 
 
 # HollyCast
