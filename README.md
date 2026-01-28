@@ -1,60 +1,58 @@
-# Flycast
+# HollyCast
+Hollycast is a Fork of Flycast, That is kept up to date consistantly to Flycast, but has
 
-[![Android CI](https://github.com/flyinghead/flycast/actions/workflows/android.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/android.yml)
-[![C/C++ CI](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml)
-[![Nintendo Switch CI](https://github.com/flyinghead/flycast/actions/workflows/switch.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/switch.yml)
-[![Windows UWP CI](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml)
-[![BSD CI](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml)
+**Hollycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**Flycast**](https://github.com/flyinghead/flycast)..
+# HollyCast
 
-<img src="shell/linux/flycast.png" alt="flycast logo" width="150"/>
+HollyCast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator, derived of [Flycast](https://github.com/flyinghead/flycast), the open-source Sega Dreamcast emulator.  
+Our mission is simple: **MATCH upstream** while delivering a **more UI-friendly**, **feature-rich**, and **power-user capable** experience.
 
-**Flycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**reicast**](https://github.com/skmp/reicast-emulator).
+## Philosophy
 
-Information about configuration and supported features can be found on [**TheArcadeStriker's flycast wiki**](https://github.com/TheArcadeStriker/flycast-wiki/wiki).
+### Upstream-first
+We aim to follow Flycast closely and regularly pull upstream changes. HollyCast exists to:
+- Reduce friction for users (better UX, clearer settings, sane defaults)
+- Experiment with features that may not fit upstream’s goals
+- Ship improvements that the community has been requesting
+- allow a little bit more freedom to developers, *while* maintaing high standards to ensure **NO RESRESSIONS**
 
-Join us on our [**Discord server**](https://discord.gg/X8YWP8w) for a chat. 
+### Performance & accuracy are non-negotiable
+We treat performance drops and accuracy regressions as bugs. While any software can regress during development, our goal is:
+- **Match or exceed Flycast performance**
+- **Improve accuracy where possible**
+- Validate changes with testing and real-world reports
+- Never allow a change to cause issues or regressions where issues pop up, or performance is hit.
 
-## Install
+### Features that didn’t make the cut
+Flycast is intentionally selective about what gets merged. HollyCast is where we can:
+- Explore requested features
+- Iterate faster
+- Add optional enhancements behind toggles when appropriate
+-Make large changes that Flycast won't allow
+- Bring some things up to date, as the emulator is getting up there in age, and some parts have not seen much attention.
 
-### Android ![android](https://flyinghead.github.io/flycast-builds/android.jpg)
-Install Flycast from [**Google Play**](https://play.google.com/store/apps/details?id=com.flycast.emulator).
-### Flatpak (Linux ![ubuntu logo](https://flyinghead.github.io/flycast-builds/ubuntu.png))
+## What’s different?
+HollyCast is focused on:
+- A **new, more modern UI**
+- More quality-of-life features (especially for daily users)
+- Advanced controls for enthusiasts without overwhelming new users
+- Much more "user Friendly" and will allow more of a "Grab and Go" experece.
+- Better Documentation of what settings do and when they need to bee used.
+- Made the settings more of a "Instal and Run" setup, where Power Users still can access all the settings,but New users, wont be overwhealmed and can hit the ground running.
 
-1. [Set up Flatpak](https://www.flatpak.org/setup/).
 
-2. Install Flycast from [Flathub](https://flathub.org/apps/details/org.flycast.Flycast):
+## Compatibility
+HollyCast is based on Flycast, and aims to support the same platforms and releases where possible. If Flycast can do it, HollyCast will too — and ideally with an even smoother experience.
 
-`flatpak install -y org.flycast.Flycast`
+> Note: HollyCast is community-driven and under active development. Expect rapid iteration, and please report issues with logs and steps to reproduce. If you would like to contribute, Please join the discord  open up a Feature Request with your plans, so it can be discussed first.
 
-3. Run Flycast:
 
-`flatpak run org.flycast.Flycast`
 
-### Homebrew (MacOS ![apple logo](https://flyinghead.github.io/flycast-builds/apple.png))
 
-1. [Set up Homebrew](https://brew.sh).
-
-2. Install Flycast via Homebrew:
-
-`brew install --cask flycast`
-
-### iOS
-
-Due to persistent harassment from an iOS user, support for this platform has been dropped. 
-
-### Xbox One/Series ![xbox logo](https://flyinghead.github.io/flycast-builds/xbox.png)
-
-Grab the latest build from [**the builds page**](https://flyinghead.github.io/flycast-builds/), or the [**GitHub Actions**](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml). Then install it using the **Xbox Device Portal**.
-
-### Binaries ![android](https://flyinghead.github.io/flycast-builds/android.jpg) ![windows](https://flyinghead.github.io/flycast-builds/windows.png) ![linux](https://flyinghead.github.io/flycast-builds/ubuntu.png) ![apple](https://flyinghead.github.io/flycast-builds/apple.png) ![switch](https://flyinghead.github.io/flycast-builds/switch.png) ![xbox](https://flyinghead.github.io/flycast-builds/xbox.png)
-
-Get fresh builds for your system [**on the builds page**](https://flyinghead.github.io/flycast-builds/).
-
-**New:** Now automated test results are available as well. 
 
 ### Build instructions:
 ```
-$ git clone --recursive https://github.com/flyinghead/flycast.git
+$ git clone --recursive **https://github.com/OrangeFox86/hollycast.git
 $ cd flycast
 $ mkdir build && cd build
 $ cmake ..
