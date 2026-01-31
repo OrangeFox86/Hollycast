@@ -222,7 +222,7 @@ static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num 
 	if (link)
 	{
 		INFO_LOG(MAPLE, "MapleLinkVmu created on %d,%d", bus, port);
-		dev = link->createMapleDevice(type);
+		dev = link->createMapleDevice(type, bus, port);
 	}
 	else
 	{

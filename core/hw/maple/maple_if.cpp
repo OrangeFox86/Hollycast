@@ -226,7 +226,7 @@ static void maple_DoDma()
 					pDevice = MapleDevices[bus][port];
 			}
 
-			if (pDevice != nullptr)
+			if (pDevice != nullptr && pDevice->linkStatus())
 			{
 				if (swap_msb)
 				{

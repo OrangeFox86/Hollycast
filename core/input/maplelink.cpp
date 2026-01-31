@@ -17,10 +17,56 @@
 #include "maplelink.h"
 #include "cfg/option.h"
 #include "hw/maple/maple_if.h"
-#include "oslib/oslib.h"
+#include "hw/maple/maple_devs.h"
 
-std::array<std::array<std::list<MapleLink::Ptr>, 2>, 4> MapleLink::Links;
+#include <memory>
+
+std::array<std::array<std::list<MapleLink::Ptr>, 6>, 4> MapleLink::Links;
 std::mutex MapleLink::Mutex;
+
+static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)
+{
+	auto link = MapleLink::GetMapleLink(bus, port);
+	if (link == nullptr)
+		return true;
+	else
+		return link->send(msg);
+}
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+struct MapleLinkVmu : maple_sega_vmu
+{
+	u32 dma(u32 cmd) override
+	{
+		u32 rv = maple_sega_vmu::dma(cmd);
+		if (inMsg && inMsg->size > 0)
+		{
+			u32 function = inMsg->readData<u32>(0);
+			if ((cmd == MDCF_BlockWrite && function == MFID_2_LCD) || cmd == MDCF_SetCondition)
+			{
+				relayMapleLink(bus_id, bus_port, *inMsg);
+			}
+		}
+		return rv;
+	}
+};
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+struct MapleLinkPuruPuru : maple_sega_purupuru
+{
+	u32 dma(u32 cmd) override
+	{
+		u32 rv = maple_sega_purupuru::dma(cmd);
+		if (inMsg)
+		{
+			if (cmd == MDCF_BlockWrite || cmd == MDCF_SetCondition)
+			{
+				relayMapleLink(bus_id, bus_port, *inMsg);
+			}
+		}
+		return rv;
+	}
+};
 
 namespace
 {
@@ -41,162 +87,6 @@ struct GameState
 bool GameState::started;
 GameState GameState::instance;
 }
-
-//! A specialized VMU which interfaces with a MapleLink's VMU, including read/write operations
-struct MapleLinkVmu : public maple_sega_vmu
-{
-	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
-	bool userNotified = false;
-
-	void OnSetup() override
-	{
-		// All data must be re-read
-		memset(cachedBlocks, 0, sizeof(cachedBlocks));
-
-		// Ensure file is not being used
-		if (file != nullptr) {
-			std::fclose(file);
-			file = nullptr;
-		}
-
-		memset(flash_data, 0, sizeof(flash_data));
-		memset(lcd_data, 0, sizeof(lcd_data));
-	}
-
-	bool fullSave() override
-	{
-		// Skip virtual save when using MapleLink VMU
-		DEBUG_LOG(MAPLE, "Full save ignored for MapleLink VMU");
-		return true;
-	}
-
-	void serialize(Serializer& ser) const override {
-		throw Serializer::Exception("Can't save linked VMU data");
-	}
-
-	void deserialize(Deserializer& deser) override
-	{
-		// Ignore the VMU data from the loaded state
-		u8 savedData[sizeof(flash_data)];
-		memcpy(savedData, flash_data, sizeof(savedData));
-		maple_sega_vmu::deserialize(deser);
-		memcpy(flash_data, savedData, sizeof(savedData));
-	}
-
-	MapleLink::Ptr getMapleLink()
-	{
-		MapleLink::Ptr link = MapleLink::GetMapleLink(bus_id, bus_port);
-		if (link == nullptr)
-			ERROR_LOG(MAPLE, "MapleLinkVmu[%s]: MapleLink is null", logical_port);
-		return link;
-	}
-
-	MapleDeviceRV readBlock(unsigned block)
-	{
-		if (cachedBlocks[block])
-			return MDRS_JVSNone;
-
-		MapleLink::Ptr link = getMapleLink();
-		if (link == nullptr)
-			return MDRS_JVSNone;
-
-		MapleMsg txMsg;
-		txMsg.command = MDCF_BlockRead;
-		txMsg.originAP = inMsg->originAP;
-		txMsg.destAP = inMsg->destAP;
-		txMsg.pushData(MFID_1_Storage);
-		txMsg.pushData<u32>(block << 24); // (BE) partition #, phase, block #
-		MapleMsg rxMsg;
-		if (link->sendReceive(txMsg, rxMsg) && rxMsg.size == 130)
-		{
-			DEBUG_LOG(MAPLE, "MapleLinkVmu[%s]: read block %d", logical_port, block);
-			memcpy(&flash_data[block * 4 * 128], &rxMsg.data[8], 4 * 128);
-			cachedBlocks[block] = true;
-		}
-		else {
-			ERROR_LOG(MAPLE, "Failed to read VMU %s: I/O error", logical_port);
-			return MDRE_FileError; // I/O error
-		}
-		return MDRS_JVSNone;
-	}
-
-	u32 dma(u32 cmd) override
-	{
-		// Physical VMU logic
-		if (dma_count_in >= 4)
-		{
-			const u32 functionId = inMsg->readData<u32>(0);
-
-			if (functionId == MFID_1_Storage)
-			{
-				switch (cmd)
-				{
-				case MDCF_BlockWrite:
-				{
-					if (!userNotified)
-					{
-						os_notify("ATTENTION: You are saving to a physical VMU", 6000,
-								"Do not disconnect the VMU or close the game");
-						userNotified = true;
-					}
-					MapleLink::Ptr link = getMapleLink();
-					if (link == nullptr)
-						return MDRE_FileError;
-					MapleMsg rxMsg;
-					if (!link->sendReceive(*inMsg, rxMsg)) {
-						ERROR_LOG(MAPLE, "Failed to write VMU %s: I/O error", logical_port);
-						return MDRE_FileError;
-					}
-					if (rxMsg.command != MDRS_DeviceReply)
-						return rxMsg.command;
-					cachedBlocks[inMsg->data[7]] = true;
-					DEBUG_LOG(MAPLE, "MapleLinkVmu[%s]: write block %d", logical_port, inMsg->data[7]);
-					break;
-				}
-
-				case MDCF_BlockRead:
-				{
-					u8 block = inMsg->data[7];
-					MapleDeviceRV rc = readBlock(block);
-					if (rc != MDRS_JVSNone)
-						return rc;
-					break;
-				}
-
-				case MDCF_GetMediaInfo:
-					// block 255 contains the media info
-					readBlock(255);
-					break;
-
-				case MDCF_GetLastError:
-				{
-					MapleLink::Ptr link = getMapleLink();
-					if (link == nullptr)
-						return MDRE_FileError;
-					if (!link->handleGetLastError(*inMsg)) {
-						ERROR_LOG(MAPLE, "MapleLinkVmu[%s]::GetLastError: I/O error", logical_port);
-						return MDRE_FileError;
-					}
-					break;
-				}
-
-				default:
-					// do nothing
-					break;
-				}
-			}
-		}
-		return maple_sega_vmu::dma(cmd);
-	}
-
-	bool linkStatus() override
-	{
-		auto link = MapleLink::GetMapleLink(bus_id, bus_port);
-		if (link == nullptr)
-			return false;
-		return link->isConnected();
-	}
-};
 
 std::size_t MapleLink::activeLinkCount(int bus) const
 {
@@ -280,10 +170,12 @@ void BaseMapleLink::gameStarted() {
 	vmuStorage = storageSupported && config::UsePhysicalVmuMemory && isConnected();
 }
 
-std::shared_ptr<maple_device> BaseMapleLink::createMapleDevice(MapleDeviceType type) {
-	if (type == MapleDeviceType::MDT_SegaVMU && storageEnabled())
-		return std::make_shared<MapleLinkVmu>();
-	return maple_Create(type);
+std::shared_ptr<maple_device> BaseMapleLink::createMapleDevice(MapleDeviceType type, u32 bus, u32 port) {
+	switch (type) {
+		case MapleDeviceType::MDT_SegaVMU: return std::make_shared<MapleLinkVmu>();
+		case MapleDeviceType::MDT_PurupuruPack: return std::make_shared<MapleLinkPuruPuru>();
+		default: return maple_Create(type);
+	}
 }
 
 void BaseMapleLink::eventHandler(Event event, void *p)
@@ -332,10 +224,4 @@ bool BaseMapleLink::storageEnabled()
 		return storageSupported && config::UsePhysicalVmuMemory;
 	else
 		return vmuStorage;
-}
-
-bool BaseMapleLink::handleGetLastError(const MapleMsg&)
-{
-	// Just acknowledge by default
-	return true;
 }

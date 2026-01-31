@@ -55,15 +55,6 @@ maple_device::~maple_device()
     delete config;
 }
 
-bool maple_base::relayMapleLink()
-{
-	auto link = MapleLink::GetMapleLink(bus_id, bus_port);
-	if (link == nullptr)
-		return true;
-	else
-		return link->send(*inMsg);
-}
-
 static inline void mutualExclusion(u32& keycode, u32 mask)
 {
 	if ((keycode & mask) == 0)
@@ -718,7 +709,6 @@ u32 maple_sega_vmu::dma(u32 cmd)
 						}
 					}
 					config->SetImage(lcd_data_decoded);
-					relayMapleLink();
 
 					return  MDRS_DeviceReply;
 				}
@@ -760,7 +750,6 @@ u32 maple_sega_vmu::dma(u32 cmd)
 				INFO_LOG(MAPLE, "BEEP: %d/%d", alw, ald);
 				aica::sgc::vmuBeep(alw, ald);
 
-				relayMapleLink();
 				return MDRS_DeviceReply;
 			}
 
@@ -1066,7 +1055,6 @@ u32 maple_sega_purupuru::dma(u32 cmd)
 		//Auto-stop time
 		AST = dma_buffer_in[10];
 		AST_ms = AST * 250 + 250;
-		relayMapleLink();
 
 		return MDRS_DeviceReply;
 
@@ -1098,8 +1086,6 @@ u32 maple_sega_purupuru::dma(u32 cmd)
 			else
 				inclination = FREQ / (1000.0 * INC * std::max(POW_POS, POW_NEG));
 			config->SetVibration(power, inclination, duration_ms);
-
-			relayMapleLink();
 		}
 
 		return MDRS_DeviceReply;

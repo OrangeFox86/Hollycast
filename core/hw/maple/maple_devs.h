@@ -293,8 +293,6 @@ struct maple_base: maple_device
 
 		return outlen + 4;
 	}
-
-	bool relayMapleLink();
 };
 
 struct BaseMIE : public maple_base

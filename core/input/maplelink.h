@@ -35,10 +35,6 @@ public:
 	virtual bool send(const MapleMsg& msg) = 0;
 	//! Sends a message to the controller and waits for a response
 	virtual bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) = 0;
-	//! Called on GetLastError command over previous writes
-	//! @param[in] msg The message which contains GetLastError command
-	//! @return true iff successful
-	virtual bool handleGetLastError(const MapleMsg& msg) = 0;
 	//! True if VMU reads and writes should be sent to the device
 	virtual bool storageEnabled() = 0;
 	//! True if the link is operational
@@ -48,11 +44,15 @@ public:
 
 	//! Create the maple device needed to interface this device to the emulator
 	//! @param[in] type The user-selected device type
-	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type) = 0;
+	//! @param[in] bus The bus used for this device [0,3]
+	//! @param[in] port The port for this device [0,4]
+	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) = 0;
 
 	//! Returns the maple link at the given location if any
 	static Ptr GetMapleLink(int bus, int port) {
 		std::lock_guard<std::mutex> _(Mutex);
+		if (bus >= Links.size() || port >= Links[bus].size())
+			return nullptr;
 		std::list<MapleLink::Ptr>& list = Links[bus][port];
 		if (list.empty())
 			return nullptr;
@@ -73,7 +73,7 @@ private:
 	static std::mutex Mutex;
 	//! Indexed by [bus][extension port][priority idx]
 	//! Multiple links may be registered for a bus/port, and the last added to front takes precedence
-	static std::array<std::array<std::list<Ptr>, 2>, 4> Links;
+	static std::array<std::array<std::list<Ptr>, 6>, 4> Links;
 };
 
 class BaseMapleLink : public MapleLink
@@ -81,7 +81,6 @@ class BaseMapleLink : public MapleLink
 public:
 	~BaseMapleLink();
 	bool storageEnabled() override;
-	bool handleGetLastError(const MapleMsg& msg) override;
 
 protected:
 	BaseMapleLink(bool storageSupported);
@@ -90,7 +89,7 @@ protected:
 	//! When called, do teardown stuff (vmu screen reset is handled by maple_sega_vmu)
 	virtual void gameTermination() {}
 
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type) override;
+	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override;
 
 	const bool storageSupported;
 	bool vmuStorage = false;

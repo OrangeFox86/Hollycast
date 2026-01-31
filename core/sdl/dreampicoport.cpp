@@ -54,6 +54,42 @@
 #include <setupapi.h>
 #endif
 
+// TODO: add namepsace and change names of some of these classes
+
+//! Generically handles any MapleLink device when supported
+struct MapleLinkDevice : public maple_base
+{
+	//! The supported functions mask for this device
+	const u32 supportedFns;
+	//! The last time write was performed
+	std::chrono::steady_clock::time_point lastWriteTime;
+	//! Mutex serializing write operations
+	std::mutex writeMutex;
+	//! Virtual VMU used when physical memory should not be used
+	std::unique_ptr<maple_sega_vmu> virtualVmu;
+
+	//! Constructor
+	//! @param[in] supportedFns Supported functions mask (default: any function)
+	MapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
+	virtual ~MapleLinkDevice();
+	std::shared_ptr<class DreamPicoPort> getMapleLink();
+	bool linkStatus() override;
+	MapleDeviceType get_device_type() override;
+	u32 virtualVmuDma(u32 cmd);
+	u32 dma(u32 cmd) override;
+};
+
+//! Generically handles a MapleLink main device (normally a controller)
+struct MapleLinkMainDevice : public MapleLinkDevice
+{
+	//! Constructor
+	//! Only input devices are currently supported here - even lightguns and DreamEye implement MFID_0_Input
+	//! This should support everything except for keyboard & mouse
+	MapleLinkMainDevice();
+	MapleDeviceType get_device_type() override;
+	u32 dma(u32 cmd) override;
+};
+
 //! Interface class for different DreamPicoPort communications interface
 class DreamPicoPortComms
 {
@@ -1067,8 +1103,6 @@ class DreamPicoPort : public DreamLink
     double interface_version = 0.0;
     //! The queried peripherals; for each function, index 0 is function code and index 1 is the function definition
     std::vector<std::vector<std::array<uint32_t, 2>>> peripherals;
-	//! The last time write operation was performed
-	std::chrono::steady_clock::time_point lastWriteTime = {};
     //! Dreamcast Controller USB VID:1209 PID:2f07
     static constexpr std::uint16_t VID = 0x1209;
     static constexpr std::uint16_t PID = 0x2f07;
@@ -1122,32 +1156,7 @@ public:
 			return false;
 		}
 
-		if (txMsg.command == MDCF_BlockWrite) {
-			// Ensure proper timing between write calls
-			std::this_thread::sleep_until(lastWriteTime + std::chrono::milliseconds(10));
-		}
-
-		bool sent = dpp_comms->send(txMsg, rxMsg, timeout_ms);
-
-		if (txMsg.command == MDCF_BlockWrite) {
-			// Save time of last write operation
-			lastWriteTime = std::chrono::steady_clock::now();
-		}
-
-		return sent;
-	}
-
-	bool handleGetLastError(const MapleMsg& msg) override {
-		// Ensure proper timing between write calls
-		std::this_thread::sleep_until(lastWriteTime + std::chrono::milliseconds(10));
-
-		MapleMsg rxMsg;
-		bool acknowledged = (dpp_comms->send(msg, rxMsg, timeout_ms) && rxMsg.command == MDRS_DeviceReply);
-
-		// Save time of last write operation
-		lastWriteTime = std::chrono::steady_clock::now();
-
-		return acknowledged;
+		return dpp_comms->send(txMsg, rxMsg, timeout_ms);
 	}
 
 	//! Sends the current game id to a DreamLink backed expansion device if supported
@@ -1250,8 +1259,8 @@ public:
 	void changeBus(int newBus) override {
 		if (software_bus == newBus)
 			return;
-		unregisterLink(software_bus, 0);
-		unregisterLink(software_bus, 1);
+		for (int i = 0; i < 6; ++i)
+			unregisterLink(software_bus, i);
 		software_bus = newBus;
 		setMapleDevices();
 		if (dpp_comms) {
@@ -1269,10 +1278,13 @@ public:
 		if (!DreamLink::isValidPort(software_bus))
 			return;
 
+		// Register all ports regardless of current presence of device - MapleLinkDevice will generically handle this
+		for (int i = 0; i < 6; ++i)
+			registerLink(software_bus, i);
+
 		u32 portOneFn = getFunctionCode(0);
 		if (portOneFn & MFID_1_Storage) {
 			config::MapleExpansionDevices[software_bus][0] = MDT_SegaVMU;
-			registerLink(software_bus, 0);
 			if (storageEnabled() && isGameStarted())
 			{
 				sendGameId(0);
@@ -1286,11 +1298,9 @@ public:
 		u32 portTwoFn = getFunctionCode(1);
 		if (portTwoFn & MFID_8_Vibration) {
 			config::MapleExpansionDevices[software_bus][1] = MDT_PurupuruPack;
-			registerLink(software_bus, 1);
 		}
 		else if (portTwoFn & MFID_1_Storage) {
 			config::MapleExpansionDevices[software_bus][1] = MDT_SegaVMU;
-			registerLink(software_bus, 1);
 			if (storageEnabled() && isGameStarted())
 			{
 				sendGameId(1);
@@ -1304,6 +1314,14 @@ public:
 
 	bool isConnected() override {
 		return (dpp_comms && dpp_comms->isConnected());
+	}
+
+	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override {
+		if (port == 5) {
+			return std::make_shared<MapleLinkMainDevice>();
+		} else {
+			return std::make_shared<MapleLinkDevice>();
+		}
 	}
 
 	void connect() override {
@@ -1373,8 +1391,8 @@ public:
 
 	void disconnect() override {
 		dpp_comms.reset();
-		unregisterLink(software_bus, 0);
-		unregisterLink(software_bus, 1);
+		for (int i = 0; i < 6; ++i)
+			unregisterLink(software_bus, i);
 		disableStorage();
 	}
 
@@ -1625,4 +1643,202 @@ const char *DreamPicoPortGamepad::get_button_name(u32 code)
 
 		default: return DreamLinkGamepad::get_button_name(code); // default name
 	}
+}
+
+
+MapleLinkDevice::MapleLinkDevice(u32 supportedFns) : supportedFns(supportedFns)
+{}
+
+MapleLinkDevice::~MapleLinkDevice()
+{
+	if (virtualVmu)
+	{
+		// Need to nullify the config to avoid double delete
+		virtualVmu->config = nullptr;
+		virtualVmu.reset();
+	}
+}
+
+std::shared_ptr<DreamPicoPort> MapleLinkDevice::getMapleLink()
+{
+	const MapleLink::Ptr& link = MapleLink::GetMapleLink(bus_id, bus_port);
+	return std::reinterpret_pointer_cast<DreamPicoPort>(link);
+}
+
+bool MapleLinkDevice::linkStatus()
+{
+	auto link = getMapleLink();
+	return (
+		link &&
+		link->isConnected() &&
+		((link->getFunctionCode(bus_port) & supportedFns) != 0)
+	);
+}
+
+MapleDeviceType MapleLinkDevice::get_device_type()
+{
+	// This is mainly used by the serializer, so it's ok if it's not completely correct
+
+	auto link = getMapleLink();
+	if (!link)
+		return MDT_None;
+
+	u32 fn = link->getFunctionCode(bus_port);
+	if (fn | MFID_0_Input)
+		return MDT_SegaController;
+	else if (fn | (MFID_1_Storage & MFID_2_LCD & MFID_3_Clock))
+		return MDT_SegaVMU;
+	else if (fn | MFID_4_Mic)
+		return MDT_Microphone;
+	else if (fn | (MFID_5_ARGun & MFID_7_LightGun))
+		return MDT_LightGun;
+	else if (fn | MFID_6_Keyboard)
+		return MDT_Keyboard;
+	else if (fn | MFID_8_Vibration)
+		return MDT_PurupuruPack;
+	else if (fn | MFID_9_Mouse)
+		return MDT_Mouse;
+	else if (fn | MFID_11_Camera)
+		return MDT_Dreameye;
+
+	return MDT_None;
+}
+
+u32 MapleLinkDevice::virtualVmuDma(u32 cmd)
+{
+	if (!virtualVmu)
+	{
+		// Create the virtual VMU and have it share my data
+		virtualVmu = std::make_unique<maple_sega_vmu>();
+		virtualVmu->maple_port = maple_port;
+		virtualVmu->bus_port = bus_port;
+		virtualVmu->bus_id = bus_id;
+		memcpy(&virtualVmu->logical_port[0], &logical_port[0], sizeof(logical_port));
+		virtualVmu->player_num = player_num;
+		virtualVmu->config = config;
+		virtualVmu->OnSetup();
+	}
+
+	return virtualVmu->Dma(
+		cmd,
+		reinterpret_cast<const u32*>(dma_buffer_in),
+		dma_count_in,
+		reinterpret_cast<u32*>(dma_buffer_out),
+		*dma_count_out
+	);
+}
+
+u32 MapleLinkDevice::dma(u32 cmd)
+{
+	auto link = MapleLink::GetMapleLink(bus_id, bus_port);
+	if (!link)
+		return MDRS_JVSNone;
+
+	// Deserialize the first data word without popping off of dma
+	u32 firstWord = 0;
+	if (inMsg->size >= 1) {
+		firstWord = *(const u32 *)&inMsg->data[0];
+	}
+
+	if (
+		!link->storageEnabled() &&
+		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError) &&
+		firstWord == MFID_1_Storage
+	) {
+		// Use virtual memory and return without accessing physical memory
+		return virtualVmuDma(cmd);
+	} else if (cmd == MDCF_BlockWrite && firstWord == MFID_2_LCD) {
+		// Send to virtual screen and also continue below
+		virtualVmuDma(cmd);
+	}
+
+	u32 response = MDRS_JVSNone;
+	std::unique_lock<std::mutex> lock(writeMutex, std::defer_lock);
+
+	// If doing write operation, serialize operation and delay 10 ms between writes
+	const bool isWriteOp = (cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError);
+	if (isWriteOp) {
+		lock.lock();
+		std::this_thread::sleep_until(lastWriteTime + std::chrono::milliseconds(10));
+	}
+
+	const MapleMsg& txMsg = *inMsg;
+	MapleMsg rxMsg;
+	std::vector<u32> output;
+	if (link && link->sendReceive(txMsg, rxMsg)) {
+		// If this message came from a main peripheral, clear out attached flags (will be handled by base)
+		if (rxMsg.originAP & 0x20) {
+			rxMsg.originAP = (rxMsg.originAP & 0xE0);
+		}
+
+		for (u32 i = 0; i < rxMsg.getDataSize(); ++i) {
+			w8(rxMsg.data[i]);
+		}
+	} else {
+		rxMsg.command = MDRS_JVSNone;
+	}
+
+	// If doing write operation, save time at this point
+	if (isWriteOp) {
+		lastWriteTime = std::chrono::steady_clock::now();
+		lock.unlock();
+	}
+
+	return rxMsg.command;
+}
+
+
+MapleLinkMainDevice::MapleLinkMainDevice() : MapleLinkDevice(MFID_0_Input) {}
+
+MapleDeviceType MapleLinkMainDevice::get_device_type()
+{
+	// This is mainly used by the serializer
+	return MDT_SegaController;
+}
+
+u32 MapleLinkMainDevice::dma(u32 cmd)
+{
+	// Since MDCF_GetCondition gets called very often and is very well defined, handle it here
+	if (cmd == MDCF_GetCondition)
+	{
+		std::vector<u32> output;
+
+		PlainJoystickState pjs;
+		config->GetInput(&pjs);
+
+		auto link = getMapleLink();
+		if (!link || !link->isConnected())
+		{
+			// Not connected
+			return MDRS_JVSNone;
+		}
+		else
+		{
+			// Function definition is analog/button mask
+			// byte 0: 0  0  0  0  0  0  0  0
+			// byte 1: 0  0  a5 a4 a3 a2 a1 a0
+			// byte 2: R2 L2 D2 U2 D  X  Y  Z
+			// byte 3: R  L  D  U  St A  B  C
+			const u32 fnDef = link->getFunctionDefinitions(bus_port)[0]; // MFID_0_Input def is always at [0]
+
+			// Function
+			w32(MFID_0_Input);
+
+			// state data
+			// 2 key code
+			w16(pjs.kcode | ~(((fnDef >> 8) & 0xFF00) | ((fnDef >> 24) & 0xFF))); // 0==pressed
+
+			// analog axes
+			w8(((fnDef & 0x0100) != 0) ? pjs.trigger[PJTI_R] : 0x80);
+			w8(((fnDef & 0x0200) != 0) ? pjs.trigger[PJTI_L] : 0x80);
+			w8(((fnDef & 0x0400) != 0) ? pjs.joy[PJAI_X1] : 0x80);
+			w8(((fnDef & 0x0800) != 0) ? pjs.joy[PJAI_Y1] : 0x80);
+			w8(((fnDef & 0x1000) != 0) ? pjs.joy[PJAI_X2] : 0x80);
+			w8(((fnDef & 0x2000) != 0) ? pjs.joy[PJAI_Y2] : 0x80);
+
+			return MDRS_DataTransfer;
+		}
+	}
+
+	return MapleLinkDevice::dma(cmd);
 }
