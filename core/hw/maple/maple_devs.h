@@ -47,7 +47,7 @@ enum MapleDeviceCommand
 
 	MDC_JVSUploadFirmware = 0x80, // JVS bridge firmware
 	MDC_JVSGetId		 = 0x82,
-	MDC_JVSSelfTest		 = 0x84, // JVS Self Test
+	MDC_JVSSelfTest		 = 0x84,
 	MDC_JVSCommand		 = 0x86, // JVS I/O
 };
 
@@ -66,8 +66,9 @@ enum MapleDeviceRV
 	MDRE_FileError       = 0xFB, //1 word, bitfield
 	MDRE_LCDError        = 0xFA, //1 word, bitfield
 	MDRE_ARGunError      = 0xF9, //1 word, bitfield
-	MDRS_JVSSelfTestReply= 0x85, // JVS I/O SelfTest
 
+	MDRS_JVSGetIdReply   = 0x83,
+	MDRS_JVSSelfTestReply= 0x85,
 	MDRS_JVSReply		 = 0x87, // JVS I/O
 };
 
@@ -296,53 +297,24 @@ struct maple_base: maple_device
 	bool relayMapleLink();
 };
 
-class jvs_io_board;
-
-struct maple_naomi_jamma : maple_base, SerialPort
+struct BaseMIE : public maple_base
 {
-	static constexpr u8 ALL_NODES = 0xff;
-
-	std::vector<std::unique_ptr<jvs_io_board>> io_boards;
-	bool crazy_mode = false;
-	bool hotd2p = false;
-
-	u8 jvs_repeat_request[32][256];
-	u8 jvs_receive_buffer[32][258];
-	u32 jvs_receive_length[32] = { 0 };
-	u8 eeprom[128];
-
-	maple_naomi_jamma();
-	~maple_naomi_jamma() override;
-
-	MapleDeviceType get_device_type() override
-	{
-		return MDT_NaomiJamma;
-	}
-
-	u8 sense_line(u32 node_id)
-	{
-		bool last_node = node_id == io_boards.size();
-		return last_node ? 0x8E : 0x8F;
-	}
-
-	void send_jvs_message(u32 node_id, u32 channel, u32 length, const u8 *data);
-	void send_jvs_messages(u32 node_id, u32 channel, bool use_repeat, u32 length, const u8 *data, bool repeat_first);
-	bool receive_jvs_messages(u32 channel);
-
-	void handle_86_subcommand();
-
 	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out) override;
-	u32 dma(u32 cmd) override { return 0; }
+	u32 dma(u32 cmd) override;
+	void reply(u8 code, u8 sizew = 0);
 
-	void serialize(Serializer& ser) const override;
-	void deserialize(Deserializer& deser) override;
+	virtual void handle_86_subcommand();
+	virtual void firmwareLoaded(u32 hash) {}
+};
 
-	void setPipe(Pipe *pipe) override {
-		serialPipe = pipe;
-	}
-	void updateStatus() override {}
+struct MIE : public BaseMIE, public SerialPort
+{
+	static std::shared_ptr<maple_device> Create();
+};
 
-	Pipe *serialPipe = nullptr;
+struct RFIDReaderWriter : public BaseMIE
+{
+	static std::shared_ptr<maple_device> Create();
 };
 
 //
@@ -537,27 +509,4 @@ struct maple_dreamparapara_controller : maple_device
 	MapleDeviceType get_device_type() override;
 	u16 get_state();
 	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out) override;
-};
-
-struct RFIDReaderWriter : maple_base
-{
-	u32 getStatus() const;
-	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32* buffer_out) override;
-	u32 dma(u32 cmd) override;
-	MapleDeviceType get_device_type() override;
-	void OnSetup() override;
-	std::string getCardPath() const;
-	void loadCard();
-	void saveCard() const;
-	void serialize(Serializer& ser) const override;
-	void deserialize(Deserializer& deser) override;
-	void insertCard();
-	const u8 *getCardData();
-	void setCardData(u8 *data);
-
-	u8 cardData[128];
-	bool d4Seen = false;
-	bool cardInserted = false;
-	bool cardLocked = false;
-	bool transientData = false;
 };
