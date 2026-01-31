@@ -22,23 +22,13 @@ DreamLink implementations all expose a connection state, which is displayed in a
 
 DreamLinks associated with physical controllers generally handle setting up and tearing down the DreamLink connection, by checking for specific device IDs when an SDL controller is being set up. Note that this means the controller-based DreamLinks have a dependency on SDL, which means they only work on the desktop OS targets and not on Android, Switch, etc.
 
-If a controlled-based DreamLink connection is disrupted, the user generally needs to disconnect and reconnect the controller or restart Hollycast to re-establish the connection.
-
-The DreamPotato case works by the user ensuring both Hollycast and DreamPotato are running, then starting a game. If the connection is disrupted, the user can reconnect by pausing and using a reconnect command in the UI.
+We want users to be able to connect/disconnect DreamLinks in the middle of a game with minimal disruption. For example, if a connection is dropped due to an error, like an external program crashing, etc., there should be a straightforward way of re-establishing the connection. For example, a button in the pause UI, or an automatic reconnect mechanism of some kind.
 
 ### Configuration
 
 DreamLinks with associated physical controllers can be used by selecting certain controller types for the port in the Input UI. For example, the controller in port A, could be set to DreamPicoPort, which means that the state and behavior of the controller and expansion slots for that port, is determined by the behavior of the DreamPicoPort device connected via a DreamLink.
 
 DreamPotato can be used in a given expansion slot by choosing it as the expansion device type in a given slot. For example, instead of using a VMU or Vibration Pack in a given slot, a DreamPotato can be selected instead. This means that the state and behavior of that slot is determined by a DreamPotato instance connected via a DreamLink. This includes: is any device connected to the slot at all (which can change over time), and, what are the contents/state of the device in the slot.
-
-### Transport
-
-Each of the device-specific DreamLink implementations allows use of a different transport, such as TCP or USB, while allowing the Maple layer of Hollycast to communicate with each in a mostly uniform way.
-
-At time of writing, DreamConn controllers and DreamPotato both start a local TCP server on the same set of ports, which Flycast connects to. A different TCP port is reserved for each controller port.
-
-DreamPicoPort uses libusb to communicate with the Raspberry Pi Pico.
 
 ### Graceful behavior
 
@@ -75,50 +65,50 @@ We could also consider implicitly disconnecting the physical memory when loading
 
 ### Messaging
 
-A Maple message is generally categorized by its *type* and *function*. Examples of message *types* include GetDeviceInfo, GetCondition, etc. Examples of message *functions* include Input, Storage, LCD, etc.
+A DreamLink implementation is expected to be able to handle the standard set of message types for the peripherals it reports usage of to Hollycast. See https://dreamcast.wiki/Maple_bus#Payload for detailed definitions of specific message types.
 
-On real hardware, every Maple message expects a response, and, every message is sent by the Dreamcast and the response is sent by the appropriate peripheral (the controller itself or an expansion device).
+### Transport
 
-This section lays out the set of messages which a DreamLink implementation is expected to be able to handle. The sending message types will be named in *Type, Function* form.
+Each of the device-specific DreamLink implementations allows use of a different transport, such as TCP or USB, while allowing the Maple layer of Hollycast to communicate with each in a mostly uniform way.
 
-The exact binary form of the messages isn't specified here currently, but, it is documented elsewhere and can generally be found in the implementation.
+#### DreamConn transport
 
-#### GetCondition, Input
+For DreamConn controller connections, the DreamConn Utility starts a local TCP server on a known set of 4 ports, each corresponding to a Dreamcast controller port.
 
-GetCondition, Input is a request to know which expansion slots contain expansion devices. The DreamLink is expected to respond with *message type* Ack, which sets the appropriate bits in the Maple sender address field, to indicate this information.
+Hollycast writes Maple messages to the port in an "ASCII hex lines" format. For example, see the [GetCondition](https://dreamcast.wiki/Maple_bus#Get_Condition_Payload_Structure_(cmd_0x09)) message, which is sent to ask the peripheral to enumerate the attached devices:
+`09 20 00 01 00 00 00 01\r\n`
 
-As can occur on real hardware, it is expected that the devices in expansion slots could be inserted or removed at any time. Hollycast will account for this by polling all the DreamLinks in use with this message every frame.
+The following is a byte-by-byte breakdown of this message, to serve as an example. See also [Maple Bus Data Packet](https://dreamcast.wiki/Maple_bus#Maple_Bus_Data_Packet) documentation.
+- `09` is the command `GetCondition`.
+- `20` indicates the recipient address is the main peripheral (the controller).
+- `00` is the sender address (the console).
+- `01` is the length of the rest of the message.
+- `00 00 00 01` is the `Controller` function type.
 
-Generally, the bits in the reply must change if there is a change to the specific expansion devices being used. This means that, for example, if a DreamLink wants to change which VMU is currently being used (for example, the DreamPotato user docks the VMU, then uses Open to load a different VMU file), then it must first reply to GetCondition, Input with the appropriate bits cleared, and then reply with the bits set on the next frame, to effectively signal to Hollycast that a device was removed and then another device was inserted.
+The recipient is expected to reply to this message in "ASCII hex lines" format. e.g. a valid reply to `GetCondition` would be an `Ack` message similar to:  
+`07 00 01 00\r\n`
+- `07` is the command `Acknowledge`
+- `00` is the recipient address
+- `01` in the sender address indicates some device is connected to slot 1, and no device is connected to slot 2.
+- `00` is the length of the rest of the message.
 
-#### GetDeviceInfo
+Note that a reply is not expected for the following message types:
+- Updating the VMU screen (Command `WriteBlock` with function `Screen`)
+- Updating the VMU buzzer (Command `SetCondition` with function `Clock`)
+- Updating the jump pack state (Command `SetCondition` with function `Vibration`)
 
-Queries for the specific type of device in an expansion slot. The expected response is of type DeviceInfoTransfer and sets the appropriate Maple *function* flags depending on the device being used. For example, an ordinary VMU would set the `Storage | LCD | Clock` function flags, while a jump pack would set just the Vibration flag. TODO: what function does the sender use for this?
+If the DreamConn Utility is sent a message in an unexpected format, it will reply with a string error message, prefixed with `ERROR`, such as:  
+`ERROR: Unsupported function code 0x42.\r\n`
 
-#### SetCondition, Clock
+#### DreamPotato transport
 
-Plays a sound on the VMU speaker. This is a PWM sound, i.e. a simple square wave. The parameters to the message indicate the period and duty cycle of the sound. The sound should continue to be played until a new SetCondition, Clock message is received.
+Currently, DreamPotato uses the same format and set of TCP ports as DreamConn. This may change in the future, to e.g.:
+- use a different set of ports
+- use configurable ports
+- write binary data instead of ASCII hex lines
+- use extra custom message type(s) to allow client to discover the server capabilities upon connection and respond accordingly
+- or other changes
 
-It is recommended that a DreamLink implementation stops playing sound automatically if it detects the connection is disrupted.
+#### DreamPicoPort transport
 
-TODO: should Hollycast automatically send messages to stop/start the "current sound" when the emulator pauses/resumes? Otherwise, if the user pauses while a sound is playing on the VMU, the sound might keep playing indefinitely.
-
-#### WriteBlock, Clock
-
-Updates the real-time clock on a VMU. TODO: I don't recall if we actually send this or not.
-
-#### WriteBlock, LCD
-
-Updates the contents of the VMU screen. It is recommended that a DreamLink implementation clears the screen if it detects the connection is disrupted.
-
-#### ReadBlock, Storage
-
-Reads a 512-byte block of the VMU's flash storage. Expects a DataTransfer response including the contents of the block. Only sent when *physical memory access* is enabled.
-
-#### WriteBlock, Storage
-
-Writes a block of the VMU's flash storage. This message generally comes in sequences of 4, distinguished by a *phase* field, which each write 128 bytes of the block. Expects an Ack response. Only sent when *physical memory access* is enabled.
-
-#### CompleteWrite, Storage
-
-Indicates completing a write of a 512-byte block of the VMU's flash storage. Expects an Ack response.
+DreamPicoPort uses libusb to communicate with the Raspberry Pi Pico.
