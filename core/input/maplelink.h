@@ -23,22 +23,6 @@
 #include <memory>
 #include <mutex>
 
-//! A specialized VMU which interfaces with a MapleLink's VMU, including read/write operations
-struct MapleLinkVmu : public maple_sega_vmu
-{
-	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
-	bool userNotified = false;
-
-	void OnSetup() override;
-	bool fullSave() override;
-	void serialize(Serializer& ser) const override;
-	void deserialize(Deserializer& deser) override;
-	std::shared_ptr<class MapleLink> getMapleLink();
-	MapleDeviceRV readBlock(unsigned block);
-	u32 dma(u32 cmd) override;
-	bool linkStatus() override;
-};
-
 // parent interface of DreamLink and DreamPotato for use by hw/maple
 class MapleLink : public std::enable_shared_from_this<MapleLink>
 {
