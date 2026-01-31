@@ -54,7 +54,8 @@
 #include <setupapi.h>
 #endif
 
-// TODO: add namepsace and change names of some of these classes
+namespace dream_pico_port
+{
 
 //! Generically handles any MapleLink device when supported
 struct MapleLinkDevice : public maple_base
@@ -1577,74 +1578,6 @@ private:
 	}
 };
 
-DreamPicoPortGamepad::DreamPicoPortGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
-	: DreamLinkGamepad(std::make_shared<DreamPicoPort>(maple_port, joystick_idx, sdl_joystick), maple_port, joystick_idx, sdl_joystick)
-{
-	DreamPicoPort *picoPort = dynamic_cast<DreamPicoPort*>(dreamlink.get());
-	_name = picoPort->getName();
-
-	std::string uniqueId = picoPort->getUniqueId();
-	if (!uniqueId.empty()) {
-		_unique_id = uniqueId;
-		loadMapping();
-	}
-	int bus = picoPort->getDefaultBus();
-	if (DreamLink::isValidPort(bus))
-		set_maple_port(bus);
-}
-
-bool DreamPicoPortGamepad::identify(int deviceIndex)
-{
-	char guid_str[33] {};
-	SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(deviceIndex), guid_str, sizeof(guid_str));
-	// Dreamcast Controller USB VID:1209 PID:2f07
-	const char* pid_vid_guid_str = guid_str + 8;
-	if (memcmp(VID_PID_GUID, pid_vid_guid_str, 16) == 0) {
-		NOTICE_LOG(INPUT, "Dreamcast controller found!");
-		return true;
-	}
-	return false;
-}
-
-void DreamPicoPortGamepad::setCustomMapping(const std::shared_ptr<InputMapping>& mapping)
-{
-	// Since this is a real DC controller, no deadzone adjustment is needed
-	mapping->dead_zone = 0.0f;
-	// Map the things not set by SDL
-	mapping->set_button(DC_BTN_C, 2);
-	mapping->set_button(DC_BTN_Z, 5);
-	mapping->set_button(DC_BTN_D, 10);
-	mapping->set_button(DC_DPAD2_UP, 9);
-	mapping->set_button(DC_DPAD2_DOWN, 8);
-	mapping->set_button(DC_DPAD2_LEFT, 7);
-	mapping->set_button(DC_DPAD2_RIGHT, 6);
-}
-
-const char *DreamPicoPortGamepad::get_button_name(u32 code)
-{
-	using namespace i18n;
-	switch (code) {
-		// Coincides with buttons setup in setDefaultMapping
-		case 2: return "C";
-		case 5: return "Z";
-		case 10: return "D";
-		case 9: return T("DPad2 Up");
-		case 8: return T("DPad2 Down");
-		case 7: return T("DPad2 Left");
-		case 6: return T("DPad2 Right");
-
-		// These buttons are normally not physically accessible but are mapped on DreamPicoPort
-		case 12: return T("VMU1 A");
-		case 15: return T("VMU1 B");
-		case 16: return T("VMU1 Up");
-		case 17: return T("VMU1 Down");
-		case 18: return T("VMU1 Left");
-		case 19: return T("VMU1 Right");
-
-		default: return DreamLinkGamepad::get_button_name(code); // default name
-	}
-}
-
 
 MapleLinkDevice::MapleLinkDevice(u32 supportedFns) : supportedFns(supportedFns)
 {}
@@ -1737,7 +1670,7 @@ u32 MapleLinkDevice::dma(u32 cmd)
 	// Deserialize the first data word without popping off of dma
 	u32 firstWord = 0;
 	if (inMsg->size >= 1) {
-		firstWord = *(const u32 *)&inMsg->data[0];
+		firstWord = inMsg->readData<u32>(0);
 	}
 
 	if (
@@ -1841,4 +1774,80 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 	}
 
 	return MapleLinkDevice::dma(cmd);
+}
+
+} // namespace dream_pico_port
+
+DreamPicoPortGamepad::DreamPicoPortGamepad(
+	int maple_port,
+	int joystick_idx,
+	SDL_Joystick* sdl_joystick
+) :
+	DreamLinkGamepad(
+		std::make_shared<dream_pico_port::DreamPicoPort>(
+			maple_port, joystick_idx, sdl_joystick), maple_port, joystick_idx, sdl_joystick)
+{
+	dream_pico_port::DreamPicoPort *picoPort = dynamic_cast<dream_pico_port::DreamPicoPort*>(dreamlink.get());
+	_name = picoPort->getName();
+
+	std::string uniqueId = picoPort->getUniqueId();
+	if (!uniqueId.empty()) {
+		_unique_id = uniqueId;
+		loadMapping();
+	}
+	int bus = picoPort->getDefaultBus();
+	if (DreamLink::isValidPort(bus))
+		set_maple_port(bus);
+}
+
+bool DreamPicoPortGamepad::identify(int deviceIndex)
+{
+	char guid_str[33] {};
+	SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(deviceIndex), guid_str, sizeof(guid_str));
+	// Dreamcast Controller USB VID:1209 PID:2f07
+	const char* pid_vid_guid_str = guid_str + 8;
+	if (memcmp(VID_PID_GUID, pid_vid_guid_str, 16) == 0) {
+		NOTICE_LOG(INPUT, "Dreamcast controller found!");
+		return true;
+	}
+	return false;
+}
+
+void DreamPicoPortGamepad::setCustomMapping(const std::shared_ptr<InputMapping>& mapping)
+{
+	// Since this is a real DC controller, no deadzone adjustment is needed
+	mapping->dead_zone = 0.0f;
+	// Map the things not set by SDL
+	mapping->set_button(DC_BTN_C, 2);
+	mapping->set_button(DC_BTN_Z, 5);
+	mapping->set_button(DC_BTN_D, 10);
+	mapping->set_button(DC_DPAD2_UP, 9);
+	mapping->set_button(DC_DPAD2_DOWN, 8);
+	mapping->set_button(DC_DPAD2_LEFT, 7);
+	mapping->set_button(DC_DPAD2_RIGHT, 6);
+}
+
+const char *DreamPicoPortGamepad::get_button_name(u32 code)
+{
+	using namespace i18n;
+	switch (code) {
+		// Coincides with buttons setup in setDefaultMapping
+		case 2: return "C";
+		case 5: return "Z";
+		case 10: return "D";
+		case 9: return T("DPad2 Up");
+		case 8: return T("DPad2 Down");
+		case 7: return T("DPad2 Left");
+		case 6: return T("DPad2 Right");
+
+		// These buttons are normally not physically accessible but are mapped on DreamPicoPort
+		case 12: return T("VMU1 A");
+		case 15: return T("VMU1 B");
+		case 16: return T("VMU1 Up");
+		case 17: return T("VMU1 Down");
+		case 18: return T("VMU1 Left");
+		case 19: return T("VMU1 Right");
+
+		default: return DreamLinkGamepad::get_button_name(code); // default name
+	}
 }
