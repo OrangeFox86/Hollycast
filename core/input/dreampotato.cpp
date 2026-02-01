@@ -17,7 +17,9 @@
 #include "types.h"
 #include <asio.hpp> // Must be included first to avoid winsock issues on Windows
 #include "dreampotato.h"
+#include "dreamlink.h"
 #include "maplelink.h"
+#include "maplelinkregistry.h"
 #include "emulator.h"
 #include "cfg/option.h"
 #include "oslib/oslib.h"
@@ -100,7 +102,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	MapleLink::Ptr getMapleLink()
 	{
-		MapleLink::Ptr link = MapleLink::GetMapleLink(bus_id, bus_port);
+		MapleLink::Ptr link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 		if (link == nullptr)
 			ERROR_LOG(MAPLE, "DreamPotatoVmu[%s]: MapleLink is null", logical_port);
 		return link;
@@ -202,24 +204,25 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	bool linkStatus() override
 	{
-		auto link = MapleLink::GetMapleLink(bus_id, bus_port);
+		auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 		if (link == nullptr)
 			return false;
 		return link->isConnected();
 	}
 };
 
-class DreamPotato : public BaseMapleLink
+class DreamPotato : public BaseDreamLink
 {
 	int bus;
 	asio::ip::tcp::iostream iostream;
 	bool connected = false;
 	static constexpr u16 BASE_PORT = 37393;
 	time_t lastMsg = 0;
+	u32 initedPorts = 0;
 
 public:
 	DreamPotato(int bus)
-		: BaseMapleLink(true), bus(bus)
+		: BaseDreamLink(true), bus(bus)
 	{}
 
 	bool send(const MapleMsg& msg) override;
@@ -230,7 +233,7 @@ public:
 		return connected;
 	}
 
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override {
+	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override {
 		if (storageEnabled())
 			return std::make_shared<DreamPotatoVmu>();
 		else
@@ -239,8 +242,11 @@ public:
 
 	void connect();
 	void disconnect();
-	void init();
+	void init(u32 ports);
 	void term();
+
+	// TODO: this isn't really needed in this context - probably should make another level of abstration for SDL
+	void changeBus(int newBus) override;
 
 	void checkConnection()
 	{
@@ -270,16 +276,25 @@ public:
 
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;
 
-void DreamPotato::init()
+void DreamPotato::init(u32 ports)
 {
-	connect();
-	registerLink(bus, 0);
+	if (ports != initedPorts)
+	{
+		registerLink(bus, ports);
+		initedPorts = ports;
+	}
 }
 
 void DreamPotato::term()
 {
 	disconnect();
-	unregisterLink(bus, 0);
+	unregisterLink();
+}
+
+void DreamPotato::changeBus(int newBus)
+{
+	bus = newBus;
+	registerLink(bus, initedPorts);
 }
 
 void DreamPotato::connect()
@@ -365,14 +380,27 @@ void update()
 	for (unsigned bus = 0; bus < Potatoes.size(); bus++)
 	{
 		auto& potato = Potatoes[bus];
-		if (config::NetworkExpansionDevices[bus][0] == 1
-				&& config::MapleExpansionDevices[bus][0] == MDT_SegaVMU
-				&& maple_getPortCount(config::MapleMainDevices[bus]) >= 1)
+
+		const bool inPort1 = (
+			config::NetworkExpansionDevices[bus][0] == 1 &&
+			config::MapleExpansionDevices[bus][0] == MDT_SegaVMU
+		);
+		const bool inPort2 = (
+			config::NetworkExpansionDevices[bus][1] == 1 &&
+			config::MapleExpansionDevices[bus][1] == MDT_SegaVMU
+		);
+		u32 ports = (inPort1 ? 0x01 : 0) | (inPort2 ? 0x02 : 0);
+
+		if (
+			(inPort1 && maple_getPortCount(config::MapleMainDevices[bus]) >= 1) ||
+			(inPort2 && maple_getPortCount(config::MapleMainDevices[bus]) >= 2)
+		)
 		{
 			if (potato == nullptr) {
 				potato = std::make_shared<DreamPotato>(bus);
-				potato->init();
 			}
+
+			potato->init(ports);
 		}
 		else if (potato != nullptr) {
 			potato->term();

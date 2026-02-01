@@ -35,7 +35,7 @@ bool receiveMsg(MapleMsg& msg, std::istream& stream);
 
 //! DreamConn implementation class
 //! This is here mainly so asio.hpp can be included in this source file instead of the header.
-class DreamConn : public DreamLink
+class DreamConn : public BaseDreamLink
 {
 	int bus = -1;
 	bool maple_io_connected = false;
@@ -46,7 +46,7 @@ class DreamConn : public DreamLink
 
 public:
 	DreamConn(int bus)
-		: DreamLink(false), bus(bus)
+		: BaseDreamLink(false), bus(bus)
 	{}
 
 	bool storageEnabled() override {
@@ -98,7 +98,7 @@ public:
 	void connect() override
 	{
 		maple_io_connected = false;
-		if (!DreamLink::isValidPort(bus))
+		if (!DreamLink::isValidBus(bus))
 			return;
 
 		iostream = asio::ip::tcp::iostream("localhost", std::to_string(BASE_PORT + bus));
@@ -124,10 +124,12 @@ public:
 
 		config::MapleExpansionDevices[bus][0] = expansionDevs[0] = rxMsg.originAP & 1 ? MDT_SegaVMU : MDT_None;
 		config::MapleExpansionDevices[bus][1] = expansionDevs[1] = rxMsg.originAP & 2 ? MDT_PurupuruPack : MDT_None;
+		u32 ports = 0;
 		if (expansionDevs[0] == MDT_SegaVMU)
-			registerLink(bus, 0);
+			ports |= 1;
 		if (expansionDevs[1] == MDT_PurupuruPack)
-			registerLink(bus, 1);
+			ports |= 2;
+		registerLink(bus, ports);
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,
 				deviceDescription(expansionDevs[0]), deviceDescription(expansionDevs[1]));
@@ -149,8 +151,7 @@ public:
 			return;
 		maple_io_connected = false;
 
-		unregisterLink(bus, 0);
-		unregisterLink(bus, 1);
+		unregisterLink();
 		if (iostream)
 			iostream.close();
 

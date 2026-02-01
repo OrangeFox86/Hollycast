@@ -19,6 +19,9 @@
 
 #include "dreampicoport.h"
 
+#include "input/maplelink.h"
+#include "input/maplelinkregistry.h"
+
 #include "hw/maple/maple_devs.h"
 #include "hw/maple/maple_if.h"
 #include "ui/gui.h"
@@ -73,7 +76,7 @@ struct MapleLinkDevice : public maple_base
 	//! @param[in] supportedFns Supported functions mask (default: any function)
 	MapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~MapleLinkDevice();
-	std::shared_ptr<class DreamPicoPort> getMapleLink();
+	std::shared_ptr<class DreamPicoPort> getDreamPicoPort();
 	bool linkStatus() override;
 	MapleDeviceType get_device_type() override;
 	u32 virtualVmuDma(u32 cmd);
@@ -1092,7 +1095,7 @@ public:
 std::unordered_map<std::string, std::weak_ptr<dpp_api::DppDevice>> ApiDreamPicoPortComms::all_dpp_api_devices;
 std::mutex ApiDreamPicoPortComms::all_dpp_api_devices_mutex;
 
-class DreamPicoPort : public DreamLink
+class DreamPicoPort : public BaseDreamLink
 {
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class DreamPicoPortComms> dpp_comms;
@@ -1139,6 +1142,7 @@ class DreamPicoPort : public DreamLink
 
 public:
     DreamPicoPort(int bus, int joystick_idx, SDL_Joystick* sdl_joystick) :
+		BaseDreamLink(true),
 		software_bus(bus),
 		hw_info(parseHardwareInfo(joystick_idx, sdl_joystick))
 	{
@@ -1196,12 +1200,12 @@ public:
 	}
 
 	void gameStarted() override {
-		DreamLink::gameStarted();
+		BaseDreamLink::gameStarted();
 		sendGameId();
 	}
 
 	void gameTermination() override {
-		DreamLink::gameTermination();
+		BaseDreamLink::gameTermination();
 		// Need a short delay to wait for last screen draw to complete
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// Reset screen to selected port
@@ -1260,8 +1264,7 @@ public:
 	void changeBus(int newBus) override {
 		if (software_bus == newBus)
 			return;
-		for (int i = 0; i < 6; ++i)
-			unregisterLink(software_bus, i);
+		unregisterLink();
 		software_bus = newBus;
 		setMapleDevices();
 		if (dpp_comms) {
@@ -1276,12 +1279,11 @@ public:
 
 	void setMapleDevices()
 	{
-		if (!DreamLink::isValidPort(software_bus))
+		if (!DreamLink::isValidBus(software_bus))
 			return;
 
 		// Register all ports regardless of current presence of device - MapleLinkDevice will generically handle this
-		for (int i = 0; i < 6; ++i)
-			registerLink(software_bus, i);
+		registerLink(software_bus, ALL_PORTS_MASK);
 
 		u32 portOneFn = getFunctionCode(0);
 		if (portOneFn & MFID_1_Storage) {
@@ -1317,7 +1319,7 @@ public:
 		return (dpp_comms && dpp_comms->isConnected());
 	}
 
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override {
+	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override {
 		if (port == 5) {
 			return std::make_shared<MapleLinkMainDevice>();
 		} else {
@@ -1393,7 +1395,7 @@ public:
 	void disconnect() override {
 		dpp_comms.reset();
 		for (int i = 0; i < 6; ++i)
-			unregisterLink(software_bus, i);
+			unregisterLink();
 		disableStorage();
 	}
 
@@ -1592,15 +1594,17 @@ MapleLinkDevice::~MapleLinkDevice()
 	}
 }
 
-std::shared_ptr<DreamPicoPort> MapleLinkDevice::getMapleLink()
+std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort()
 {
-	const MapleLink::Ptr& link = MapleLink::GetMapleLink(bus_id, bus_port);
-	return std::reinterpret_pointer_cast<DreamPicoPort>(link);
+	MapleLink::Ptr ptr = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
+	if (!ptr)
+		return nullptr;
+	return std::dynamic_pointer_cast<DreamPicoPort>(ptr->dreamlink);
 }
 
 bool MapleLinkDevice::linkStatus()
 {
-	auto link = getMapleLink();
+	auto link = getDreamPicoPort();
 	return (
 		link &&
 		link->isConnected() &&
@@ -1612,7 +1616,7 @@ MapleDeviceType MapleLinkDevice::get_device_type()
 {
 	// This is mainly used by the serializer, so it's ok if it's not completely correct
 
-	auto link = getMapleLink();
+	auto link = getDreamPicoPort();
 	if (!link)
 		return MDT_None;
 
@@ -1663,7 +1667,7 @@ u32 MapleLinkDevice::virtualVmuDma(u32 cmd)
 
 u32 MapleLinkDevice::dma(u32 cmd)
 {
-	auto link = MapleLink::GetMapleLink(bus_id, bus_port);
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (!link)
 		return MDRS_JVSNone;
 
@@ -1739,7 +1743,7 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 		PlainJoystickState pjs;
 		config->GetInput(&pjs);
 
-		auto link = getMapleLink();
+		auto link = getDreamPicoPort();
 		if (!link || !link->isConnected())
 		{
 			// Not connected
@@ -1796,7 +1800,7 @@ DreamPicoPortGamepad::DreamPicoPortGamepad(
 		loadMapping();
 	}
 	int bus = picoPort->getDefaultBus();
-	if (DreamLink::isValidPort(bus))
+	if (DreamLink::isValidBus(bus))
 		set_maple_port(bus);
 }
 

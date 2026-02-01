@@ -15,6 +15,7 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+#include "dreamlink.h"
 #include "types.h"
 #include "hw/maple/maple_devs.h"
 #include "emulator.h"
@@ -23,79 +24,36 @@
 #include <memory>
 #include <mutex>
 
-// parent interface of DreamLink and DreamPotato for use by hw/maple
-class MapleLink : public std::enable_shared_from_this<MapleLink>
+class MapleLink
 {
 public:
 	using Ptr = std::shared_ptr<MapleLink>;
 
+	MapleLink() = delete;
+	MapleLink(const DreamLink::Ptr& dreamlink, u32 bus, u32 port);
 	virtual ~MapleLink() = default;
 
 	//! Sends a message to the controller, not expecting a response
-	virtual bool send(const MapleMsg& msg) = 0;
+	bool send(const MapleMsg& msg);
 	//! Sends a message to the controller and waits for a response
-	virtual bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) = 0;
+	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg);
 	//! True if VMU reads and writes should be sent to the device
-	virtual bool storageEnabled() = 0;
+	bool storageEnabled();
 	//! True if the link is operational
-	virtual bool isConnected() = 0;
-	//! @return number of active links made for this MapleLink on the given bus
-	std::size_t activeLinkCount(int bus) const;
+	bool isConnected();
 
 	//! Create the maple device needed to interface this device to the emulator
 	//! @param[in] type The user-selected device type
 	//! @param[in] bus The bus used for this device [0,3]
 	//! @param[in] port The port for this device [0,4]
-	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) = 0;
+	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type);
 
-	//! Returns the maple link at the given location if any
-	static Ptr GetMapleLink(int bus, int port) {
-		std::lock_guard<std::mutex> _(Mutex);
-		if (bus >= Links.size() || port >= Links[bus].size())
-			return nullptr;
-		std::list<MapleLink::Ptr>& list = Links[bus][port];
-		if (list.empty())
-			return nullptr;
-		return list.front();
-	}
-	//! True if any maple link currently has storage enabled
-	static bool StorageEnabled();
-
-protected:
-	//! True if a game has been started
-	bool isGameStarted() const;
-	void registerLink(int bus, int port);
-	void unregisterLink(int bus, int port);
-	int bus = -1;
-	u32 ports = 0;
-
-private:
-	static std::mutex Mutex;
-	//! Indexed by [bus][extension port][priority idx]
-	//! Multiple links may be registered for a bus/port, and the last added to front takes precedence
-	static std::array<std::array<std::list<Ptr>, 6>, 4> Links;
-};
-
-class BaseMapleLink : public MapleLink
-{
-public:
-	~BaseMapleLink();
-	bool storageEnabled() override;
-
-protected:
-	BaseMapleLink(bool storageSupported);
-	void disableStorage(); // Disable VMU storage for this link
-	virtual void gameStarted();
-	//! When called, do teardown stuff (vmu screen reset is handled by maple_sega_vmu)
-	virtual void gameTermination() {}
-
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override;
-
-	const bool storageSupported;
-	bool vmuStorage = false;
-
-private:
-	static void eventHandler(Event event, void *p);
+	//! The associated dreamlink
+	const const DreamLink::Ptr dreamlink;
+	//! The linked bus
+	const u32 bus;
+	//! The linked port
+	const u32 port;
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink device

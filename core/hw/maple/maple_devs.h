@@ -10,6 +10,11 @@
 #include <memory>
 #include <vector>
 
+//! Number of ports (aka buses) on a Dreamcast
+static constexpr const int MAPLE_PORTS = 4;
+//! Maximum number of logical devices that may exist on a single bus (main plus maximum of 5 sub-peripherals)
+static constexpr const int MAPLE_DEVS_PER_PORT = 6;
+
 enum MapleFunctionID
 {
 	MFID_0_Input       = 0x01000000, //DC Controller, Lightgun buttons, arcade stick .. stuff like that
@@ -189,8 +194,6 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 };
 
 std::shared_ptr<maple_device> maple_Create(MapleDeviceType type);
-
-#define MAPLE_PORTS 4
 
 template<int Magnitude>
 void limit_joystick_magnitude(s8& joyx, s8& joyy)

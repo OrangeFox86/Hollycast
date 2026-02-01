@@ -9,7 +9,7 @@
 #include "oslib/i18n.h"
 #include "hw/aica/sgc_if.h"
 #include "cfg/option.h"
-#include "input/maplelink.h"
+#include "input/maplelinkregistry.h"
 #include <zlib.h>
 #include <cerrno>
 #include <ctime>
@@ -358,7 +358,7 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 
 void maple_sega_vmu::updateMapleLinkScreen()
 {
-	auto link = MapleLink::GetMapleLink(bus_id, bus_port);
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (link == nullptr)
 		return;
 

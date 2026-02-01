@@ -17,7 +17,7 @@
 #include "stdclass.h"
 #include "serialize.h"
 #include "oslib/i18n.h"
-#include "input/maplelink.h"
+#include "input/maplelinkregistry.h"
 #include <time.h>
 #ifdef TARGET_UWP
 #include <winrt/Windows.System.h>
@@ -158,7 +158,7 @@ void flycast_term()
 
 bool dc_savestateAllowed() {
 	return !settings.content.path.empty() && !settings.network.online
-			&& !settings.naomi.multiboard && !MapleLink::StorageEnabled();
+			&& !settings.naomi.multiboard && !MapleLinkRegistry::StorageEnabled();
 }
 
 void dc_savestate(int index, const u8 *pngData, u32 pngSize)

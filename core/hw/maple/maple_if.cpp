@@ -19,7 +19,7 @@ enum MaplePattern
 	MP_NOP = 7
 };
 
-std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
+std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][MAPLE_DEVS_PER_PORT];
 
 int maple_schid;
 

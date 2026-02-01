@@ -6,7 +6,7 @@
 #include "cfg/option.h"
 #include "stdclass.h"
 #include "serialize.h"
-#include "input/maplelink.h"
+#include "input/maplelinkregistry.h"
 
 MapleInputState mapleInputState[4];
 extern bool maple_ddt_pending_reset;
@@ -218,11 +218,11 @@ static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num 
 		return;
 
 	std::shared_ptr<maple_device> dev;
-	MapleLink::Ptr link = MapleLink::GetMapleLink(bus, port);
+	MapleLink::Ptr link = MapleLinkRegistry::GetMapleLink(bus, port);
 	if (link)
 	{
-		INFO_LOG(MAPLE, "MapleLinkVmu created on %d,%d", bus, port);
-		dev = link->createMapleDevice(type, bus, port);
+		INFO_LOG(MAPLE, "MapleLink device created on %d,%d", bus, port);
+		dev = link->createMapleDevice(type);
 	}
 	else
 	{
