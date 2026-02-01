@@ -25,7 +25,7 @@
 #include "hw/maple/maple_if.h"
 #include "oslib/oslib.h"
 
-std::mutex BaseDreamLink::Mutex;
+std::recursive_mutex BaseDreamLink::Mutex;
 std::array<std::list<BaseDreamLink::Ptr>, MAPLE_PORTS> BaseDreamLink::Registry;
 std::atomic<bool> BaseDreamLink::EventsRegistered = false;
 std::atomic<bool> BaseDreamLink::GameStarted = false;
@@ -103,7 +103,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 	if (linkedBus == bus && connectedPorts == ports)
 		return;
 
-	std::lock_guard<std::mutex> lock(BaseDreamLink::Mutex);
+	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
 
 	// Ensure this link is not currently established
 	removeLinkFromRegistry(bus);
@@ -111,6 +111,8 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 	if (isValidBus(bus))
 	{
 		linkedBus = bus;
+		linkedPorts = ports;
+		connectedPorts = ports;
 
 		std::list<BaseDreamLink::Ptr>& priorities = BaseDreamLink::Registry[bus];
 
@@ -121,10 +123,13 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 			{
 				const u32 prev = link->connectedPorts;
 				link->connectedPorts = link->connectedPorts & ~ports;
-				if (link->connectedPorts == 0 && prev != link->connectedPorts)
+				if (link->connectedPorts == 0)
 				{
-					// No longer connected to anything
-					link->disconnect();
+					if (prev != link->connectedPorts)
+					{
+						// No longer connected to anything
+						link->disconnect();
+					}
 				}
 			}
 		}
@@ -148,7 +153,12 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 
 void BaseDreamLink::unregisterLink()
 {
-	std::lock_guard<std::mutex> lock(BaseDreamLink::Mutex);
+	if (!isValidBus(linkedBus))
+		return;
+
+	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
+
+	linkedBus = -1;
 
 	disconnect();
 
@@ -214,6 +224,7 @@ void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
 	{
 		if ((portMask & ports) != 0)
 		{
+			connectedPorts |= portMask;
 			MapleLinkRegistry::Get().registerLink(shared_from_this(), bus, port);
 			added = true;
 		}
@@ -239,7 +250,7 @@ void BaseDreamLink::eventHandler(Event event, void *p)
 	}
 
 	// Perform events for each link
-	std::lock_guard<std::mutex> lock(BaseDreamLink::Mutex);
+	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
 	for (std::list<Ptr>& priorities : BaseDreamLink::Registry)
 	{
 		if (!priorities.empty())

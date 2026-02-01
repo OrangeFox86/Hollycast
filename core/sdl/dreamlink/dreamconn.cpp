@@ -151,7 +151,6 @@ public:
 			return;
 		maple_io_connected = false;
 
-		unregisterLink();
 		if (iostream)
 			iostream.close();
 

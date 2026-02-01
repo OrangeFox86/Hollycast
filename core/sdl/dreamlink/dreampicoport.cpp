@@ -1394,8 +1394,6 @@ public:
 
 	void disconnect() override {
 		dpp_comms.reset();
-		for (int i = 0; i < 6; ++i)
-			unregisterLink();
 		disableStorage();
 	}
 
