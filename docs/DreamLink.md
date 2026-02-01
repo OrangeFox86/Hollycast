@@ -111,4 +111,4 @@ Currently, DreamPotato uses the same format and set of TCP ports as DreamConn. T
 
 #### DreamPicoPort transport
 
-DreamPicoPort uses libusb to communicate with the Raspberry Pi Pico.
+DreamPicoPort uses libusb to communicate with the Raspberry Pi Pico through the [DreamPicoPort-API](https://github.com/OrangeFox86/DreamPicoPort-API). All communication at the API is event-based.
