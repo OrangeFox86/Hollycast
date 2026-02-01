@@ -73,7 +73,7 @@ Each of the device-specific DreamLink implementations allows use of a different 
 
 #### DreamConn transport
 
-For DreamConn controller connections, the DreamConn Utility starts a local TCP server on a known set of 4 ports, each corresponding to a Dreamcast controller port.
+For DreamConn controller connections, the DreamConn Utility starts a local TCP server on a known set of 4 ports (37393-37396, inclusive), each corresponding to a Dreamcast controller port.
 
 Hollycast writes Maple messages to the port in an "ASCII hex lines" format. For example, see the [GetCondition](https://dreamcast.wiki/Maple_bus#Get_Condition_Payload_Structure_(cmd_0x09)) message, which is sent to ask the peripheral to enumerate the attached devices:
 `09 20 00 01 00 00 00 01\r\n`
