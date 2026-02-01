@@ -58,7 +58,7 @@ namespace dreampotato
 {
 
 //! A specialized VMU which interfaces with a MapleLink's VMU, including read/write operations
-struct DreamPotatoVmu : public maple_sega_vmu
+struct DreamPotatoVmu : public MapleLinkVmu
 {
 	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	bool userNotified = false;
@@ -94,7 +94,7 @@ struct DreamPotatoVmu : public maple_sega_vmu
 		// Ignore the VMU data from the loaded state
 		u8 savedData[sizeof(flash_data)];
 		memcpy(savedData, flash_data, sizeof(savedData));
-		maple_sega_vmu::deserialize(deser);
+		MapleLinkVmu::deserialize(deser);
 		memcpy(flash_data, savedData, sizeof(savedData));
 	}
 
@@ -102,7 +102,7 @@ struct DreamPotatoVmu : public maple_sega_vmu
 	{
 		MapleLink::Ptr link = MapleLink::GetMapleLink(bus_id, bus_port);
 		if (link == nullptr)
-			ERROR_LOG(MAPLE, "MapleLinkVmu[%s]: MapleLink is null", logical_port);
+			ERROR_LOG(MAPLE, "DreamPotatoVmu[%s]: MapleLink is null", logical_port);
 		return link;
 	}
 
@@ -124,7 +124,7 @@ struct DreamPotatoVmu : public maple_sega_vmu
 		MapleMsg rxMsg;
 		if (link->sendReceive(txMsg, rxMsg) && rxMsg.size == 130)
 		{
-			DEBUG_LOG(MAPLE, "MapleLinkVmu[%s]: read block %d", logical_port, block);
+			DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: read block %d", logical_port, block);
 			memcpy(&flash_data[block * 4 * 128], &rxMsg.data[8], 4 * 128);
 			cachedBlocks[block] = true;
 		}
@@ -165,7 +165,7 @@ struct DreamPotatoVmu : public maple_sega_vmu
 					if (rxMsg.command != MDRS_DeviceReply)
 						return rxMsg.command;
 					cachedBlocks[inMsg->data[7]] = true;
-					DEBUG_LOG(MAPLE, "MapleLinkVmu[%s]: write block %d", logical_port, inMsg->data[7]);
+					DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: write block %d", logical_port, inMsg->data[7]);
 					break;
 				}
 
@@ -197,7 +197,7 @@ struct DreamPotatoVmu : public maple_sega_vmu
 				}
 			}
 		}
-		return maple_sega_vmu::dma(cmd);
+		return MapleLinkVmu::dma(cmd);
 	}
 
 	bool linkStatus() override
@@ -231,7 +231,10 @@ public:
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, u32 bus, u32 port) override {
-		return std::make_shared<DreamPotatoVmu>();
+		if (storageEnabled())
+			return std::make_shared<DreamPotatoVmu>();
+		else
+			return std::make_shared<MapleLinkVmu>(); // only screen and timer sync
 	}
 
 	void connect();

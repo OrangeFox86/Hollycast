@@ -33,40 +33,32 @@ static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)
 		return link->send(msg);
 }
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
-struct MapleLinkVmu : maple_sega_vmu
+u32 MapleLinkVmu::dma(u32 cmd)
 {
-	u32 dma(u32 cmd) override
+	u32 rv = maple_sega_vmu::dma(cmd);
+	if (inMsg && inMsg->size > 0)
 	{
-		u32 rv = maple_sega_vmu::dma(cmd);
-		if (inMsg && inMsg->size > 0)
+		u32 function = inMsg->readData<u32>(0);
+		if ((cmd == MDCF_BlockWrite && function == MFID_2_LCD) || cmd == MDCF_SetCondition)
 		{
-			u32 function = inMsg->readData<u32>(0);
-			if ((cmd == MDCF_BlockWrite && function == MFID_2_LCD) || cmd == MDCF_SetCondition)
-			{
-				relayMapleLink(bus_id, bus_port, *inMsg);
-			}
+			relayMapleLink(bus_id, bus_port, *inMsg);
 		}
-		return rv;
 	}
-};
+	return rv;
+}
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
-struct MapleLinkPuruPuru : maple_sega_purupuru
+u32 MapleLinkPuruPuru::dma(u32 cmd)
 {
-	u32 dma(u32 cmd) override
+	u32 rv = maple_sega_purupuru::dma(cmd);
+	if (inMsg)
 	{
-		u32 rv = maple_sega_purupuru::dma(cmd);
-		if (inMsg)
+		if (cmd == MDCF_BlockWrite || cmd == MDCF_SetCondition)
 		{
-			if (cmd == MDCF_BlockWrite || cmd == MDCF_SetCondition)
-			{
-				relayMapleLink(bus_id, bus_port, *inMsg);
-			}
+			relayMapleLink(bus_id, bus_port, *inMsg);
 		}
-		return rv;
 	}
-};
+	return rv;
+}
 
 namespace
 {

@@ -97,3 +97,15 @@ protected:
 private:
 	static void eventHandler(Event event, void *p);
 };
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+struct MapleLinkVmu : maple_sega_vmu
+{
+	u32 dma(u32 cmd) override;
+};
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+struct MapleLinkPuruPuru : maple_sega_purupuru
+{
+	u32 dma(u32 cmd) override;
+};
