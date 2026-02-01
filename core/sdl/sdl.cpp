@@ -29,7 +29,7 @@
 #include "nswitch.h"
 #include "switch_gamepad.h"
 #endif
-#include "dreamlink.h"
+#include "dreamlink/dreamlinkgamepad.h"
 #include "oslib/i18n.h"
 #include <unordered_map>
 

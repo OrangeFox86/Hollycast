@@ -26,8 +26,8 @@
 #include "vgamepad.h"
 #include "oslib/storage.h"
 
-#if defined(USE_SDL)
-#include "sdl/dreamlink.h" // For USE_DREAMCASTCONTROLLER
+#if defined(USE_DREAMLINK_DEVICES)
+#include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
 
 static float calcComboWidth(const char *labels[], size_t size)
