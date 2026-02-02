@@ -124,11 +124,7 @@ public:
 
 		config::MapleExpansionDevices[bus][0] = expansionDevs[0] = rxMsg.originAP & 1 ? MDT_SegaVMU : MDT_None;
 		config::MapleExpansionDevices[bus][1] = expansionDevs[1] = rxMsg.originAP & 2 ? MDT_PurupuruPack : MDT_None;
-		u32 ports = 0;
-		if (expansionDevs[0] == MDT_SegaVMU)
-			ports |= 1;
-		if (expansionDevs[1] == MDT_PurupuruPack)
-			ports |= 2;
+		const u32 ports = rxMsg.originAP & 0x03;
 		registerLink(bus, ports);
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,

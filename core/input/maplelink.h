@@ -56,13 +56,13 @@ public:
 	const u32 port;
 };
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
 struct MapleLinkVmu : maple_sega_vmu
 {
 	u32 dma(u32 cmd) override;
 };
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink device
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
 struct MapleLinkPuruPuru : maple_sega_purupuru
 {
 	u32 dma(u32 cmd) override;

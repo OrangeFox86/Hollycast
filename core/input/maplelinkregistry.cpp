@@ -20,6 +20,9 @@
 
 #include "maplelinkregistry.h"
 
+#include "hw/maple/maple_if.h"
+#include "emulator.h"
+
 MapleLinkRegistry& MapleLinkRegistry::Get()
 {
     static MapleLinkRegistry singleton;
@@ -59,7 +62,18 @@ void MapleLinkRegistry::registerLink(const DreamLink::Ptr& dreamlink, u32 bus, u
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    links[bus][port] = std::make_shared<MapleLink>(dreamlink, bus, port);
+    MapleLink::Ptr& link = links[bus][port];
+
+    const bool reconnect = (link && link->dreamlink.get() != dreamlink.get() && dreamlink->isGameStarted());
+
+    link = std::make_shared<MapleLink>(dreamlink, bus, port);
+
+    if (reconnect)
+    {
+		emu.run([bus, port]() {
+			maple_ReconnectDevice(bus, port);
+		});
+    }
 }
 
 void MapleLinkRegistry::unregisterLink(const DreamLink* dreamlink)

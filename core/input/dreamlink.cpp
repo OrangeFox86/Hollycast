@@ -75,13 +75,14 @@ void BaseDreamLink::disableStorage()
 	vmuStorage = false;
 	if (isGameStarted())
 	{
-		// TODO: access the MapleLinkRegistry to perform reestablishment of maple link device
-		// emu.run([bus=this->bus, ports=this->ports]() {
-		// 	if (bus != -1 && (ports & 1))
-		// 		maple_ReconnectDevice(bus, 0);
-		// 	if (bus != -1 && (ports & 2))
-		// 		maple_ReconnectDevice(bus, 1);
-		// });
+		// TODO: Only DreamPotato would be affected by this, so maybe there just needs to be a tweak there
+		emu.run([bus=linkedBus, ports=connectedPorts]() {
+			for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
+			{
+				if (DreamLink::isValidBus(bus) && (ports & (1 << port)))
+					maple_ReconnectDevice(bus, port);
+			}
+		});
 
 		os_notify("ATTENTION: State loaded with physical VMU memory enabled", 6000,
 				"Physical memory has detached from local state");
@@ -93,7 +94,7 @@ bool BaseDreamLink::isGameStarted() const
 	return BaseDreamLink::GameStarted;
 }
 
-void BaseDreamLink::gameStarted()
+void BaseDreamLink::onGameStarted()
 {
 	vmuStorage = storageSupported && config::UsePhysicalVmuMemory && isConnected();
 }
@@ -181,9 +182,9 @@ void BaseDreamLink::removeLinkFromRegistry(int newBus)
 	// Remove from MapleLinkRegistry
 	MapleLinkRegistry::Get().unregisterLink(this);
 
-	int bus = 0;
-	for (std::list<Ptr>& priorities : BaseDreamLink::Registry)
+	for (int bus = 0; bus < BaseDreamLink::Registry.size(); ++bus)
 	{
+		std::list<Ptr>& priorities = BaseDreamLink::Registry[bus];
 		std::list<Ptr>::iterator iter = priorities.begin();
 		while (iter != priorities.end())
 		{
@@ -220,8 +221,9 @@ void BaseDreamLink::removeLinkFromRegistry(int newBus)
 void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
 {
 	bool added = false;
-	for (u32 port = 0, portMask = 1; port < MAPLE_DEVS_PER_PORT; ++port, portMask <<= 1)
+	for (u32 port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
 	{
+		const u32 portMask = (1 << port);
 		if ((portMask & ports) != 0)
 		{
 			connectedPorts |= portMask;
@@ -260,10 +262,10 @@ void BaseDreamLink::eventHandler(Event event, void *p)
 			switch (event)
 			{
 			case Event::Start:
-				ptr->gameStarted();
+				ptr->onGameStarted();
 				break;
 			case Event::Terminate:
-				ptr->gameTermination();
+				ptr->onGameTermination();
 				break;
 			case Event::LoadState:
 				ptr->disableStorage();

@@ -54,6 +54,8 @@ public:
 	virtual bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) = 0;
 	//! @return true iff VMU reads and writes should be sent to the device
 	virtual bool storageEnabled() = 0;
+	//! @return true iff a game has been started
+	virtual bool isGameStarted() const = 0;
 	//! Attempt connection to the link
 	virtual void connect() = 0;
 	//! Disconnect from the link
@@ -102,21 +104,22 @@ public:
 	virtual ~BaseDreamLink();
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
+	//! @return true iff a game has been started
+	bool isGameStarted() const;
 
 protected:
     //! Disable VMU storage for this link
 	void disableStorage();
-	//! @return true iff a game has been started
-	bool isGameStarted() const;
 	//! Called when a game has started
-	virtual void gameStarted();
+	virtual void onGameStarted();
 	//! Called when a game has terminated
 	//! When called, do teardown stuff (vmu screen reset is handled by maple_sega_vmu)
-	virtual inline void gameTermination() {}
+	virtual inline void onGameTermination() {}
 
-    //! Registers this link with local, static registry of links plus the global MapleLinkRegistry.
-    //! The local registry ensures only 1 DreamLink per bus is active. The global registry links logical bus/ports to
-    //! this DreamLink. If this DreamLink was already registered, the previous registration will first be deleted.
+    //! Registers this link into registries.
+    //! The registry in DreamLink ensures only 1 DreamLink per bus is active. The global registry links logical
+	//! bus/ports to this DreamLink. If this DreamLink was already registered, the previous registration will first be
+	//! deleted.
     //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
     //! @param[in] ports The port mask representing the ports on the bus that this DreamLink supports
     void registerLink(int bus, u32 ports);

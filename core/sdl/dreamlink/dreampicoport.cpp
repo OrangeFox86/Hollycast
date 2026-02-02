@@ -1199,13 +1199,13 @@ public:
 		}
 	}
 
-	void gameStarted() override {
-		BaseDreamLink::gameStarted();
+	void onGameStarted() override {
+		BaseDreamLink::onGameStarted();
 		sendGameId();
 	}
 
-	void gameTermination() override {
-		BaseDreamLink::gameTermination();
+	void onGameTermination() override {
+		BaseDreamLink::onGameTermination();
 		// Need a short delay to wait for last screen draw to complete
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// Reset screen to selected port
