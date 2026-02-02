@@ -53,7 +53,10 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 BaseDreamLink::~BaseDreamLink()
 {
 	// This link should no longer be registered anywhere
-	unregisterLink();
+	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
+
+	// Remove everything previously established for this controller
+	removeLinkFromRegistry();
 }
 
 bool BaseDreamLink::storageEnabled()
@@ -92,6 +95,11 @@ void BaseDreamLink::disableStorage()
 bool BaseDreamLink::isGameStarted() const
 {
 	return BaseDreamLink::GameStarted;
+}
+
+void BaseDreamLink::term()
+{
+	unregisterLink();
 }
 
 void BaseDreamLink::onGameStarted()

@@ -73,6 +73,7 @@ void DreamLinkGamepad::close()
 	if (dreamlink != nullptr)
 	{
 		dreamlink->disconnect();
+		dreamlink->term();
 		dreamlink.reset();
 		// Make sure settings are open in case disconnection happened mid-game
 		if (!gui_is_open())

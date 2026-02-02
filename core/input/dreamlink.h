@@ -64,6 +64,8 @@ public:
 	virtual bool isConnected() = 0;
 	//! Changes the selected maple port is changed by the user
 	virtual void changeBus(int newBus) = 0;
+	//! Do termination cleanup
+	virtual void term() = 0;
 
 	//! Create the maple device needed to interface this device to the emulator
 	//! @param[in] type The user-selected device type
@@ -106,6 +108,8 @@ public:
 	bool storageEnabled() override;
 	//! @return true iff a game has been started
 	bool isGameStarted() const;
+	//! Do termination cleanup
+	void term() override;
 
 protected:
     //! Disable VMU storage for this link
