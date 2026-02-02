@@ -165,9 +165,9 @@ private:
     //! Currently linked bus
     int linkedBus;
     //! All available ports
-    u32 linkedPorts;
+    u32 linkedPortsMask;
     //! All currently connected ports
-    u32 connectedPorts;
+    u32 connectedPortsMask;
 
     //! Initialized to false and set to true on the creation of the first BaseDreamLink
     static std::atomic<bool> EventsRegistered;

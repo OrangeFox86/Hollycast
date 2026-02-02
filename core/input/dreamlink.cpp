@@ -34,8 +34,8 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 	storageSupported(storageSupported),
 	vmuStorage(storageSupported),
 	linkedBus(-1),
-	linkedPorts(0),
-	connectedPorts(0)
+	linkedPortsMask(0),
+	connectedPortsMask(0)
 {
 	if (isGameStarted()) {
 		vmuStorage = vmuStorage && config::UsePhysicalVmuMemory;
@@ -79,7 +79,7 @@ void BaseDreamLink::disableStorage()
 	if (isGameStarted())
 	{
 		// TODO: Only DreamPotato would be affected by this, so maybe there just needs to be a tweak there
-		emu.run([bus=linkedBus, ports=connectedPorts]() {
+		emu.run([bus=linkedBus, ports=connectedPortsMask]() {
 			for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
 			{
 				if (DreamLink::isValidBus(bus) && (ports & (1 << port)))
@@ -109,7 +109,7 @@ void BaseDreamLink::onGameStarted()
 
 void BaseDreamLink::registerLink(int bus, u32 ports)
 {
-	if (linkedBus == bus && connectedPorts == ports)
+	if (linkedBus == bus && connectedPortsMask == ports)
 		return;
 
 	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
@@ -120,8 +120,8 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 	if (isValidBus(bus))
 	{
 		linkedBus = bus;
-		linkedPorts = ports;
-		connectedPorts = ports;
+		linkedPortsMask = ports;
+		connectedPortsMask = ports;
 
 		std::list<BaseDreamLink::Ptr>& priorities = BaseDreamLink::Registry[bus];
 
@@ -130,11 +130,11 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 			// Remove connected port flags since this link now takes precedence
 			for (BaseDreamLink::Ptr& link : priorities)
 			{
-				const u32 prev = link->connectedPorts;
-				link->connectedPorts = link->connectedPorts & ~ports;
-				if (link->connectedPorts == 0)
+				const u32 prev = link->connectedPortsMask;
+				link->connectedPortsMask = link->connectedPortsMask & ~ports;
+				if (link->connectedPortsMask == 0)
 				{
-					if (prev != link->connectedPorts)
+					if (prev != link->connectedPortsMask)
 					{
 						// No longer connected to anything
 						link->disconnect();
@@ -207,7 +207,7 @@ void BaseDreamLink::removeLinkFromRegistry(int newBus)
 					for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
 					{
 						const Ptr& link = *innerIter;
-						const u32 ports = availablePorts & link->linkedPorts;
+						const u32 ports = availablePorts & link->linkedPortsMask;
 						if (ports != 0)
 						{
 							link->establishInMapleLinkRegistry(bus, ports);
@@ -232,7 +232,7 @@ void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
 		const u32 portMask = (1 << port);
 		if ((portMask & ports) != 0)
 		{
-			connectedPorts |= portMask;
+			connectedPortsMask |= portMask;
 			MapleLinkRegistry::Get().registerLink(shared_from_this(), bus, port);
 			added = true;
 		}
