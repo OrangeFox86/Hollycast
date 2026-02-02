@@ -172,7 +172,7 @@ private:
 
     //! Mutex serializing access to Registry
     static std::recursive_mutex Mutex;
-    //! Local registry of BaseDreamLink devices [bus index][priority] (front takes precedence)
+    //! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)
     static std::array<std::list<Ptr>, MAPLE_PORTS> Registry;
 
 };

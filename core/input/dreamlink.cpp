@@ -213,8 +213,6 @@ void BaseDreamLink::removeLinkFromRegistry(int newBus)
 				++iter;
 			}
 		}
-
-		++bus;
 	}
 }
 
