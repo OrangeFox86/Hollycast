@@ -99,6 +99,7 @@ bool BaseDreamLink::isGameStarted() const
 
 void BaseDreamLink::term()
 {
+	disconnect();
 	unregisterLink();
 }
 

@@ -243,7 +243,6 @@ public:
 	void connect();
 	void disconnect();
 	void init(u32 ports);
-	void term();
 
 	// TODO: this isn't really needed in this context - probably should make another level of abstration for SDL
 	void changeBus(int newBus) override;
@@ -283,12 +282,6 @@ void DreamPotato::init(u32 ports)
 		registerLink(bus, ports);
 		initedPorts = ports;
 	}
-}
-
-void DreamPotato::term()
-{
-	disconnect();
-	unregisterLink();
 }
 
 void DreamPotato::changeBus(int newBus)
