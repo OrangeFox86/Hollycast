@@ -218,7 +218,7 @@ static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num 
 		return;
 
 	std::shared_ptr<maple_device> dev;
-	MapleLink::Ptr link = MapleLinkRegistry::GetMapleLink(bus, port);
+	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus, port);
 	if (link)
 	{
 		INFO_LOG(MAPLE, "MapleLink device created on %d,%d", bus, port);

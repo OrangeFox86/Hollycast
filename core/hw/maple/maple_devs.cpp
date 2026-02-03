@@ -359,7 +359,7 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 void maple_sega_vmu::updateMapleLinkScreen()
 {
 	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-	if (link == nullptr)
+	if (!link)
 		return;
 
 	MapleMsg msg;

@@ -63,7 +63,7 @@ std::shared_ptr<maple_device> MapleLink::createMapleDevice(MapleDeviceType type)
 static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)
 {
 	auto link = MapleLinkRegistry::GetMapleLink(bus, port);
-	if (link == nullptr)
+	if (!link)
 		return true;
 	else
 		return link->send(msg);

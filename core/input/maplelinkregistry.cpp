@@ -29,18 +29,18 @@ MapleLinkRegistry& MapleLinkRegistry::Get()
     return singleton;
 }
 
-MapleLink::Ptr MapleLinkRegistry::getMapleLink(int bus, int port)
+std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port)
 {
     if (!DreamLink::isValidBus(bus) || !DreamLink::isValidPort(port))
-        return nullptr;
+        return std::nullopt;
 
     std::lock_guard<std::mutex> lock(mutex);
 
     DreamLink::Ptr link = links[bus][port].lock();
     if (!link)
-        return nullptr;
+        return std::nullopt;
 
-    return std::make_shared<MapleLink>(std::move(link), bus, port);
+    return MapleLink(std::move(link), bus, port);
 }
 
 bool MapleLinkRegistry::storageEnabled()

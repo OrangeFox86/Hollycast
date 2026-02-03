@@ -25,6 +25,7 @@
 
 #include <array>
 #include <mutex>
+#include <optional>
 
 class MapleLinkRegistry
 {
@@ -49,7 +50,7 @@ public:
 	//! @param[in] port Peripheral port index [0,5]
 	//! @return the MapleLink at the given bus/port if one is installed
 	//! @return nullptr otherwise
-	static inline MapleLink::Ptr GetMapleLink(int bus, int port) {
+	static inline std::optional<MapleLink> GetMapleLink(int bus, int port) {
 		return Get().getMapleLink(bus, port);
 	}
 
@@ -61,7 +62,7 @@ public:
 
     //! Non-static retrieval function for the designated MapleLink at the given bus/port
 	//! @see GetMapleLink
-    MapleLink::Ptr getMapleLink(int bus, int port);
+    std::optional<MapleLink> getMapleLink(int bus, int port);
 
 	//! Non-static retrieval function for storage enabled flag
 	//! @see  StorageEnabled

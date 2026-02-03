@@ -1594,10 +1594,10 @@ MapleLinkDevice::~MapleLinkDevice()
 
 std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort()
 {
-	MapleLink::Ptr ptr = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-	if (!ptr)
+	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
+	if (!link)
 		return nullptr;
-	return std::dynamic_pointer_cast<DreamPicoPort>(ptr->dreamlink);
+	return std::dynamic_pointer_cast<DreamPicoPort>(link->dreamlink);
 }
 
 bool MapleLinkDevice::linkStatus()

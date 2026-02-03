@@ -27,8 +27,6 @@
 class MapleLink
 {
 public:
-	using Ptr = std::shared_ptr<MapleLink>;
-
 	//! Default constructor (deleted)
 	MapleLink() = delete;
 

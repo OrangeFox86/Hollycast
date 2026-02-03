@@ -100,10 +100,10 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		memcpy(flash_data, savedData, sizeof(savedData));
 	}
 
-	MapleLink::Ptr getMapleLink()
+	std::optional<MapleLink> getMapleLink()
 	{
-		MapleLink::Ptr link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-		if (link == nullptr)
+		std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
+		if (!link)
 			ERROR_LOG(MAPLE, "DreamPotatoVmu[%s]: MapleLink is null", logical_port);
 		return link;
 	}
@@ -113,8 +113,8 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		if (cachedBlocks[block])
 			return MDRS_JVSNone;
 
-		MapleLink::Ptr link = getMapleLink();
-		if (link == nullptr)
+		std::optional<MapleLink> link = getMapleLink();
+		if (!link)
 			return MDRS_JVSNone;
 
 		MapleMsg txMsg;
@@ -156,8 +156,8 @@ struct DreamPotatoVmu : public MapleLinkVmu
 								"Do not disconnect the VMU or close the game");
 						userNotified = true;
 					}
-					MapleLink::Ptr link = getMapleLink();
-					if (link == nullptr)
+					std::optional<MapleLink> link = getMapleLink();
+					if (!link)
 						return MDRE_FileError;
 					MapleMsg rxMsg;
 					if (!link->sendReceive(*inMsg, rxMsg)) {
@@ -187,8 +187,8 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 				case MDCF_GetLastError:
 				{
-					MapleLink::Ptr link = getMapleLink();
-					if (link == nullptr)
+					std::optional<MapleLink> link = getMapleLink();
+					if (!link)
 						return MDRE_FileError;
 					break;
 				}
@@ -205,7 +205,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	bool linkStatus() override
 	{
 		auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-		if (link == nullptr)
+		if (!link)
 			return false;
 		return link->isConnected();
 	}
