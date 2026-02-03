@@ -29,16 +29,33 @@ class MapleLink
 public:
 	using Ptr = std::shared_ptr<MapleLink>;
 
+	//! Default constructor (deleted)
 	MapleLink() = delete;
+
+	//! Constructor
+	//! @param[in] dreamlink The dreamlink pointer to copy from
+	//! @param[in] bus Dreamcast bus index [0,3]
+	//! @param[in] port Peripheral port index [0,5]
 	MapleLink(const DreamLink::Ptr& dreamlink, u32 bus, u32 port);
+
+	//! Constructor
+	//! @param[in] dreamlink The dreamlink pointer to move from
+	//! @param[in] bus Dreamcast bus index [0,3]
+	//! @param[in] port Peripheral port index [0,5]
+	MapleLink(DreamLink::Ptr&& dreamlink, u32 bus, u32 port);
+
+	//! Destructor (virtual, default)
 	virtual ~MapleLink() = default;
 
 	//! Sends a message to the controller, not expecting a response
 	bool send(const MapleMsg& msg);
+
 	//! Sends a message to the controller and waits for a response
 	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg);
+
 	//! True if VMU reads and writes should be sent to the device
 	bool storageEnabled();
+
 	//! True if the link is operational
 	bool isConnected();
 

@@ -101,6 +101,12 @@ void BaseDreamLink::term()
 {
 	disconnect();
 	unregisterLink();
+
+	// Invalidate internal data
+	vmuStorage = false;
+    linkedBus = -1;
+    linkedPortsMask = 0;
+    connectedPortsMask = 0;
 }
 
 void BaseDreamLink::onGameStarted()

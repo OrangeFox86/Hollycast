@@ -29,6 +29,12 @@ MapleLink::MapleLink(const DreamLink::Ptr& dreamlink, u32 bus, u32 port) :
 	port(port)
 {}
 
+MapleLink::MapleLink(DreamLink::Ptr&& dreamlink, u32 bus, u32 port) :
+	dreamlink(std::move(dreamlink)),
+	bus(bus),
+	port(port)
+{}
+
 bool MapleLink::send(const MapleMsg& msg)
 {
 	return dreamlink->send(msg);

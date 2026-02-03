@@ -36,7 +36,11 @@ MapleLink::Ptr MapleLinkRegistry::getMapleLink(int bus, int port)
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    return links[bus][port];
+    DreamLink::Ptr link = links[bus][port].lock();
+    if (!link)
+        return nullptr;
+
+    return std::make_shared<MapleLink>(std::move(link), bus, port);
 }
 
 bool MapleLinkRegistry::storageEnabled()
@@ -45,9 +49,10 @@ bool MapleLinkRegistry::storageEnabled()
 
     for (auto& perPort : links)
     {
-        for (MapleLink::Ptr& mapleLink : perPort)
+        for (DreamLink::WPtr& wptr : perPort)
         {
-            if (mapleLink && mapleLink->dreamlink->storageEnabled())
+            DreamLink::Ptr link = wptr.lock();
+            if (link && link->storageEnabled())
                 return true;
         }
     }
@@ -62,11 +67,11 @@ void MapleLinkRegistry::registerLink(const DreamLink::Ptr& dreamlink, u32 bus, u
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    MapleLink::Ptr& link = links[bus][port];
+    DreamLink::Ptr link = links[bus][port].lock();
 
-    const bool reconnect = (link && link->dreamlink.get() != dreamlink.get() && dreamlink->isGameStarted());
+    const bool reconnect = (link && link.get() != dreamlink.get() && dreamlink->isGameStarted());
 
-    link = std::make_shared<MapleLink>(dreamlink, bus, port);
+    links[bus][port] = dreamlink;
 
     if (reconnect)
     {
@@ -82,10 +87,11 @@ void MapleLinkRegistry::unregisterLink(const DreamLink* dreamlink)
 
     for (auto& perPort : links)
     {
-        for (MapleLink::Ptr& mapleLink : perPort)
+        for (DreamLink::WPtr& wptr : perPort)
         {
-            if (mapleLink && mapleLink->dreamlink.get() == dreamlink)
-                mapleLink.reset();
+            DreamLink::Ptr link = wptr.lock();
+            if (link && link.get() == dreamlink)
+                wptr.reset();
         }
     }
 }

@@ -35,6 +35,7 @@ class DreamLink
 {
 public:
 	using Ptr = std::shared_ptr<DreamLink>;
+	using WPtr = std::weak_ptr<DreamLink>;
 
     //! Constructor (default)
     DreamLink() = default;
@@ -65,6 +66,7 @@ public:
 	//! Changes the selected maple port is changed by the user
 	virtual void changeBus(int newBus) = 0;
 	//! Do termination cleanup
+	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
 
 	//! Create the maple device needed to interface this device to the emulator
@@ -109,6 +111,7 @@ public:
 	//! @return true iff a game has been started
 	bool isGameStarted() const;
 	//! Do termination cleanup
+	//! @post the object may be in an invalid state and is no longer intended for use
 	void term() override;
 
 protected:
@@ -187,7 +190,7 @@ struct DreamLinkVmu : maple_sega_vmu
 	u32 dma(u32 cmd) override;
 };
 
-//! Basic dream link VMU device which relays only screen and timer data to the DreamLink device
+//! Basic dream link Puru Puru (aka jump pack) device which relays vibration data to the DreamLink device
 struct DreamLinkPuruPuru : maple_sega_purupuru
 {
 	u32 dma(u32 cmd) override;
