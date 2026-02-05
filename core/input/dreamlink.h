@@ -29,7 +29,6 @@
 #include <mutex>
 #include <atomic>
 #include <unordered_map>
-#include <queue>
 #include <thread>
 #include <condition_variable>
 #include <memory>
@@ -145,6 +144,9 @@ protected:
 	//! This is the default implementation which may be overridden by child
 	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override;
 
+	//! May be called by the child to attempt to reestablish connection after it is lost
+	void asyncRetryConnect();
+
 private:
     //! Removes link from reistry without locking on the mutex
     //! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
@@ -160,8 +162,17 @@ private:
     //! @param[in] p Context pointer (ignored)
 	static void eventHandler(Event event, void *p);
 
-	void asyncConnect();
-	void asyncDisconnect();
+	//! Type of pending connection work
+	enum class ConnectionWorkType { Connect, Disconnect };
+
+	//! Do an asynchronous connect or disconnect
+	void asyncConnection(const ConnectionWorkType& type, bool getLock = true);
+
+	//! Worker thread function for processing connection/disconnection operations
+	void connectionWorkerThread();
+
+	//! Stops the connection worker thread
+	void stopConnectionWorkerThread();
 
 public:
     //! Mask to use for all ports
@@ -182,8 +193,18 @@ private:
     //! All currently connected ports
     u32 connectedPortsMask;
 
+	//! Flag to signal worker thread shutdown
+	bool connectionWorkerShutdown = false;
+	//! Mutex protecting connection work queue and worker thread
 	std::mutex connectionMutex;
-	std::future<void> connectionFuture;
+	//! Last submitted connection request type
+	ConnectionWorkType lastConnectRequest = ConnectionWorkType::Disconnect;
+	//! Queue of pending connection operations
+	std::list<ConnectionWorkType> connectionWorkQueue;
+	//! Condition variable to wake the worker thread
+	std::condition_variable connectionCondVar;
+	//! Worker thread for this instance
+	std::unique_ptr<std::thread> connectionWorker;
 
     //! Initialized to false and set to true on the creation of the first BaseDreamLink
     static std::atomic<bool> EventsRegistered;

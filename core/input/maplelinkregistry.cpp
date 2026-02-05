@@ -89,13 +89,26 @@ void MapleLinkRegistry::unregisterLink(const DreamLink* dreamlink)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    for (auto& perPort : links)
+    for (std::size_t bus = 0; bus < links.size(); ++bus)
     {
-        for (DreamLink::WPtr& wptr : perPort)
+        auto& perPort = links[bus];
+        for (std::size_t port = 0; port < perPort.size(); ++port)
         {
+            DreamLink::WPtr& wptr = perPort[port];
             DreamLink::Ptr link = wptr.lock();
             if (link && link.get() == dreamlink)
+            {
+                const bool reconnect = link->isGameStarted();
                 wptr.reset();
+                link.reset();
+
+                if (reconnect)
+                {
+                    emu.run([bus, port]() {
+                        maple_ReconnectDevice(bus, port);
+                    });
+                }
+            }
         }
     }
 }

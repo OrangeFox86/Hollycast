@@ -25,6 +25,9 @@
 #include "hw/maple/maple_if.h"
 #include "oslib/oslib.h"
 
+#include <thread>
+#include <chrono>
+
 std::recursive_mutex BaseDreamLink::Mutex;
 std::array<std::list<BaseDreamLink::Ptr>, MAPLE_PORTS> BaseDreamLink::Registry;
 std::atomic<bool> BaseDreamLink::EventsRegistered = false;
@@ -52,17 +55,17 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 
 BaseDreamLink::~BaseDreamLink()
 {
-	// This link should no longer be registered anywhere
-	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
+	{
+		// This link should no longer be registered anywhere
+		std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
+		removeLinkFromRegistry();
+	}
 
-	// Remove everything previously established for this controller
-	removeLinkFromRegistry();
+	stopConnectionWorkerThread();
 }
 
 bool BaseDreamLink::storageEnabled()
 {
-	if (!isConnected())
-		return false;
 	if (!isGameStarted())
 		return storageSupported && config::UsePhysicalVmuMemory;
 	else
@@ -100,6 +103,7 @@ bool BaseDreamLink::isGameStarted() const
 void BaseDreamLink::term()
 {
 	unregisterLink();
+	stopConnectionWorkerThread();
 
 	// Invalidate internal data
 	vmuStorage = false;
@@ -143,7 +147,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 					if (prev != link->connectedPortsMask)
 					{
 						// No longer connected to anything
-						link->asyncDisconnect();
+						link->asyncConnection(ConnectionWorkType::Disconnect);
 					}
 				}
 			}
@@ -158,7 +162,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 	{
 		// Not a valid bus, so this should not be connected
 		linkedBus = -1;
-		asyncDisconnect();
+		asyncConnection(ConnectionWorkType::Disconnect);
 	}
 }
 
@@ -171,7 +175,7 @@ void BaseDreamLink::unregisterLink()
 
 	linkedBus = -1;
 
-	asyncDisconnect();
+	asyncConnection(ConnectionWorkType::Disconnect);
 
 	// Remove everything previously established for this controller
 	removeLinkFromRegistry();
@@ -184,6 +188,17 @@ std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(MapleDeviceType t
 		case MapleDeviceType::MDT_SegaVMU: return std::make_shared<MapleLinkVmu>();
 		case MapleDeviceType::MDT_PurupuruPack: return std::make_shared<MapleLinkPuruPuru>();
 		default: return maple_Create(type);
+	}
+}
+
+void BaseDreamLink::asyncRetryConnect()
+{
+	std::lock_guard<std::mutex> lock(connectionMutex);
+
+	// Only allow the request if Connect was last executed internally
+	if (lastConnectRequest == ConnectionWorkType::Connect)
+	{
+		asyncConnection(ConnectionWorkType::Connect, false);
 	}
 }
 
@@ -241,7 +256,7 @@ void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
 	}
 
 	if (added)
-		asyncConnect();
+		asyncConnection(ConnectionWorkType::Connect);
 }
 
 void BaseDreamLink::eventHandler(Event event, void *p)
@@ -285,38 +300,103 @@ void BaseDreamLink::eventHandler(Event event, void *p)
 	}
 }
 
-void BaseDreamLink::asyncConnect()
+void BaseDreamLink::asyncConnection(const ConnectionWorkType& type,  bool getLock)
 {
-	std::lock_guard<std::mutex> lock(connectionMutex);
+	std::unique_lock<std::mutex> lock(connectionMutex, std::defer_lock);
 
-	// Wait for previous connect/disconnect to complete, if any
-	if (connectionFuture.valid())
+	if (getLock)
 	{
-		connectionFuture.get();
+		lock.lock();
 	}
 
-	// Connect in async thread
-	connectionFuture = std::async(std::launch::async, [wptr=weak_from_this()](){
-		BaseDreamLink::Ptr self = wptr.lock();
-		if (self)
-			self->connect();
-	});
+	if (connectionWorkerShutdown)
+	{
+		return;
+	}
+
+	// Lazily initialize the worker thread on first use
+	if (!connectionWorker)
+	{
+		connectionWorker = std::make_unique<std::thread>([this]() { connectionWorkerThread(); });
+	}
+
+	lastConnectRequest = type;
+	connectionWorkQueue.push_back(type);
+	connectionCondVar.notify_one();
 }
 
-void BaseDreamLink::asyncDisconnect()
+void BaseDreamLink::connectionWorkerThread()
 {
-	std::lock_guard<std::mutex> lock(connectionMutex);
+	// The predicate which returns true if item is available to pop or thread shutdown is requested
+	auto pred = [this](){ return !connectionWorkQueue.empty() || connectionWorkerShutdown; };
 
-	// Wait for previous connect/disconnect to complete, if any
-	if (connectionFuture.valid())
+	while (true)
 	{
-		connectionFuture.get();
+		ConnectionWorkType work;
+
+		{
+			std::unique_lock<std::mutex> lock(connectionMutex);
+
+			// Wait for work or shutdown signal
+			connectionCondVar.wait(lock, pred);
+
+			if (connectionWorkerShutdown)
+			{
+				return;  // Shutdown, exit thread
+			}
+
+			// Only the back item will ever take precedence
+			work = connectionWorkQueue.back();
+			connectionWorkQueue.clear();
+		}
+
+		// Execute the connection work without holding the lock
+		switch (work)
+		{
+		case ConnectionWorkType::Connect:
+			while (true)
+			{
+				if (connectionWorkerShutdown)
+				{
+					return;  // Shutdown, exit thread
+				}
+
+				connect();
+				if (isConnected())
+					break;
+
+				NOTICE_LOG(INPUT, "DreamLink connection failed; retrying connection in 1 second");
+
+				// Wait for 1 second while checking for new events or shutdown
+				{
+					std::unique_lock<std::mutex> lock(connectionMutex);
+					if (connectionCondVar.wait_for(lock, std::chrono::seconds(1), pred))
+					{
+						break; // New event
+					}
+				}
+			}
+			break;
+		case ConnectionWorkType::Disconnect:
+			disconnect();
+			break;
+		}
+	}
+}
+
+void BaseDreamLink::stopConnectionWorkerThread()
+{
+	std::unique_ptr<std::thread> workerThread;
+
+	{
+		std::lock_guard<std::mutex> lock(connectionMutex);
+		connectionWorkerShutdown = true;
+		connectionCondVar.notify_all();
+		workerThread = std::move(connectionWorker);
 	}
 
-	// Disconnect in async thread
-	connectionFuture = std::async(std::launch::async, [wptr=weak_from_this()](){
-		BaseDreamLink::Ptr self = wptr.lock();
-		if (self)
-			self->disconnect();
-	});
+	if (workerThread)
+	{
+		workerThread->join();
+	}
 }

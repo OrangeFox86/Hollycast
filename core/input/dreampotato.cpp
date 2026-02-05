@@ -266,7 +266,10 @@ public:
 			sock.non_blocking(false, ignored);
 		}
 		if (read != 1 && !!ec && ec != asio::error::would_block)
-			disconnect();
+		{
+			connected = false;
+			asyncRetryConnect();
+		}
 	}
 };
 
@@ -329,7 +332,6 @@ void DreamPotato::disconnect()
 
 bool DreamPotato::send(const MapleMsg& msg)
 {
-	connect();
 	if (!connected)
 		return false;
 
@@ -338,7 +340,8 @@ bool DreamPotato::send(const MapleMsg& msg)
 	if (ec)
 	{
 		WARN_LOG(INPUT, "DreamPotato[%d] send failed: %s", bus, ec.message().c_str());
-		disconnect();
+		connected = false;
+		asyncRetryConnect();
 		return false;
 	}
 	lastMsg = getTimeMs();
@@ -352,7 +355,8 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 
 	if (!receiveMsg(rxMsg, iostream)) {
 		WARN_LOG(INPUT, "DreamPotato[%d] receive failed", bus);
-		disconnect();
+		connected = false;
+		asyncRetryConnect();
 		return false;
 	}
 	return true;

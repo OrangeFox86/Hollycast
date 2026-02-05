@@ -62,7 +62,8 @@ public:
 		auto ec = sendMsg(msg, iostream);
 		if (ec) {
 			WARN_LOG(INPUT, "DreamConn[%d] send failed: %s", bus, ec.message().c_str());
-			disconnect();
+			maple_io_connected = false;
+			asyncRetryConnect();
 			return false;
 		}
 		return true;
@@ -75,7 +76,8 @@ public:
 
 		if (!receiveMsg(rxMsg, iostream)) {
 			WARN_LOG(INPUT, "DreamConn[%d] receive failed", bus);
-			disconnect();
+			maple_io_connected = false;
+			asyncRetryConnect();
 			return false;
 		}
 		return true;
@@ -84,10 +86,13 @@ public:
 	void changeBus(int newBus) override
 	{
 		if (newBus != bus) {
-			// A different TCP port is used depending on the bus. We'll need to disconnect from the current port.
-			// The caller will call connect() again if appropriate.
-			disconnect();
 			bus = newBus;
+			if (isConnected())
+			{
+				// A different TCP port is used depending on the bus - need to reconnect
+				maple_io_connected = false;
+				asyncRetryConnect();
+			}
 		}
 	}
 
