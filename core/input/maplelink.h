@@ -24,6 +24,7 @@
 #include <memory>
 #include <mutex>
 
+//! A MapleLink puts bus/port context onto a DreamLink and allows for creation of a maple_device
 class MapleLink
 {
 public:

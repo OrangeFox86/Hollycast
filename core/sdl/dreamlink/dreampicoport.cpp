@@ -1095,7 +1095,7 @@ public:
 std::unordered_map<std::string, std::weak_ptr<dpp_api::DppDevice>> ApiDreamPicoPortComms::all_dpp_api_devices;
 std::mutex ApiDreamPicoPortComms::all_dpp_api_devices_mutex;
 
-class DreamPicoPort : public BaseDreamLink
+class DreamPicoPort : public SDLDreamLink
 {
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class DreamPicoPortComms> dpp_comms;
@@ -1142,7 +1142,7 @@ class DreamPicoPort : public BaseDreamLink
 
 public:
     DreamPicoPort(int bus, int joystick_idx, SDL_Joystick* sdl_joystick) :
-		BaseDreamLink(true),
+		SDLDreamLink(true),
 		software_bus(bus),
 		hw_info(parseHardwareInfo(joystick_idx, sdl_joystick))
 	{
@@ -1200,12 +1200,12 @@ public:
 	}
 
 	void onGameStarted() override {
-		BaseDreamLink::onGameStarted();
+		SDLDreamLink::onGameStarted();
 		sendGameId();
 	}
 
 	void onGameTermination() override {
-		BaseDreamLink::onGameTermination();
+		SDLDreamLink::onGameTermination();
 		// Need a short delay to wait for last screen draw to complete
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// Reset screen to selected port

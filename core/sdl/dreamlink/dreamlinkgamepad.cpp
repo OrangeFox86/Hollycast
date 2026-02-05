@@ -62,7 +62,7 @@ bool DreamLinkGamepad::isDreamcastController(int deviceIndex)
 	return false;
 }
 
-DreamLinkGamepad::DreamLinkGamepad(std::shared_ptr<DreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
+DreamLinkGamepad::DreamLinkGamepad(std::shared_ptr<SDLDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
 	: SDLGamepad(maple_port, joystick_idx, sdl_joystick), dreamlink(dreamlink)
 {
 	verify(dreamlink != nullptr);

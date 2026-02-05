@@ -35,7 +35,7 @@ bool receiveMsg(MapleMsg& msg, std::istream& stream);
 
 //! DreamConn implementation class
 //! This is here mainly so asio.hpp can be included in this source file instead of the header.
-class DreamConn : public BaseDreamLink
+class DreamConn : public SDLDreamLink
 {
 	int bus = -1;
 	bool maple_io_connected = false;
@@ -46,7 +46,7 @@ class DreamConn : public BaseDreamLink
 
 public:
 	DreamConn(int bus)
-		: BaseDreamLink(false), bus(bus)
+		: SDLDreamLink(false), bus(bus)
 	{}
 
 	bool storageEnabled() override {

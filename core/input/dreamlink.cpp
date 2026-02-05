@@ -99,7 +99,6 @@ bool BaseDreamLink::isGameStarted() const
 
 void BaseDreamLink::term()
 {
-	disconnect();
 	unregisterLink();
 
 	// Invalidate internal data
@@ -144,7 +143,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 					if (prev != link->connectedPortsMask)
 					{
 						// No longer connected to anything
-						link->disconnect();
+						link->asyncDisconnect();
 					}
 				}
 			}
@@ -153,17 +152,13 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 		// Establish local registry link
 		priorities.push_front(shared_from_this());
 
-		// Connect now if not already
-		if (!isConnected())
-			connect();
-
 		establishInMapleLinkRegistry(bus, ports);
 	}
 	else
 	{
 		// Not a valid bus, so this should not be connected
 		linkedBus = -1;
-		disconnect();
+		asyncDisconnect();
 	}
 }
 
@@ -176,7 +171,7 @@ void BaseDreamLink::unregisterLink()
 
 	linkedBus = -1;
 
-	disconnect();
+	asyncDisconnect();
 
 	// Remove everything previously established for this controller
 	removeLinkFromRegistry();
@@ -245,8 +240,8 @@ void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
 		}
 	}
 
-	if (added && !isConnected())
-		connect();
+	if (added)
+		asyncConnect();
 }
 
 void BaseDreamLink::eventHandler(Event event, void *p)
@@ -288,4 +283,40 @@ void BaseDreamLink::eventHandler(Event event, void *p)
 			}
 		}
 	}
+}
+
+void BaseDreamLink::asyncConnect()
+{
+	std::lock_guard<std::mutex> lock(connectionMutex);
+
+	// Wait for previous connect/disconnect to complete, if any
+	if (connectionFuture.valid())
+	{
+		connectionFuture.get();
+	}
+
+	// Connect in async thread
+	connectionFuture = std::async(std::launch::async, [wptr=weak_from_this()](){
+		BaseDreamLink::Ptr self = wptr.lock();
+		if (self)
+			self->connect();
+	});
+}
+
+void BaseDreamLink::asyncDisconnect()
+{
+	std::lock_guard<std::mutex> lock(connectionMutex);
+
+	// Wait for previous connect/disconnect to complete, if any
+	if (connectionFuture.valid())
+	{
+		connectionFuture.get();
+	}
+
+	// Disconnect in async thread
+	connectionFuture = std::async(std::launch::async, [wptr=weak_from_this()](){
+		BaseDreamLink::Ptr self = wptr.lock();
+		if (self)
+			self->disconnect();
+	});
 }

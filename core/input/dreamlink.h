@@ -29,10 +29,18 @@
 #include <mutex>
 #include <atomic>
 #include <unordered_map>
+#include <queue>
+#include <thread>
+#include <condition_variable>
+#include <memory>
+#include <future>
 
 // Abstract base class for communication with physical controllers
 class DreamLink
 {
+	// MapleLink is tightly coupled with this class and may access createMapleDevice()
+	friend class MapleLink;
+
 public:
 	using Ptr = std::shared_ptr<DreamLink>;
 	using WPtr = std::weak_ptr<DreamLink>;
@@ -63,17 +71,9 @@ public:
 	virtual void disconnect() = 0;
 	//! @return true iff the link is operational
 	virtual bool isConnected() = 0;
-	//! Changes the selected maple port is changed by the user
-	virtual void changeBus(int newBus) = 0;
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
-
-	//! Create the maple device needed to interface this device to the emulator
-	//! @param[in] type The user-selected device type
-	//! @param[in] bus The bus used for this device [0,3]
-	//! @param[in] port The port for this device [0,5]
-	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test
@@ -88,6 +88,13 @@ public:
     static inline bool isValidPort(int port) {
         return (port >= 0 && port < MAPLE_DEVS_PER_PORT);
     }
+
+protected:
+	//! Create the maple device needed to interface this device to the emulator
+	//! @param[in] type The user-selected device type
+	//! @param[in] bus The bus used for this device [0,3]
+	//! @param[in] port The port for this device [0,5]
+	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) = 0;
 };
 
 //! The class a DreamLink device should inherit from
@@ -153,6 +160,9 @@ private:
     //! @param[in] p Context pointer (ignored)
 	static void eventHandler(Event event, void *p);
 
+	void asyncConnect();
+	void asyncDisconnect();
+
 public:
     //! Mask to use for all ports
     static constexpr const u32 ALL_PORTS_MASK = (1 << MAPLE_DEVS_PER_PORT) - 1;
@@ -172,6 +182,9 @@ private:
     //! All currently connected ports
     u32 connectedPortsMask;
 
+	std::mutex connectionMutex;
+	std::future<void> connectionFuture;
+
     //! Initialized to false and set to true on the creation of the first BaseDreamLink
     static std::atomic<bool> EventsRegistered;
     //! Flag which tracks game start/termination events
@@ -181,7 +194,6 @@ private:
     static std::recursive_mutex Mutex;
     //! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)
     static std::array<std::list<Ptr>, MAPLE_PORTS> Registry;
-
 };
 
 //! Basic dream link VMU device which relays only screen and timer data to the DreamLink device

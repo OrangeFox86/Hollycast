@@ -34,9 +34,13 @@ std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port)
     if (!DreamLink::isValidBus(bus) || !DreamLink::isValidPort(port))
         return std::nullopt;
 
-    std::lock_guard<std::mutex> lock(mutex);
+    DreamLink::Ptr link;
 
-    DreamLink::Ptr link = links[bus][port].lock();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        link = links[bus][port].lock();
+    }
+
     if (!link)
         return std::nullopt;
 

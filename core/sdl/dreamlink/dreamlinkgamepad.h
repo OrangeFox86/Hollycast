@@ -26,7 +26,7 @@
 #include "types.h"
 #include "emulator.h"
 #include "../sdl_gamepad.h"
-#include "input/dreamlink.h"
+#include "sdldreamlink.h"
 
 #include <functional>
 #include <memory>
@@ -43,12 +43,12 @@ public:
 	void close() override;
 
 protected:
-	DreamLinkGamepad(std::shared_ptr<DreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
+	DreamLinkGamepad(std::shared_ptr<SDLDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
 	std::shared_ptr<InputMapping> getDefaultMapping() override;
 	void setBaseDefaultMapping(const std::shared_ptr<InputMapping>& mapping) const;
 	virtual void setCustomMapping(const std::shared_ptr<InputMapping>& mapping) {}
 
-	std::shared_ptr<DreamLink> dreamlink;
+	std::shared_ptr<SDLDreamLink> dreamlink;
 	std::string device_guid;
 };
 
