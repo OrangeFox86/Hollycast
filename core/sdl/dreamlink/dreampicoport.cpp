@@ -61,7 +61,7 @@ namespace dream_pico_port
 {
 
 //! Generically handles any MapleLink device when supported
-struct MapleLinkDevice : public maple_base
+struct MapleLinkDevice : public maple_base, public MapleLinkDeviceMeta
 {
 	//! The supported functions mask for this device
 	const u32 supportedFns;
@@ -71,16 +71,20 @@ struct MapleLinkDevice : public maple_base
 	std::mutex writeMutex;
 	//! Virtual VMU used when physical memory should not be used
 	std::unique_ptr<maple_sega_vmu> virtualVmu;
+	//! Switched to true on first memory read/write command
+	bool storageLinked = false;
 
 	//! Constructor
 	//! @param[in] supportedFns Supported functions mask (default: any function)
 	MapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~MapleLinkDevice();
-	std::shared_ptr<class DreamPicoPort> getDreamPicoPort();
+	std::shared_ptr<class DreamPicoPort> getDreamPicoPort() const;
 	bool linkStatus() override;
 	MapleDeviceType get_device_type() override;
 	u32 virtualVmuDma(u32 cmd);
 	u32 dma(u32 cmd) override;
+
+	bool usingExternalStorage() const override;
 };
 
 //! Generically handles a MapleLink main device (normally a controller)
@@ -1592,7 +1596,7 @@ MapleLinkDevice::~MapleLinkDevice()
 	}
 }
 
-std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort()
+std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort() const
 {
 	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (!link)
@@ -1619,21 +1623,21 @@ MapleDeviceType MapleLinkDevice::get_device_type()
 		return MDT_None;
 
 	u32 fn = link->getFunctionCode(bus_port);
-	if (fn | MFID_0_Input)
+	if (fn & MFID_0_Input)
 		return MDT_SegaController;
-	else if (fn | (MFID_1_Storage & MFID_2_LCD & MFID_3_Clock))
+	else if (fn & (MFID_1_Storage & MFID_2_LCD & MFID_3_Clock))
 		return MDT_SegaVMU;
-	else if (fn | MFID_4_Mic)
+	else if (fn & MFID_4_Mic)
 		return MDT_Microphone;
-	else if (fn | (MFID_5_ARGun & MFID_7_LightGun))
+	else if (fn & (MFID_5_ARGun & MFID_7_LightGun))
 		return MDT_LightGun;
-	else if (fn | MFID_6_Keyboard)
+	else if (fn & MFID_6_Keyboard)
 		return MDT_Keyboard;
-	else if (fn | MFID_8_Vibration)
+	else if (fn & MFID_8_Vibration)
 		return MDT_PurupuruPack;
-	else if (fn | MFID_9_Mouse)
+	else if (fn & MFID_9_Mouse)
 		return MDT_Mouse;
-	else if (fn | MFID_11_Camera)
+	else if (fn & MFID_11_Camera)
 		return MDT_Dreameye;
 
 	return MDT_None;
@@ -1676,12 +1680,17 @@ u32 MapleLinkDevice::dma(u32 cmd)
 	}
 
 	if (
-		!link->storageEnabled() &&
-		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError) &&
-		firstWord == MFID_1_Storage
+		firstWord == MFID_1_Storage &&
+		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError)
 	) {
-		// Use virtual memory and return without accessing physical memory
-		return virtualVmuDma(cmd);
+		if (!link->storageEnabled() && !storageLinked) {
+			// Use virtual memory and return without accessing physical memory
+			// This will use file-backed memory and automatically save when needed
+			return virtualVmuDma(cmd);
+		} else {
+			// Ensure flag is updated to save the fact that external storage is being used
+			storageLinked = true;
+		}
 	} else if (cmd == MDCF_BlockWrite && firstWord == MFID_2_LCD) {
 		// Send to virtual screen and also continue below
 		virtualVmuDma(cmd);
@@ -1720,6 +1729,11 @@ u32 MapleLinkDevice::dma(u32 cmd)
 	}
 
 	return rxMsg.command;
+}
+
+bool MapleLinkDevice::usingExternalStorage() const
+{
+	return storageLinked;
 }
 
 

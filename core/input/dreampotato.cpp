@@ -64,6 +64,13 @@ struct DreamPotatoVmu : public MapleLinkVmu
 {
 	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	bool userNotified = false;
+	//! Switched to true on first memory read/write command
+	bool storageLinked = false;
+
+	bool usingExternalStorage() const override
+	{
+		return storageLinked;
+	}
 
 	void OnSetup() override
 	{
@@ -152,6 +159,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 			DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: read block %d", logical_port, block);
 			memcpy(&flash_data[block * 4 * 128], &rxMsg.data[8], 4 * 128);
 			cachedBlocks[block] = true;
+			storageLinked = true;
 		}
 		else {
 			ERROR_LOG(MAPLE, "Failed to read VMU %s: I/O error", logical_port);
@@ -190,6 +198,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 						ERROR_LOG(MAPLE, "Failed to write VMU %s: I/O error", logical_port);
 						return MDRE_FileError;
 					}
+					storageLinked = true;
 					if (rxMsg.command != MDRS_DeviceReply)
 						return rxMsg.command;
 					cachedBlocks[inMsg->data[7]] = true;

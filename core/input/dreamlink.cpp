@@ -81,6 +81,28 @@ void BaseDreamLink::disableStorage()
 	vmuStorage = false;
 	if (isGameStarted())
 	{
+		// Simulate a removal and reinsertion event for devices using external memory
+		emu.run([bus=linkedBus, ports=connectedPortsMask]() {
+			for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
+			{
+				if (DreamLink::isValidBus(bus) && (ports & (1 << port)))
+				{
+					auto link = MapleLinkRegistry::GetMapleLink(bus, port);
+					if (!link)
+					{
+						continue;
+					}
+
+					std::shared_ptr<MapleLinkDeviceMeta> mapleDevMeta =
+						std::dynamic_pointer_cast<MapleLinkDeviceMeta>(link->dreamlink);
+					if (mapleDevMeta && mapleDevMeta->usingExternalStorage())
+					{
+						maple_ReconnectDevice(bus, port);
+					}
+				}
+			}
+		});
+
 		os_notify("ATTENTION: State loaded with physical VMU memory enabled", 6000,
 				"Physical memory has detached from local state");
 	}

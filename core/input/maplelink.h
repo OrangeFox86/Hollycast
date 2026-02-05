@@ -73,16 +73,31 @@ public:
 	const u32 port;
 };
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
-struct MapleLinkVmu : maple_sega_vmu
+//! Virtual class which all maple link devices should inheirt from
+struct MapleLinkDeviceMeta
 {
-	u32 dma(u32 cmd) override;
-	u32 dma(std::optional<MapleLink>& link, u32 cmd);
+	//! @return true iff there is a current link to external storage
+	virtual bool usingExternalStorage() const = 0;
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
-struct MapleLinkPuruPuru : maple_sega_purupuru
+struct MapleLinkVmu : maple_sega_vmu, MapleLinkDeviceMeta
 {
 	u32 dma(u32 cmd) override;
 	u32 dma(std::optional<MapleLink>& link, u32 cmd);
+	inline bool usingExternalStorage() const override
+	{
+		return false;
+	}
+};
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
+struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDeviceMeta
+{
+	u32 dma(u32 cmd) override;
+	u32 dma(std::optional<MapleLink>& link, u32 cmd);
+	inline bool usingExternalStorage() const override
+	{
+		return false;
+	}
 };
