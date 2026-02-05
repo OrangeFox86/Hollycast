@@ -81,15 +81,6 @@ void BaseDreamLink::disableStorage()
 	vmuStorage = false;
 	if (isGameStarted())
 	{
-		// TODO: Only DreamPotato would be affected by this, so maybe there just needs to be a tweak there
-		emu.run([bus=linkedBus, ports=connectedPortsMask]() {
-			for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
-			{
-				if (DreamLink::isValidBus(bus) && (ports & (1 << port)))
-					maple_ReconnectDevice(bus, port);
-			}
-		});
-
 		os_notify("ATTENTION: State loaded with physical VMU memory enabled", 6000,
 				"Physical memory has detached from local state");
 	}

@@ -71,13 +71,19 @@ static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)
 
 u32 MapleLinkVmu::dma(u32 cmd)
 {
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_id);
+	return dma(link, cmd);
+}
+
+u32 MapleLinkVmu::dma(std::optional<MapleLink>& link, u32 cmd)
+{
 	u32 rv = maple_sega_vmu::dma(cmd);
-	if (inMsg && inMsg->size > 0)
+	if (link && inMsg && inMsg->size > 0)
 	{
 		u32 function = inMsg->readData<u32>(0);
 		if ((cmd == MDCF_BlockWrite && function == MFID_2_LCD) || cmd == MDCF_SetCondition)
 		{
-			relayMapleLink(bus_id, bus_port, *inMsg);
+			link->send(*inMsg);
 		}
 	}
 	return rv;
@@ -85,12 +91,18 @@ u32 MapleLinkVmu::dma(u32 cmd)
 
 u32 MapleLinkPuruPuru::dma(u32 cmd)
 {
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_id);
+	return dma(link, cmd);
+}
+
+u32 MapleLinkPuruPuru::dma(std::optional<MapleLink>& link, u32 cmd)
+{
 	u32 rv = maple_sega_purupuru::dma(cmd);
-	if (inMsg)
+	if (link && inMsg)
 	{
 		if (cmd == MDCF_BlockWrite || cmd == MDCF_SetCondition)
 		{
-			relayMapleLink(bus_id, bus_port, *inMsg);
+			link->send(*inMsg);
 		}
 	}
 	return rv;

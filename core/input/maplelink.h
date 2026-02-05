@@ -23,6 +23,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <optional>
 
 //! A MapleLink puts bus/port context onto a DreamLink and allows for creation of a maple_device
 class MapleLink
@@ -76,10 +77,12 @@ public:
 struct MapleLinkVmu : maple_sega_vmu
 {
 	u32 dma(u32 cmd) override;
+	u32 dma(std::optional<MapleLink>& link, u32 cmd);
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
 struct MapleLinkPuruPuru : maple_sega_purupuru
 {
 	u32 dma(u32 cmd) override;
+	u32 dma(std::optional<MapleLink>& link, u32 cmd);
 };
