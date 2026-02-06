@@ -1143,12 +1143,15 @@ class DreamPicoPort : public SDLDreamLink
 
 	//! Hardware information determined on instantiation
 	const HardwareInfo hw_info;
+	//! The name to return on getName
+	const std::string device_name;
 
 public:
     DreamPicoPort(int bus, int joystick_idx, SDL_Joystick* sdl_joystick) :
 		SDLDreamLink(true),
 		software_bus(bus),
-		hw_info(parseHardwareInfo(joystick_idx, sdl_joystick))
+		hw_info(parseHardwareInfo(joystick_idx, sdl_joystick)),
+		device_name(hw_info.getName())
 	{
 	}
 
@@ -1277,8 +1280,8 @@ public:
 		}
 	}
 
-	std::string getName() const {
-		return hw_info.getName();
+	const char* getName() const override {
+		return device_name.c_str();
 	}
 
 	void setMapleDevices()
@@ -1390,7 +1393,7 @@ public:
 			INPUT,
 			"Connected to DreamPicoPort[%d]: Type:%s, VMU:%d, Jump Pack:%d",
 			software_bus,
-			getName().c_str(),
+			getName(),
 			(getFunctionCode(0) & MFID_1_Storage) != 0,
 			(getFunctionCode(1) & MFID_8_Vibration) != 0
 		);

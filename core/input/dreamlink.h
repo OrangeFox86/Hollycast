@@ -73,6 +73,8 @@ public:
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
+	//! @return the display name of this DreamLink
+	virtual const char* getName() const = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test

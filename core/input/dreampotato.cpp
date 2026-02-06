@@ -262,6 +262,9 @@ public:
 		checkConnection();
 		return connected;
 	}
+	const char* getName() const override {
+		return "DreamPotato";
+	}
 
 	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override {
 		return std::make_shared<DreamPotatoVmu>();

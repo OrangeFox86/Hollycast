@@ -161,6 +161,10 @@ public:
 		snprintf(buf, sizeof(buf), i18n::T("WARNING: DreamConn disconnected from port %c"), 'A' + bus);
 		os_notify(buf, 6000);
 	}
+
+	const char* getName() const override {
+		return "DreamConn";
+	}
 };
 
 bool DreamConnGamepad::identify(int deviceIndex)
