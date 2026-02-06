@@ -127,9 +127,7 @@ public:
 			return;
 		iostream.expires_from_now(std::chrono::duration<u32>::max());	// don't use a 64-bit based duration to avoid overflow
 
-		config::MapleExpansionDevices[bus][0] = expansionDevs[0] = rxMsg.originAP & 1 ? MDT_SegaVMU : MDT_None;
-		config::MapleExpansionDevices[bus][1] = expansionDevs[1] = rxMsg.originAP & 2 ? MDT_PurupuruPack : MDT_None;
-		const u32 ports = rxMsg.originAP & 0x03;
+		const u32 ports = (0x03 | (1 << 5)); // Port 1 and 2 plus controller itself
 		registerLink(bus, ports);
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,

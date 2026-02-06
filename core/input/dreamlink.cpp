@@ -196,12 +196,25 @@ void BaseDreamLink::unregisterLink()
 
 std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(MapleDeviceType type, int bus, int port)
 {
-	// By default, make a VMU and PuruPuru device link to hardware
-	switch (type) {
-		case MapleDeviceType::MDT_SegaVMU: return std::make_shared<MapleLinkVmu>();
-		case MapleDeviceType::MDT_PurupuruPack: return std::make_shared<MapleLinkPuruPuru>();
-		default: return maple_Create(type);
+	// Support basic controller with VMU and PuruPuru pack when MDT_DreamLink set for type
+	if (type == MapleDeviceType::MDT_DreamLink)
+	{
+		if (port == 1)
+		{
+			return std::make_shared<MapleLinkPuruPuru>();
+		}
+		else if (port == 5)
+		{
+			return maple_Create(MapleDeviceType::MDT_SegaController);
+		}
+		else
+		{
+			return std::make_shared<MapleLinkVmu>();
+		}
 	}
+
+	// Default create otherwise
+	return maple_Create(type);
 }
 
 void BaseDreamLink::asyncRetryConnect()

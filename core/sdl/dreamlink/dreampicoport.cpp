@@ -1327,11 +1327,16 @@ public:
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override {
-		if (port == 5) {
-			return std::make_shared<MapleLinkMainDevice>();
-		} else {
-			return std::make_shared<MapleLinkDevice>();
+		if (type == MapleDeviceType::MDT_DreamLink) {
+			if (port == 5) {
+				return std::make_shared<MapleLinkMainDevice>();
+			} else {
+				return std::make_shared<MapleLinkDevice>();
+			}
 		}
+
+		// Default create otherwise
+		return maple_Create(type);
 	}
 
 	void connect() override {

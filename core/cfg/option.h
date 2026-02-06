@@ -552,6 +552,8 @@ extern Option<int> VirtualGamepadTransparency;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;
+extern std::array<std::array<Option<bool>, 2>, 4> AutoDreamLinkSelect;
+extern std::array<std::array<bool, 2>, 4> DreamLinkSelected;
 extern Option<bool> PerGameVmu;
 #ifdef _WIN32
 extern Option<bool, false> UseRawInput;

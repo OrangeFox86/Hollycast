@@ -25,6 +25,7 @@ enum MapleDeviceType
 	MDT_Dreameye                = 17,
 	MDT_SegaControllerXL        = 18,
 	MDT_DreamParaParaController = 19,
+	MDT_DreamLink               = 20, // External device through DreamLink
 	MDT_Count
 };
 

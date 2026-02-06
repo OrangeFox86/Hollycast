@@ -227,6 +227,20 @@ std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices{{
 	{{Option<int>("device4.1.net", 0, "input"),
 	Option<int>("device4.2.net", 0, "input")}},
 }};
+std::array<std::array<Option<bool>, 2>, 4> AutoDreamLinkSelect{{
+	{{Option<bool>("device1.1.dreamlink", true, "input"),
+	Option<bool>("device1.2.dreamlink", true, "input")}},
+
+	{{Option<bool>("device2.1.dreamlink", true, "input"),
+	Option<bool>("device2.2.dreamlink", true, "input")}},
+
+	{{Option<bool>("device3.1.dreamlink", true, "input"),
+	Option<bool>("device3.2.dreamlink", true, "input")}},
+
+	{{Option<bool>("device4.1.dreamlink", true, "input"),
+	Option<bool>("device4.2.dreamlink", true, "input")}},
+}};
+std::array<std::array<bool, 2>, 4> DreamLinkSelected = {};
 Option<bool> PerGameVmu("PerGameVmu", true, "config");
 #ifdef _WIN32
 Option<bool, false> UseRawInput("RawInput", false, "input");
