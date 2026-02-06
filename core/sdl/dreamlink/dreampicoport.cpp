@@ -1294,31 +1294,20 @@ public:
 
 		u32 portOneFn = getFunctionCode(0);
 		if (portOneFn & MFID_1_Storage) {
-			config::MapleExpansionDevices[software_bus][0] = MDT_SegaVMU;
 			if (storageEnabled() && isGameStarted())
 			{
 				sendGameId(0);
 				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
 			}
 		}
-		else {
-			config::MapleExpansionDevices[software_bus][0] = MDT_None;
-		}
 
 		u32 portTwoFn = getFunctionCode(1);
-		if (portTwoFn & MFID_8_Vibration) {
-			config::MapleExpansionDevices[software_bus][1] = MDT_PurupuruPack;
-		}
-		else if (portTwoFn & MFID_1_Storage) {
-			config::MapleExpansionDevices[software_bus][1] = MDT_SegaVMU;
+		if (portTwoFn & MFID_1_Storage) {
 			if (storageEnabled() && isGameStarted())
 			{
 				sendGameId(1);
 				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
 			}
-		}
-		else {
-			config::MapleExpansionDevices[software_bus][1] = MDT_None;
 		}
 	}
 
