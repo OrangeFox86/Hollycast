@@ -1571,8 +1571,11 @@ private:
 		return hw_info;
 	}
 
-    bool queryPeripherals() {
-		peripherals.clear();
+public:
+    bool queryPeripherals(bool clearOnFailure = true) {
+		if (clearOnFailure) {
+			peripherals.clear();
+		}
 
 		if (!isConnected()) {
 			return false;
@@ -1874,4 +1877,18 @@ const char *DreamPicoPortGamepad::get_button_name(u32 code)
 
 		default: return DreamLinkGamepad::get_button_name(code); // default name
 	}
+}
+
+bool DreamPicoPortGamepad::gamepad_btn_input(u32 code, bool pressed)
+{
+	if (code == 20 && !pressed)
+	{
+		dream_pico_port::DreamPicoPort *picoPort = dynamic_cast<dream_pico_port::DreamPicoPort*>(dreamlink.get());
+		if (picoPort)
+		{
+			picoPort->queryPeripherals(false);
+		}
+	}
+
+	return DreamLinkGamepad::gamepad_btn_input(code, pressed);
 }

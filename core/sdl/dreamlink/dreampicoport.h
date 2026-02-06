@@ -33,6 +33,8 @@ public:
 	const char *get_button_name(u32 code) override;
 	static bool identify(int deviceIndex);
 
+    bool gamepad_btn_input(u32 code, bool pressed) override;
+
 protected:
 	void setCustomMapping(const std::shared_ptr<InputMapping>& mapping) override;
 
