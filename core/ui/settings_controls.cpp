@@ -1153,8 +1153,6 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				for (int port = 0; port < port_count; port++)
 				{
 					const bool port_has_dream_link = has_dream_link && (MapleLinkRegistry::GetMapleLink(bus, port) != std::nullopt);
-					if (!port_has_dream_link)
-						config::DreamLinkSelected[bus][port] = false;
 
 					ImGui::TableSetColumnIndex(2 + port);
 					snprintf(device_name, sizeof(device_name), "##device%d.%d", bus, port + 1);
@@ -1163,8 +1161,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 					int subtype = config::MapleExpansionDevices[bus][port];
 					if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1)
 						subtype = MDT_DreamPotato;
-					else if (port_has_dream_link && (config::DreamLinkSelected[bus][port] || config::AutoDreamLinkSelect[bus][port])) {
-						config::DreamLinkSelected[bus][port] = true;
+					else if (port_has_dream_link && (config::DreamLinkSelect[bus][port])) {
 						subtype = MDT_DreamLink;
 					}
 					if (ImGui::BeginCombo(device_name, maple_expansion_device_name((MapleDeviceType)subtype), ImGuiComboFlags_None))
@@ -1176,12 +1173,10 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 							{
 								subtype = maple_expansion_device_type_from_index(i);
 								if (subtype == MDT_DreamLink) {
-									config::DreamLinkSelected[bus][port] = true;
-									config::AutoDreamLinkSelect[bus][port] = true;
+									config::DreamLinkSelect[bus][port] = true;
 								}
 								else if (port_has_dream_link) {
-									config::DreamLinkSelected[bus][port] = false;
-									config::AutoDreamLinkSelect[bus][port] = false;
+									config::DreamLinkSelect[bus][port] = false;
 								}
 
 								if (subtype == MDT_DreamPotato) {
@@ -1189,7 +1184,9 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 									config::NetworkExpansionDevices[bus][port] = 1;
 								}
 								else {
-									config::MapleExpansionDevices[bus][port] = (MapleDeviceType)subtype;
+									if (subtype != MDT_DreamLink) {
+										config::MapleExpansionDevices[bus][port] = (MapleDeviceType)subtype;
+									}
 									config::NetworkExpansionDevices[bus][port] = 0;
 								}
 								expDevicesChanges[bus][port] = true;

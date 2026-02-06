@@ -327,8 +327,40 @@ static void createAtomiswaveDevices()
 	}
 }
 
+void mcfg_CreateDreamLinkDevices()
+{
+	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
+	{
+		std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus, 5);
+		if (link)
+		{
+			mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, 5);
+
+			for (int port = 0; port < 2; ++port)
+			{
+				if (config::DreamLinkSelect[bus][port] && MapleLinkRegistry::GetMapleLink(bus, port))
+					mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, port);
+				else if (config::MapleExpansionDevices[bus][port] != MDT_None)
+					mcfg_Create(config::MapleExpansionDevices[bus][port], bus, port);
+			}
+
+			for (int port = 2; port < 5; ++port)
+			{
+				auto link = MapleLinkRegistry::GetMapleLink(bus, port);
+				if (link)
+				{
+					mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, static_cast<u32>(port));
+				}
+			}
+		}
+	}
+}
+
 static void createDreamcastDevices()
 {
+	// Check for and instantiate DreamLink devices first
+	mcfg_CreateDreamLinkDevices();
+
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
 		switch (config::MapleMainDevices[bus])
@@ -395,46 +427,12 @@ static void vmuDigest()
 	md5.getDigest(settings.network.md5.vmu);
 }
 
-void mcfg_CreateDreamLinkDevices()
-{
-	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
-	{
-		std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus, 5);
-		if (link)
-		{
-			mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, 5);
-
-			for (int port = 0; port < 2; ++port)
-			{
-				if (config::MapleExpansionDevices[bus][port] != MDT_None)
-					if (config::DreamLinkSelected[bus][port])
-						mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, port);
-					else
-						mcfg_Create(config::MapleExpansionDevices[bus][port], bus, port);
-			}
-
-			for (int port = 2; port < 5; ++port)
-			{
-				auto link = MapleLinkRegistry::GetMapleLink(bus, port);
-				if (link)
-				{
-					mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, static_cast<u32>(port));
-				}
-			}
-		}
-	}
-}
-
 void mcfg_CreateDevices()
 {
 	settings.input.lightgunGame = false;
 	settings.input.keyboardGame = false;
 	settings.input.mouseGame = false;
 	settings.input.fourPlayerGames = false;
-
-	// Check for and instantiate DreamLink devices first
-	mcfg_CreateDreamLinkDevices();
-
 	switch (settings.platform.system)
 	{
 	case DC_PLATFORM_DREAMCAST:
