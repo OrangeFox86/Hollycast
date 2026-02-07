@@ -48,7 +48,6 @@ public:
 	DreamConn(int bus)
 		: SDLDreamLink(false), bus(bus)
 	{
-		registerLink(bus, ALL_PORTS_MASK);
 	}
 
 	bool storageEnabled() override {
@@ -97,6 +96,10 @@ public:
 				asyncRetryConnect();
 			}
 		}
+	}
+
+	void registered() override {
+		registerLink(bus, ALL_PORTS_MASK);
 	}
 
 	bool isConnected() override {

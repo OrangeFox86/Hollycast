@@ -101,7 +101,7 @@ void DreamLinkGamepad::set_maple_port(int port)
 void DreamLinkGamepad::registered()
 {
 	SDLGamepad::registered();
-	dreamlink->connect();
+	dreamlink->registered();
 }
 
 void DreamLinkGamepad::resetMappingToDefault(bool arcade, bool gamepad) {

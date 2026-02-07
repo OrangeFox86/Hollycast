@@ -35,4 +35,7 @@ public:
 
 	//! Changes the selected maple port is changed by the user
 	virtual void changeBus(int newBus) = 0;
+
+	//! Called once the gamepad is registered - the dreamlink should register itself
+	virtual void registered() = 0;
 };

@@ -1272,11 +1272,16 @@ public:
 		if (software_bus == newBus)
 			return;
 		software_bus = newBus;
+		registerLink(software_bus, ALL_PORTS_MASK); // will automatically unregister from previous bus
 		setMapleDevices();
 		if (dpp_comms) {
 			dpp_comms->changeSoftwareBus(software_bus);
 			sendPort();
 		}
+	}
+
+	void registered() override {
+		registerLink(software_bus, ALL_PORTS_MASK);
 	}
 
 	const char* getName() const override {
@@ -1286,13 +1291,7 @@ public:
 	void setMapleDevices()
 	{
 		if (!DreamLink::isValidBus(software_bus))
-		{
-			unregisterLink();
 			return;
-		}
-
-		// Register all ports regardless of current presence of device - MapleLinkDevice will generically handle this
-		registerLink(software_bus, ALL_PORTS_MASK);
 
 		u32 portOneFn = getFunctionCode(0);
 		if (portOneFn & MFID_1_Storage) {
