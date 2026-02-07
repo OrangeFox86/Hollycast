@@ -61,7 +61,7 @@ public:
 	//! @return true iff VMU reads and writes should be sent to the device
 	virtual bool storageEnabled() = 0;
 	//! @return true iff a game has been started
-	virtual bool isGameStarted() const = 0;
+	virtual bool isGameRunning() const = 0;
 	//! Attempt connection to the link
 	virtual void connect() = 0;
 	//! Disconnect from the link
@@ -139,7 +139,7 @@ public:
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
 	//! @return true iff a game has been started
-	bool isGameStarted() const;
+	bool isGameRunning() const;
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	void term() override;
@@ -162,7 +162,8 @@ protected:
     void registerLink(int bus, u32 portsMask);
 
     //! Unregisters this DreamLink from all registries
-    void unregisterLink();
+	//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
+    void unregisterLink(bool isTerminal = false);
 
 	//! Overridden from DreamLink
 	//! This is the default implementation which may be overridden by child
@@ -172,20 +173,6 @@ protected:
 	void asyncRetryConnect();
 
 private:
-    //! Removes link from reistry without locking on the mutex
-    //! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
-    void removeLinkFromRegistry(int newBus = -1);
-
-    //! Esablish this link in MapleLinkRegistry
-    //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
-    //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
-    void establishInMapleLinkRegistry(int bus, u32 portsMask);
-
-    //! Central event handler
-    //! @param[in] event The incoming event
-    //! @param[in] p Context pointer (ignored)
-	static void eventHandler(Event event, void *p);
-
 	//! Type of pending connection work
 	enum class ConnectionWorkType { Connect, Disconnect };
 
@@ -226,25 +213,61 @@ private:
 	//! Worker thread for this instance
 	std::unique_ptr<std::thread> connectionWorker;
 
-    //! Initialized to false and set to true on the creation of the first BaseDreamLink
-    static std::atomic<bool> EventsRegistered;
-    //! Flag which tracks game start/termination events
-    static std::atomic<bool> GameStarted;
+	//! Singleton class which is a prioritized Registry of BaseDreamLink devices.
+	//! This registry keeps track of which devices are connected by priority and handles game events for all devices.
+	class PrioritizedRegistry
+	{
+	private:
+		//! Default constructor
+		PrioritizedRegistry();
+		//! Destructor
+		~PrioritizedRegistry();
 
-    //! Mutex serializing access to Registry
-    static std::recursive_mutex Mutex;
-    //! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)
-    static std::array<std::list<Ptr>, MAPLE_PORTS> Registry;
-};
+	public:
+		//! @return the singleton instance
+		static PrioritizedRegistry& Get();
 
-//! Basic dream link VMU device which relays only screen and timer data to the DreamLink device
-struct DreamLinkVmu : maple_sega_vmu
-{
-	u32 dma(u32 cmd) override;
-};
+		//! Esablish this link in MapleLinkRegistry
+		//! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
+		//! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
+		void registerLink(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask);
 
-//! Basic dream link Puru Puru (aka jump pack) device which relays vibration data to the DreamLink device
-struct DreamLinkPuruPuru : maple_sega_purupuru
-{
-	u32 dma(u32 cmd) override;
+		//! Removes link from reistry without locking on the mutex
+		//! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
+		//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
+		void unregisterLink(BaseDreamLink* dreamlink, bool isTerminal = false);
+
+		//! @return true iff game is currently running
+		bool isGameRunning() const;
+
+	private:
+	    //! Central event handler
+		//! @param[in] event The incoming event
+		void eventHandler(Event event);
+
+		//! Static event handler
+		//! @param[in] event The incoming event
+		//! @param[in] p Pointer to a PrioritizedRegistry
+		static void EventHandler(Event event, void *p);
+
+		//! Esablish this link in MapleLinkRegistry
+		//! @param[in] dreamlink Smart pointer to the dreamlink to add
+		//! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
+		//! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
+		void establishInMapleLinkRegistry(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask);
+
+		//! Removes link from reistry without locking on the mutex
+		//! @param[in] dreamlink Pointer to the dreamlink to remove
+		//! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
+		void removeLinkFromRegistry(const BaseDreamLink* dreamlink, int newBus = -1);
+
+	private:
+		//! Flag which tracks game start/termination events
+		std::atomic<bool> mIsGameRunning;
+
+		//! Mutex serializing access to Registry
+		std::recursive_mutex mMutex;
+		//! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)
+		std::array<std::list<BaseDreamLink::Ptr>, MAPLE_PORTS> mRegistry;
+	};
 };

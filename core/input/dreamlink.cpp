@@ -28,11 +28,6 @@
 #include <thread>
 #include <chrono>
 
-std::recursive_mutex BaseDreamLink::Mutex;
-std::array<std::list<BaseDreamLink::Ptr>, MAPLE_PORTS> BaseDreamLink::Registry;
-std::atomic<bool> BaseDreamLink::EventsRegistered = false;
-std::atomic<bool> BaseDreamLink::GameStarted = false;
-
 BaseDreamLink::BaseDreamLink(bool storageSupported) :
 	storageSupported(storageSupported),
 	vmuStorage(storageSupported),
@@ -40,33 +35,21 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 	linkedPortsMask(0),
 	connectedPortsMask(0)
 {
-	if (isGameStarted()) {
+	if (isGameRunning()) {
 		vmuStorage = vmuStorage && config::UsePhysicalVmuMemory;
-	}
-
-	// Register events on first BaseDreamLink instance
-	const bool eventsRegistered = EventsRegistered.exchange(true);
-	if (!eventsRegistered) {
-		EventManager::listen(Event::LoadState, eventHandler, nullptr);
-		EventManager::listen(Event::Start, eventHandler, nullptr);
-		EventManager::listen(Event::Terminate, eventHandler, nullptr);
 	}
 }
 
 BaseDreamLink::~BaseDreamLink()
 {
-	{
-		// This link should no longer be registered anywhere
-		std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
-		removeLinkFromRegistry();
-	}
+	unregisterLink(true);
 
 	stopConnectionWorkerThread();
 }
 
 bool BaseDreamLink::storageEnabled()
 {
-	if (!isGameStarted())
+	if (!isGameRunning())
 		return storageSupported && config::UsePhysicalVmuMemory;
 	else
 		return vmuStorage;
@@ -79,7 +62,7 @@ void BaseDreamLink::disableStorage()
 		return;
 	WARN_LOG(INPUT, "State loaded but VMU has storage enabled");
 	vmuStorage = false;
-	if (isGameStarted())
+	if (isGameRunning())
 	{
 		// Simulate a removal and reinsertion event for devices using external memory
 		emu.run([bus=linkedBus, ports=connectedPortsMask]() {
@@ -108,9 +91,9 @@ void BaseDreamLink::disableStorage()
 	}
 }
 
-bool BaseDreamLink::isGameStarted() const
+bool BaseDreamLink::isGameRunning() const
 {
-	return BaseDreamLink::GameStarted;
+	return PrioritizedRegistry::Get().isGameRunning();
 }
 
 void BaseDreamLink::term()
@@ -132,66 +115,12 @@ void BaseDreamLink::onGameStarted()
 
 void BaseDreamLink::registerLink(int bus, u32 portsMask)
 {
-	if (linkedBus == bus && connectedPortsMask == portsMask)
-		return;
-
-	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
-
-	// Ensure this link is not currently established
-	removeLinkFromRegistry(bus);
-
-	if (isValidBus(bus))
-	{
-		linkedBus = bus;
-		linkedPortsMask = portsMask;
-		connectedPortsMask = portsMask;
-
-		std::list<BaseDreamLink::Ptr>& priorities = BaseDreamLink::Registry[bus];
-
-		if (!priorities.empty())
-		{
-			// Remove connected port flags since this link now takes precedence
-			for (BaseDreamLink::Ptr& link : priorities)
-			{
-				const u32 prev = link->connectedPortsMask;
-				link->connectedPortsMask = link->connectedPortsMask & ~portsMask;
-				if (link->connectedPortsMask == 0)
-				{
-					if (prev != link->connectedPortsMask)
-					{
-						// No longer connected to anything
-						link->asyncConnection(ConnectionWorkType::Disconnect);
-					}
-				}
-			}
-		}
-
-		// Establish local registry link
-		priorities.push_front(shared_from_this());
-
-		establishInMapleLinkRegistry(bus, portsMask);
-	}
-	else
-	{
-		// Not a valid bus, so this should not be connected
-		linkedBus = -1;
-		asyncConnection(ConnectionWorkType::Disconnect);
-	}
+	PrioritizedRegistry::Get().registerLink(shared_from_this(), bus, portsMask);
 }
 
-void BaseDreamLink::unregisterLink()
+void BaseDreamLink::unregisterLink(bool isTerminal)
 {
-	if (!isValidBus(linkedBus))
-		return;
-
-	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
-
-	linkedBus = -1;
-
-	asyncConnection(ConnectionWorkType::Disconnect);
-
-	// Remove everything previously established for this controller
-	removeLinkFromRegistry();
+	PrioritizedRegistry::Get().unregisterLink(this, isTerminal);
 }
 
 std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(MapleDeviceType type, int bus, int port)
@@ -225,94 +154,6 @@ void BaseDreamLink::asyncRetryConnect()
 	if (lastConnectRequest == ConnectionWorkType::Connect)
 	{
 		asyncConnection(ConnectionWorkType::Connect, false);
-	}
-}
-
-void BaseDreamLink::removeLinkFromRegistry(int newBus)
-{
-	// Remove from MapleLinkRegistry
-	MapleLinkRegistry::Get().unregisterLinks(this);
-
-	for (int bus = 0; bus < BaseDreamLink::Registry.size(); ++bus)
-	{
-		std::list<Ptr>& priorities = BaseDreamLink::Registry[bus];
-		std::list<Ptr>::iterator iter = priorities.begin();
-		while (iter != priorities.end())
-		{
-			if (iter->get() == this)
-			{
-				iter = priorities.erase(iter);
-
-				if (bus != newBus && iter != priorities.end())
-				{
-					// Establish "new" priorities into MapleLinkRegistry
-					u32 availablePorts = ALL_PORTS_MASK;
-					for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
-					{
-						const Ptr& link = *innerIter;
-						const u32 ports = availablePorts & link->linkedPortsMask;
-						if (ports != 0)
-						{
-							link->establishInMapleLinkRegistry(bus, ports);
-							availablePorts = availablePorts & ~ports;
-						}
-					}
-				}
-			}
-			else
-			{
-				++iter;
-			}
-		}
-	}
-}
-
-void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 portsMask)
-{
-	if (MapleLinkRegistry::Get().registerLinks(shared_from_this(), bus, portsMask) > 0)
-	{
-		asyncConnection(ConnectionWorkType::Connect);
-	}
-}
-
-void BaseDreamLink::eventHandler(Event event, void *p)
-{
-	// Set GameStarted flag
-	switch (event)
-	{
-	case Event::Start:
-		BaseDreamLink::GameStarted.store(true);
-		break;
-	case Event::Terminate:
-		BaseDreamLink::GameStarted.store(false);
-		break;
-	default:
-		break;
-	}
-
-	// Perform events for each link
-	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
-	for (std::list<Ptr>& priorities : BaseDreamLink::Registry)
-	{
-		if (!priorities.empty())
-		{
-			// Only perform events for the priority device
-			const Ptr& ptr = priorities.front();
-			switch (event)
-			{
-			case Event::Start:
-				ptr->onGameStarted();
-				break;
-			case Event::Terminate:
-				ptr->onGameTermination();
-				break;
-			case Event::LoadState:
-				ptr->disableStorage();
-				break;
-			default:
-				break;
-			}
-		}
 	}
 }
 
@@ -414,5 +255,193 @@ void BaseDreamLink::stopConnectionWorkerThread()
 	if (workerThread)
 	{
 		workerThread->join();
+	}
+}
+
+BaseDreamLink::PrioritizedRegistry::PrioritizedRegistry()
+{
+	EventManager::listen(Event::LoadState, EventHandler, this);
+	EventManager::listen(Event::Start, EventHandler, this);
+	EventManager::listen(Event::Terminate, EventHandler, this);
+}
+
+BaseDreamLink::PrioritizedRegistry::~PrioritizedRegistry()
+{
+	EventManager::unlisten(Event::LoadState, EventHandler, this);
+	EventManager::unlisten(Event::Start, EventHandler, this);
+	EventManager::unlisten(Event::Terminate, EventHandler, this);
+}
+
+BaseDreamLink::PrioritizedRegistry& BaseDreamLink::PrioritizedRegistry::Get()
+{
+	static PrioritizedRegistry inst;
+	return inst;
+}
+
+void BaseDreamLink::PrioritizedRegistry::registerLink(
+	const BaseDreamLink::Ptr& dreamlink,
+	int bus,
+	u32 portsMask
+)
+{
+	if (dreamlink->linkedBus == bus && dreamlink->connectedPortsMask == portsMask)
+		return;
+
+	std::lock_guard<std::recursive_mutex> lock(mMutex);
+
+	// Ensure this link is not currently established
+	removeLinkFromRegistry(dreamlink.get(), bus);
+
+	if (isValidBus(bus))
+	{
+		dreamlink->linkedBus = bus;
+		dreamlink->linkedPortsMask = portsMask;
+		dreamlink->connectedPortsMask = portsMask;
+
+		std::list<BaseDreamLink::Ptr>& priorities = mRegistry[bus];
+
+		if (!priorities.empty())
+		{
+			// Remove connected port flags since this link now takes precedence
+			for (BaseDreamLink::Ptr& link : priorities)
+			{
+				const u32 prev = link->connectedPortsMask;
+				link->connectedPortsMask = link->connectedPortsMask & ~portsMask;
+				if (link->connectedPortsMask == 0)
+				{
+					if (prev != link->connectedPortsMask)
+					{
+						// No longer connected to anything
+						link->asyncConnection(ConnectionWorkType::Disconnect);
+					}
+				}
+			}
+		}
+
+		// Establish local registry link
+		priorities.push_front(dreamlink);
+
+		establishInMapleLinkRegistry(dreamlink, bus, portsMask);
+	}
+	else
+	{
+		// Not a valid bus, so this should not be connected
+		dreamlink->linkedBus = -1;
+		dreamlink->asyncConnection(ConnectionWorkType::Disconnect);
+	}
+}
+
+void BaseDreamLink::PrioritizedRegistry::unregisterLink(BaseDreamLink* dreamlink, bool isTerminal)
+{
+	if (!isValidBus(dreamlink->linkedBus))
+		return;
+
+	std::lock_guard<std::recursive_mutex> lock(mMutex);
+
+	dreamlink->linkedBus = -1;
+
+	if (!isTerminal)
+	{
+		dreamlink->asyncConnection(ConnectionWorkType::Disconnect);
+	}
+
+	// Remove everything previously established for this controller
+	removeLinkFromRegistry(dreamlink);
+}
+
+bool BaseDreamLink::PrioritizedRegistry::isGameRunning() const
+{
+	return mIsGameRunning;
+}
+
+void BaseDreamLink::PrioritizedRegistry::eventHandler(Event event)
+{
+	// Set GameStarted flag
+	switch (event)
+	{
+	case Event::Start:
+		mIsGameRunning.store(true);
+		break;
+	case Event::Terminate:
+		mIsGameRunning.store(false);
+		break;
+	default:
+		break;
+	}
+
+	// Perform events for each link
+	std::lock_guard<std::recursive_mutex> lock(mMutex);
+	for (std::list<Ptr>& priorities : mRegistry)
+	{
+		for (const Ptr& ptr : priorities)
+		{
+			switch (event)
+			{
+			case Event::Start:
+				ptr->onGameStarted();
+				break;
+			case Event::Terminate:
+				ptr->onGameTermination();
+				break;
+			case Event::LoadState:
+				ptr->disableStorage();
+				break;
+			default:
+				break;
+			}
+		}
+	}
+}
+
+void BaseDreamLink::PrioritizedRegistry::EventHandler(Event event, void *p)
+{
+	PrioritizedRegistry* reg = reinterpret_cast<PrioritizedRegistry*>(p);
+	reg->eventHandler(event);
+}
+
+void BaseDreamLink::PrioritizedRegistry::establishInMapleLinkRegistry(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask)
+{
+	if (MapleLinkRegistry::Get().registerLinks(dreamlink, bus, portsMask) > 0)
+	{
+		dreamlink->asyncConnection(ConnectionWorkType::Connect);
+	}
+}
+
+void BaseDreamLink::PrioritizedRegistry::removeLinkFromRegistry(const BaseDreamLink* dreamlink, int newBus)
+{
+	// Remove from MapleLinkRegistry
+	MapleLinkRegistry::Get().unregisterLinks(dreamlink);
+
+	for (int bus = 0; bus < mRegistry.size(); ++bus)
+	{
+		std::list<Ptr>& priorities = mRegistry[bus];
+		std::list<Ptr>::iterator iter = priorities.begin();
+		while (iter != priorities.end())
+		{
+			if (iter->get() == dreamlink)
+			{
+				iter = priorities.erase(iter);
+
+				if (bus != newBus && iter != priorities.end())
+				{
+					// Establish "new" priorities into MapleLinkRegistry
+					u32 availablePorts = ALL_PORTS_MASK;
+					for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
+					{
+						const Ptr& link = *innerIter;
+						const u32 ports = availablePorts & link->linkedPortsMask;
+						if (ports != 0)
+						{
+							establishInMapleLinkRegistry(link, bus, ports);
+							availablePorts = availablePorts & ~ports;
+						}
+					}
+				}
+			}
+			else
+			{
+				++iter;
+			}
+		}
 	}
 }

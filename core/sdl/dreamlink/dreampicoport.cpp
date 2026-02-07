@@ -1294,7 +1294,7 @@ public:
 
 		u32 portOneFn = getFunctionCode(0);
 		if (portOneFn & MFID_1_Storage) {
-			if (storageEnabled() && isGameStarted())
+			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(0);
 				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
@@ -1303,7 +1303,7 @@ public:
 
 		u32 portTwoFn = getFunctionCode(1);
 		if (portTwoFn & MFID_1_Storage) {
-			if (storageEnabled() && isGameStarted())
+			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(1);
 				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
