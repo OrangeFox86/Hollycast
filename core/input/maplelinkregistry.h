@@ -72,12 +72,12 @@ private:
     //! Called by a BaseDreamLink in order to register it in this registry
     //! @param[in] dreamlink Smart pointer to the dreamlink
 	//! @param[in] bus Dreamcast bus index [0,3]
-	//! @param[in] port Peripheral port index [0,5]
-    void registerLink(const DreamLink::Ptr& dreamlink, u32 bus, u32 port);
+	//! @param[in] portsMask Peripheral port mask (up to DreamLink::ALL_PORTS_MASK)
+    std::size_t registerLinks(const DreamLink::Ptr& dreamlink, u32 bus, u32 portsMask);
 
     //! Called by a BaseDreamLink in order to unregister all entries from this registry
     //! @param[in] dreamlink Raw pointer to a dreamlink
-    void unregisterLink(const DreamLink* dreamlink);
+    std::size_t unregisterLinks(const DreamLink* dreamlink);
 
 private:
     //! Mutex serializing access to links

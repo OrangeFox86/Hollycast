@@ -130,9 +130,9 @@ void BaseDreamLink::onGameStarted()
 	vmuStorage = storageSupported && config::UsePhysicalVmuMemory && isConnected();
 }
 
-void BaseDreamLink::registerLink(int bus, u32 ports)
+void BaseDreamLink::registerLink(int bus, u32 portsMask)
 {
-	if (linkedBus == bus && connectedPortsMask == ports)
+	if (linkedBus == bus && connectedPortsMask == portsMask)
 		return;
 
 	std::lock_guard<std::recursive_mutex> lock(BaseDreamLink::Mutex);
@@ -143,8 +143,8 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 	if (isValidBus(bus))
 	{
 		linkedBus = bus;
-		linkedPortsMask = ports;
-		connectedPortsMask = ports;
+		linkedPortsMask = portsMask;
+		connectedPortsMask = portsMask;
 
 		std::list<BaseDreamLink::Ptr>& priorities = BaseDreamLink::Registry[bus];
 
@@ -154,7 +154,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 			for (BaseDreamLink::Ptr& link : priorities)
 			{
 				const u32 prev = link->connectedPortsMask;
-				link->connectedPortsMask = link->connectedPortsMask & ~ports;
+				link->connectedPortsMask = link->connectedPortsMask & ~portsMask;
 				if (link->connectedPortsMask == 0)
 				{
 					if (prev != link->connectedPortsMask)
@@ -169,7 +169,7 @@ void BaseDreamLink::registerLink(int bus, u32 ports)
 		// Establish local registry link
 		priorities.push_front(shared_from_this());
 
-		establishInMapleLinkRegistry(bus, ports);
+		establishInMapleLinkRegistry(bus, portsMask);
 	}
 	else
 	{
@@ -231,7 +231,7 @@ void BaseDreamLink::asyncRetryConnect()
 void BaseDreamLink::removeLinkFromRegistry(int newBus)
 {
 	// Remove from MapleLinkRegistry
-	MapleLinkRegistry::Get().unregisterLink(this);
+	MapleLinkRegistry::Get().unregisterLinks(this);
 
 	for (int bus = 0; bus < BaseDreamLink::Registry.size(); ++bus)
 	{
@@ -267,22 +267,12 @@ void BaseDreamLink::removeLinkFromRegistry(int newBus)
 	}
 }
 
-void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 ports)
+void BaseDreamLink::establishInMapleLinkRegistry(int bus, u32 portsMask)
 {
-	bool added = false;
-	for (u32 port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
+	if (MapleLinkRegistry::Get().registerLinks(shared_from_this(), bus, portsMask) > 0)
 	{
-		const u32 portMask = (1 << port);
-		if ((portMask & ports) != 0)
-		{
-			connectedPortsMask |= portMask;
-			MapleLinkRegistry::Get().registerLink(shared_from_this(), bus, port);
-			added = true;
-		}
-	}
-
-	if (added)
 		asyncConnection(ConnectionWorkType::Connect);
+	}
 }
 
 void BaseDreamLink::eventHandler(Event event, void *p)

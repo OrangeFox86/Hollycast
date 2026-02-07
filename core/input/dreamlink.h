@@ -25,14 +25,12 @@
 
 #include <array>
 #include <list>
-#include <initializer_list>
 #include <mutex>
 #include <atomic>
-#include <unordered_map>
 #include <thread>
 #include <condition_variable>
 #include <memory>
-#include <future>
+#include <functional>
 
 // Abstract base class for communication with physical controllers
 class DreamLink
@@ -90,6 +88,30 @@ public:
         return (port >= 0 && port < MAPLE_DEVS_PER_PORT);
     }
 
+	//! Executes something for each port in a port mask
+	//! @param[in] portsMask Mask of ports (up to ALL_PORTS_MASK)
+	//! @param[in] fn The function to execute for each port in the mask
+	//! @return number of times fn was called
+	static inline std::size_t forEachPort(u32 portsMask, std::function<void(int port)> fn) {
+		std::size_t num = 0;
+
+		for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
+		{
+			if (((1 << port) & portsMask) == 0)
+			{
+				continue;
+			}
+
+			fn(port);
+			++num;
+		}
+
+		return num;
+	}
+
+    //! Mask to use for all ports
+    static constexpr const u32 ALL_PORTS_MASK = (1 << MAPLE_DEVS_PER_PORT) - 1;
+
 protected:
 	//! Create the maple device needed to interface this device to the emulator
 	//! @param[in] type The user-selected device type
@@ -136,8 +158,8 @@ protected:
 	//! bus/ports to this DreamLink. If this DreamLink was already registered, the previous registration will first be
 	//! deleted.
     //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
-    //! @param[in] ports The port mask representing the ports on the bus that this DreamLink supports
-    void registerLink(int bus, u32 ports);
+    //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
+    void registerLink(int bus, u32 portsMask);
 
     //! Unregisters this DreamLink from all registries
     void unregisterLink();
@@ -156,8 +178,8 @@ private:
 
     //! Esablish this link in MapleLinkRegistry
     //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
-    //! @param[in] ports The port mask representing the ports on the bus that this DreamLink supports
-    void establishInMapleLinkRegistry(int bus, u32 ports);
+    //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
+    void establishInMapleLinkRegistry(int bus, u32 portsMask);
 
     //! Central event handler
     //! @param[in] event The incoming event
@@ -175,10 +197,6 @@ private:
 
 	//! Stops the connection worker thread
 	void stopConnectionWorkerThread();
-
-public:
-    //! Mask to use for all ports
-    static constexpr const u32 ALL_PORTS_MASK = (1 << MAPLE_DEVS_PER_PORT) - 1;
 
 protected:
     //! Determines whether or not storage is supported by this DreamLink
