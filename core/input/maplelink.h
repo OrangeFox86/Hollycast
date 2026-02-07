@@ -66,7 +66,7 @@ public:
 	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type);
 
 	//! The associated dreamlink
-	const const DreamLink::Ptr dreamlink;
+	const DreamLink::Ptr dreamlink;
 	//! The linked bus
 	const u32 bus;
 	//! The linked port
