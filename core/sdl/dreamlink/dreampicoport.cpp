@@ -1286,7 +1286,10 @@ public:
 	void setMapleDevices()
 	{
 		if (!DreamLink::isValidBus(software_bus))
+		{
+			unregisterLink();
 			return;
+		}
 
 		// Register all ports regardless of current presence of device - MapleLinkDevice will generically handle this
 		registerLink(software_bus, ALL_PORTS_MASK);

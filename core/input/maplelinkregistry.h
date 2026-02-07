@@ -70,18 +70,25 @@ public:
 
 private:
     //! Called by a BaseDreamLink in order to register it in this registry
+	//! @post call commitChanges() once all registration/unregistration is complete
     //! @param[in] dreamlink Smart pointer to the dreamlink
 	//! @param[in] bus Dreamcast bus index [0,3]
 	//! @param[in] portsMask Peripheral port mask (up to DreamLink::ALL_PORTS_MASK)
     std::size_t registerLinks(const DreamLink::Ptr& dreamlink, u32 bus, u32 portsMask);
 
     //! Called by a BaseDreamLink in order to unregister all entries from this registry
+	//! @post call commitChanges() once all registration/unregistration is complete
     //! @param[in] dreamlink Raw pointer to a dreamlink
     std::size_t unregisterLinks(const DreamLink* dreamlink);
 
+	//! Commit all registration/unregistration changes
+	void commitChanges();
+
 private:
-    //! Mutex serializing access to links
+    //! Mutex serializing access to links and portReconnectMasks
     std::mutex mutex;
     //! Registry of links by [bus][port]
     std::array<std::array<DreamLink::WPtr, MAPLE_DEVS_PER_PORT>, MAPLE_PORTS> links;
+	//! For each bus, the port mask for ports that require maple reconnection
+	std::array<u32, MAPLE_PORTS> portReconnectMasks;
 };

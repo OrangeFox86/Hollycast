@@ -324,6 +324,8 @@ void BaseDreamLink::PrioritizedRegistry::registerLink(
 		dreamlink->linkedBus = -1;
 		dreamlink->asyncConnection(ConnectionWorkType::Disconnect);
 	}
+
+	MapleLinkRegistry::Get().commitChanges();
 }
 
 void BaseDreamLink::PrioritizedRegistry::unregisterLink(BaseDreamLink* dreamlink, bool isTerminal)
@@ -342,6 +344,8 @@ void BaseDreamLink::PrioritizedRegistry::unregisterLink(BaseDreamLink* dreamlink
 
 	// Remove everything previously established for this controller
 	removeLinkFromRegistry(dreamlink);
+
+	MapleLinkRegistry::Get().commitChanges();
 }
 
 bool BaseDreamLink::PrioritizedRegistry::isGameRunning() const

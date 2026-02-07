@@ -76,41 +76,28 @@ std::size_t MapleLinkRegistry::registerLinks(const DreamLink::Ptr& dreamlink, u3
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    bool reconnect = false;
-
     numRegistered = DreamLink::forEachPort(
         portsMask,
-        [this, &dreamlink, bus, &reconnect](int port)
+        [this, &dreamlink, bus](int port)
         {
             DreamLink::Ptr link = links[bus][port].lock();
 
-            if (!reconnect)
+            if (link.get() != dreamlink.get() && dreamlink->isGameRunning())
             {
-                reconnect = (link && link.get() != dreamlink.get() && dreamlink->isGameRunning());
+                portReconnectMasks[bus] |= (1 << port);
             }
 
             links[bus][port] = dreamlink;
         }
     );
 
-    if (reconnect)
-    {
-		emu.run([bus, portsMask]() {
-            DreamLink::forEachPort(
-                portsMask,
-                [bus, portsMask](int port)
-                {
-                    maple_ReconnectDevice(bus, port);
-                }
-            );
-		});
-    }
-
     return numRegistered;
 }
 
 std::size_t MapleLinkRegistry::unregisterLinks(const DreamLink* dreamlink)
 {
+    std::size_t numUnregistered = 0;
+
     std::lock_guard<std::mutex> lock(mutex);
 
     for (std::size_t bus = 0; bus < links.size(); ++bus)
@@ -126,13 +113,51 @@ std::size_t MapleLinkRegistry::unregisterLinks(const DreamLink* dreamlink)
                 wptr.reset();
                 link.reset();
 
+                ++numUnregistered;
+
                 if (reconnect)
                 {
-                    emu.run([bus, port]() {
-                        maple_ReconnectDevice(bus, port);
-                    });
+                    portReconnectMasks[bus] |= (1 << port);
                 }
             }
         }
     }
+
+    return numUnregistered;
+}
+
+void MapleLinkRegistry::commitChanges()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    bool changeDetected = false;
+
+    for (const u32& portsMask : portReconnectMasks)
+    {
+        if (portsMask != 0)
+        {
+            changeDetected = true;
+            break;
+        }
+    }
+
+    if (!changeDetected)
+        return;
+
+    std::array<u32, MAPLE_PORTS> changes = portReconnectMasks;
+    portReconnectMasks.fill(0);
+
+    emu.run([changes]() {
+        for (int bus = 0; bus < changes.size(); ++bus)
+        {
+            u32 portsMask = changes[bus];
+            DreamLink::forEachPort(
+                portsMask,
+                [bus, portsMask](int port)
+                {
+                    maple_ReconnectDevice(bus, port);
+                }
+            );
+        }
+    });
 }

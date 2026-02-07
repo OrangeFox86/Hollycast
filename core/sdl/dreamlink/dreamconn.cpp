@@ -47,7 +47,9 @@ class DreamConn : public SDLDreamLink
 public:
 	DreamConn(int bus)
 		: SDLDreamLink(false), bus(bus)
-	{}
+	{
+		registerLink(bus, ALL_PORTS_MASK);
+	}
 
 	bool storageEnabled() override {
 		// DreamConn controllers don't support physical VMU memory access
@@ -87,7 +89,7 @@ public:
 	{
 		if (newBus != bus) {
 			bus = newBus;
-			registerLink(bus, ALL_PORTS_MASK);
+			registerLink(bus, ALL_PORTS_MASK); // will automatically unregister from previous bus
 			if (isConnected())
 			{
 				// A different TCP port is used depending on the bus - need to reconnect
@@ -127,8 +129,6 @@ public:
 		if (!sendReceive(msg, rxMsg))
 			return;
 		iostream.expires_from_now(std::chrono::duration<u32>::max());	// don't use a 64-bit based duration to avoid overflow
-
-		registerLink(bus, ALL_PORTS_MASK);
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,
 				deviceDescription(expansionDevs[0]), deviceDescription(expansionDevs[1]));
