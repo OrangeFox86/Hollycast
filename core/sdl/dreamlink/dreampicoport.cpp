@@ -1271,7 +1271,6 @@ public:
 	void changeBus(int newBus) override {
 		if (software_bus == newBus)
 			return;
-		unregisterLink();
 		software_bus = newBus;
 		setMapleDevices();
 		if (dpp_comms) {

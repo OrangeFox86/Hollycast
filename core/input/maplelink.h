@@ -101,3 +101,12 @@ struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDeviceMeta
 		return false;
 	}
 };
+
+//! Stub class which may be used as a placeholder device when no function is needed
+struct MapleLinkStub : maple_base, MapleLinkDeviceMeta
+{
+	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }
+	inline u32 dma(u32 cmd) override { return MDRS_JVSNone; }
+	inline bool linkStatus() override { return false; }
+	inline bool usingExternalStorage() const { return false; }
+};

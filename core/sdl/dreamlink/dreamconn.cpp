@@ -87,6 +87,7 @@ public:
 	{
 		if (newBus != bus) {
 			bus = newBus;
+			registerLink(bus, ALL_PORTS_MASK);
 			if (isConnected())
 			{
 				// A different TCP port is used depending on the bus - need to reconnect
@@ -127,8 +128,7 @@ public:
 			return;
 		iostream.expires_from_now(std::chrono::duration<u32>::max());	// don't use a 64-bit based duration to avoid overflow
 
-		const u32 ports = (0x03 | (1 << 5)); // Port 1 and 2 plus controller itself
-		registerLink(bus, ports);
+		registerLink(bus, ALL_PORTS_MASK);
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,
 				deviceDescription(expansionDevs[0]), deviceDescription(expansionDevs[1]));

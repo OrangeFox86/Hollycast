@@ -128,17 +128,12 @@ std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(MapleDeviceType t
 	// Support basic controller with VMU and PuruPuru pack when MDT_DreamLink set for type
 	if (type == MapleDeviceType::MDT_DreamLink)
 	{
-		if (port == 1)
+		switch (port)
 		{
-			return std::make_shared<MapleLinkPuruPuru>();
-		}
-		else if (port == 5)
-		{
-			return maple_Create(MapleDeviceType::MDT_SegaController);
-		}
-		else
-		{
-			return std::make_shared<MapleLinkVmu>();
+			case 0: return std::make_shared<MapleLinkVmu>();
+			case 1: return std::make_shared<MapleLinkPuruPuru>();
+			case 5: return maple_Create(MapleDeviceType::MDT_SegaController);
+			default: return std::make_shared<MapleLinkStub>();
 		}
 	}
 
