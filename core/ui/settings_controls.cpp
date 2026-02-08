@@ -1083,7 +1083,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 			const char* dream_link_names[MAPLE_PORTS]{};
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
 			{
-				auto link = MapleLinkRegistry::GetMapleLink(bus, 5); // Registered controller, if any
+				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
 				if (link)
 					dream_link_names[bus] = link->dreamlink->getName();
 				else
@@ -1163,11 +1163,13 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 					ImguiID _(device_name);
 					ImGui::SetNextItemWidth(expComboWidth);
 					int subtype = config::MapleExpansionDevices[bus][port];
-					if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1)
+					if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1) {
 						subtype = MDT_DreamPotato;
+					}
 					else if (port_has_dream_link && (config::DreamLinkSelect[bus][port])) {
 						subtype = MDT_DreamLink;
 					}
+
 					if (ImGui::BeginCombo(device_name, maple_expansion_device_name((MapleDeviceType)subtype), ImGuiComboFlags_None))
 					{
 						for (int i = 0; i < port_type_count; i++)

@@ -42,7 +42,7 @@ void maple_device::Setup(u32 bus, u32 port, int playerNum, bool install)
 	bus_port = port;
 	bus_id = bus;
 	logical_port[0] = 'A' + bus_id;
-	logical_port[1] = bus_port == 5 ? 'x' : '1' + bus_port;
+	logical_port[1] = bus_port == MAPLE_MAIN_DEV_IDX ? 'x' : '1' + bus_port;
 	logical_port[2] = 0;
 	player_num = playerNum == -1 ? bus_id : playerNum;
 

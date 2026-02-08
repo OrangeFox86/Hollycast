@@ -194,11 +194,11 @@ private:
 	bool vmuStorage = false;
 
     //! Currently linked bus
-    int linkedBus;
+    int linkedBus = -1;
     //! All available ports
-    u32 linkedPortsMask;
+    u32 linkedPortsMask = 0;
     //! All currently connected ports
-    u32 connectedPortsMask;
+    u32 connectedPortsMask = 0;
 
 	//! Flag to signal worker thread shutdown
 	bool connectionWorkerShutdown = false;

@@ -14,8 +14,12 @@
 static constexpr const int MAPLE_PORTS = 4;
 //! Maximum number of logical devices that may exist on a single bus (main plus maximum of 5 sub-peripherals)
 static constexpr const int MAPLE_DEVS_PER_PORT = 6;
-//! The index of the main device
+//! The index of the main device (under MAPLE_DEVS_PER_PORT)
 static constexpr const int MAPLE_MAIN_DEV_IDX = 5;
+//! First expansion index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_FIRST_EXT_IDX = 0;
+//! Last expansion index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_LAST_EXT_IDX = 4;
 
 enum MapleFunctionID
 {
@@ -175,7 +179,7 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	MapleConfigMap* config;
 
 	//fill in the info
-	void Setup(u32 bus, u32 port = 5, int playerNum = -1, bool install = true);
+	void Setup(u32 bus, u32 port = MAPLE_MAIN_DEV_IDX, int playerNum = -1, bool install = true);
 
 	virtual void OnSetup() {};
 	virtual ~maple_device();

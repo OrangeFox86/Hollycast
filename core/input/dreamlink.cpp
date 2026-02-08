@@ -30,10 +30,7 @@
 
 BaseDreamLink::BaseDreamLink(bool storageSupported) :
 	storageSupported(storageSupported),
-	vmuStorage(storageSupported),
-	linkedBus(-1),
-	linkedPortsMask(0),
-	connectedPortsMask(0)
+	vmuStorage(storageSupported)
 {
 	if (isGameRunning()) {
 		vmuStorage = vmuStorage && config::UsePhysicalVmuMemory;
@@ -150,7 +147,7 @@ void BaseDreamLink::asyncRetryConnect()
 	}
 }
 
-void BaseDreamLink::asyncConnection(const ConnectionWorkType& type,  bool getLock)
+void BaseDreamLink::asyncConnection(const ConnectionWorkType& type, bool getLock)
 {
 	std::unique_lock<std::mutex> lock(connectionMutex, std::defer_lock);
 
@@ -415,29 +412,28 @@ void BaseDreamLink::PrioritizedRegistry::removeLinkFromRegistry(const BaseDreamL
 		std::list<Ptr>::iterator iter = priorities.begin();
 		while (iter != priorities.end())
 		{
-			if (iter->get() == dreamlink)
-			{
-				iter = priorities.erase(iter);
-
-				if (bus != newBus && iter != priorities.end())
-				{
-					// Establish "new" priorities into MapleLinkRegistry
-					u32 availablePorts = ALL_PORTS_MASK;
-					for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
-					{
-						const Ptr& link = *innerIter;
-						const u32 ports = availablePorts & link->linkedPortsMask;
-						if (ports != 0)
-						{
-							establishInMapleLinkRegistry(link, bus, ports);
-							availablePorts = availablePorts & ~ports;
-						}
-					}
-				}
-			}
-			else
+			if (iter->get() != dreamlink)
 			{
 				++iter;
+				continue;
+			}
+
+			iter = priorities.erase(iter);
+
+			if (bus != newBus && iter != priorities.end())
+			{
+				// Establish "new" priorities into MapleLinkRegistry
+				u32 availablePorts = ALL_PORTS_MASK;
+				for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
+				{
+					const Ptr& link = *innerIter;
+					const u32 ports = availablePorts & link->linkedPortsMask;
+					if (ports != 0)
+					{
+						establishInMapleLinkRegistry(link, bus, ports);
+						availablePorts = availablePorts & ~ports;
+					}
+				}
 			}
 		}
 	}
