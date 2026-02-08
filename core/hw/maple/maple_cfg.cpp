@@ -338,25 +338,20 @@ void createDreamLinkDevices()
 		{
 			mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, MAPLE_MAIN_DEV_IDX);
 
-			for (int port = MAPLE_FIRST_EXT_IDX; port <= MAPLE_LAST_EXT_IDX; ++port)
+			for (int port = MAPLE_FIRST_EXT_DEV_IDX; port <= MAPLE_LAST_EXT_DEV_IDX; ++port)
 			{
-				auto link = MapleLinkRegistry::GetMapleLink(bus, port);
-
-				if (port < config::DreamLinkSelect[bus].size())
+				if (MapleLinkRegistry::GetMapleLink(bus, port))
 				{
-					if (config::DreamLinkSelect[bus][port] && link)
+					bool selected = true;
+					if (port < config::DreamLinkSelect[bus].size())
+					{
+						selected = config::DreamLinkSelect[bus][port];
+					}
+
+					if (selected)
 					{
 						mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, port);
 					}
-					// else: allow subsequent logic to create the virtual device, if any
-				}
-				else
-				{
-					if (link)
-					{
-						mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, static_cast<u32>(port));
-					}
-					// else: allow subsequent logic to create the virtual device, if any
 				}
 			}
 		}

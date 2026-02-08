@@ -16,10 +16,10 @@ static constexpr const int MAPLE_PORTS = 4;
 static constexpr const int MAPLE_DEVS_PER_PORT = 6;
 //! The index of the main device (under MAPLE_DEVS_PER_PORT)
 static constexpr const int MAPLE_MAIN_DEV_IDX = 5;
-//! First expansion index (under MAPLE_DEVS_PER_PORT)
-static constexpr const int MAPLE_FIRST_EXT_IDX = 0;
-//! Last expansion index (under MAPLE_DEVS_PER_PORT)
-static constexpr const int MAPLE_LAST_EXT_IDX = 4;
+//! First expansion device index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_FIRST_EXT_DEV_IDX = 0;
+//! Last expansion device index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_LAST_EXT_DEV_IDX = 4;
 
 enum MapleFunctionID
 {
