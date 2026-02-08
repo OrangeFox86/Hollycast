@@ -42,8 +42,6 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 
 BaseDreamLink::~BaseDreamLink()
 {
-	unregisterLink(true);
-
 	stopConnectionWorkerThread();
 }
 
@@ -98,7 +96,7 @@ bool BaseDreamLink::isGameRunning() const
 
 void BaseDreamLink::term()
 {
-	unregisterLink();
+	unregisterLink(true);
 	stopConnectionWorkerThread();
 
 	// Invalidate internal data

@@ -102,7 +102,8 @@ struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDeviceMeta
 	}
 };
 
-//! Stub class which may be used as a placeholder device when no function is needed
+//! Stub class which may be used as a placeholder device when no function is needed. This is used to reserve a space
+//! in maple devices array so that a lower priority DreamLink can't install itself there.
 struct MapleLinkStub : maple_base, MapleLinkDeviceMeta
 {
 	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }

@@ -256,7 +256,7 @@ private:
 		//! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
 		void establishInMapleLinkRegistry(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask);
 
-		//! Removes link from reistry without locking on the mutex
+		//! Removes link from registry without locking on the mutex
 		//! @param[in] dreamlink Pointer to the dreamlink to remove
 		//! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
 		void removeLinkFromRegistry(const BaseDreamLink* dreamlink, int newBus = -1);

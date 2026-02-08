@@ -71,7 +71,7 @@ static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)
 
 u32 MapleLinkVmu::dma(u32 cmd)
 {
-	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_id);
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	return dma(link, cmd);
 }
 
@@ -91,7 +91,7 @@ u32 MapleLinkVmu::dma(std::optional<MapleLink>& link, u32 cmd)
 
 u32 MapleLinkPuruPuru::dma(u32 cmd)
 {
-	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_id);
+	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	return dma(link, cmd);
 }
 

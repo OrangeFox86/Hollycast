@@ -131,6 +131,8 @@ constexpr int maple_getPortCount(MapleDeviceType type)
 		case MDT_AsciiStick:
 		case MDT_RacingController:
 			return 1;
+		case MDT_DreamLink:
+			return 2;
 		default:
 			return 0;
 	}

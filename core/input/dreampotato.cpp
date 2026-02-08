@@ -74,15 +74,15 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	void OnSetup() override
 	{
+		// All data must be re-read
+		memset(cachedBlocks, 0, sizeof(cachedBlocks));
+
 		auto link = getMapleLink();
 		if (!link || !link->storageEnabled())
 		{
 			MapleLinkVmu::OnSetup();
 			return;
 		}
-
-		// All data must be re-read
-		memset(cachedBlocks, 0, sizeof(cachedBlocks));
 
 		// Ensure file is not being used
 		if (file != nullptr) {
