@@ -327,7 +327,7 @@ static void createAtomiswaveDevices()
 	}
 }
 
-void mcfg_CreateDreamLinkDevices()
+void createDreamLinkDevices()
 {
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
@@ -359,7 +359,7 @@ void mcfg_CreateDreamLinkDevices()
 static void createDreamcastDevices()
 {
 	// Check for and instantiate DreamLink devices first
-	mcfg_CreateDreamLinkDevices();
+	createDreamLinkDevices();
 
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
@@ -456,14 +456,27 @@ void mcfg_CreateDevices()
 	vmuDigest();
 }
 
-// Don't destroy the JVS MIE if full is false
+// Don't destroy the JVS MIE or DreamLink if full is false
 void mcfg_DestroyDevices(bool full)
 {
 	for (int i = 0; i < MAPLE_PORTS; i++)
 		for (int j = 0; j <= 5; j++)
 		{
-			if (MapleDevices[i][j] != nullptr
-					&& (full || MapleDevices[i][j]->get_device_type() != MDT_NaomiJamma))
+			bool resetDevice = true;
+
+			if (!full)
+			{
+				MapleDeviceType devType = MDT_None;
+				if (MapleDevices[i][j] != nullptr)
+				{
+					if (std::dynamic_pointer_cast<MapleLinkDevice>(MapleDevices[i][j]))
+						resetDevice = false;
+					else
+						resetDevice = (MapleDevices[i][j]->get_device_type() != MDT_NaomiJamma);
+				}
+			}
+
+			if (resetDevice)
 			{
 				MapleDevices[i][j].reset();
 			}
@@ -482,14 +495,15 @@ void mcfg_SerializeDevices(Serializer& ser)
 		ser.serialize(pair.second.data(), pair.second.size());
 	}
 	for (int i = 0; i < MAPLE_PORTS; i++)
-		for (int j = 0; j < 6; j++)
+		for (int j = 0; j < MAPLE_DEVS_PER_PORT; j++)
 		{
 			u8 deviceType = MDT_None;
 			std::shared_ptr<maple_device> device = MapleDevices[i][j];
 			if (device != nullptr)
+				// DreamLink devices will report as MDT_None if no device or unknown device is attached
 				deviceType =  device->get_device_type();
 			ser << deviceType;
-			if (device != nullptr)
+			if (deviceType != MDT_None)
 				device->serialize(ser);
 		}
 }
@@ -525,7 +539,7 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 	}
 
 	for (int i = 0; i < MAPLE_PORTS; i++)
-		for (int j = 0; j < 6; j++)
+		for (int j = 0; j < MAPLE_DEVS_PER_PORT; j++)
 		{
 			u8 deviceType;
 			deser >> deviceType;
@@ -533,7 +547,29 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 			{
 				if (!deser.rollback() && deviceType != MDT_NaomiJamma)
 					mcfg_Create((MapleDeviceType)deviceType, i, j);
-				MapleDevices[i][j]->deserialize(deser);
+
+				std::shared_ptr<maple_device> dev = MapleDevices[i][j];
+				std::shared_ptr<MapleLinkDevice> mapleLink = std::dynamic_pointer_cast<MapleLinkDevice>(dev);
+				if (mapleLink)
+				{
+					// For MapleLink for DreamLink devices, they get to decide if it may deserialize and setup for it
+					const MapleDeviceType typeEnum = static_cast<MapleDeviceType>(deviceType);
+					if (mapleLink->deserializingFor(typeEnum))
+					{
+						dev->deserialize(deser);
+					}
+					else
+					{
+						// Flush the data and require reconnect
+						std::shared_ptr<maple_device> dummyDev = maple_Create(typeEnum);
+						dummyDev->deserialize(deser);
+						maple_ReconnectDevice(i, j);
+					}
+				}
+				else
+				{
+					dev->deserialize(deser);
+				}
 			}
 		}
 	if (deser.version() < Deserializer::V23 && EEPROM != nullptr)

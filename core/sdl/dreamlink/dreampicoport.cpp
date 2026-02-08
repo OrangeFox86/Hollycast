@@ -27,6 +27,7 @@
 #include "ui/gui.h"
 #include "cfg/option.h"
 #include "oslib/i18n.h"
+#include "log/Log.h"
 
 #include "DreamPicoPortApi.hpp"
 
@@ -61,7 +62,7 @@ namespace dream_pico_port
 {
 
 //! Generically handles any MapleLink device when supported
-struct MapleLinkDevice : public maple_base, public MapleLinkDeviceMeta
+struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
 {
 	//! The supported functions mask for this device
 	const u32 supportedFns;
@@ -73,22 +74,31 @@ struct MapleLinkDevice : public maple_base, public MapleLinkDeviceMeta
 	std::unique_ptr<maple_sega_vmu> virtualVmu;
 	//! Switched to true on first memory read/write command
 	bool storageLinked = false;
+	//! The last returned value from get_device_type()
+	MapleDeviceType serializingType = MDT_None;
+	//! The device type currently deserializing for
+	MapleDeviceType deserializingType = MDT_None;
 
 	//! Constructor
 	//! @param[in] supportedFns Supported functions mask (default: any function)
-	MapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
-	virtual ~MapleLinkDevice();
+	DppMapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
+	virtual ~DppMapleLinkDevice();
 	std::shared_ptr<class DreamPicoPort> getDreamPicoPort() const;
 	bool linkStatus() override;
 	MapleDeviceType get_device_type() override;
+	void establishVirtualVmu();
 	u32 virtualVmuDma(u32 cmd);
 	u32 dma(u32 cmd) override;
 
 	bool usingExternalStorage() const override;
+
+	bool deserializingFor(MapleDeviceType type) override;
+	void serialize(Serializer& ser) const override;
+	void deserialize(Deserializer& deser) override;
 };
 
 //! Generically handles a MapleLink main device (normally a controller)
-struct MapleLinkMainDevice : public MapleLinkDevice
+struct MapleLinkMainDevice : public DppMapleLinkDevice
 {
 	//! Constructor
 	//! Only input devices are currently supported here - even lightguns and DreamEye implement MFID_0_Input
@@ -1321,7 +1331,7 @@ public:
 			if (port == 5) {
 				return std::make_shared<MapleLinkMainDevice>();
 			} else {
-				return std::make_shared<MapleLinkDevice>();
+				return std::make_shared<DppMapleLinkDevice>();
 			}
 		}
 
@@ -1584,10 +1594,10 @@ public:
 };
 
 
-MapleLinkDevice::MapleLinkDevice(u32 supportedFns) : supportedFns(supportedFns)
+DppMapleLinkDevice::DppMapleLinkDevice(u32 supportedFns) : supportedFns(supportedFns)
 {}
 
-MapleLinkDevice::~MapleLinkDevice()
+DppMapleLinkDevice::~DppMapleLinkDevice()
 {
 	if (virtualVmu)
 	{
@@ -1597,7 +1607,7 @@ MapleLinkDevice::~MapleLinkDevice()
 	}
 }
 
-std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort() const
+std::shared_ptr<DreamPicoPort> DppMapleLinkDevice::getDreamPicoPort() const
 {
 	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (!link)
@@ -1605,7 +1615,7 @@ std::shared_ptr<DreamPicoPort> MapleLinkDevice::getDreamPicoPort() const
 	return std::dynamic_pointer_cast<DreamPicoPort>(link->dreamlink);
 }
 
-bool MapleLinkDevice::linkStatus()
+bool DppMapleLinkDevice::linkStatus()
 {
 	auto link = getDreamPicoPort();
 	return (
@@ -1615,36 +1625,37 @@ bool MapleLinkDevice::linkStatus()
 	);
 }
 
-MapleDeviceType MapleLinkDevice::get_device_type()
+MapleDeviceType DppMapleLinkDevice::get_device_type()
 {
-	// This is mainly used by the serializer, so it's ok if it's not completely correct
+	// This is mainly used by the serializer
+	serializingType = MDT_None;
 
 	auto link = getDreamPicoPort();
 	if (!link)
-		return MDT_None;
+		return serializingType;
 
 	u32 fn = link->getFunctionCode(bus_port);
 	if (fn & MFID_0_Input)
-		return MDT_SegaController;
-	else if (fn & (MFID_1_Storage & MFID_2_LCD & MFID_3_Clock))
-		return MDT_SegaVMU;
+		serializingType = MDT_SegaController;
+	else if (fn & (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock))
+		serializingType = MDT_SegaVMU;
 	else if (fn & MFID_4_Mic)
-		return MDT_Microphone;
-	else if (fn & (MFID_5_ARGun & MFID_7_LightGun))
-		return MDT_LightGun;
+		serializingType = MDT_Microphone;
+	else if (fn & (MFID_5_ARGun | MFID_7_LightGun))
+		serializingType = MDT_LightGun;
 	else if (fn & MFID_6_Keyboard)
-		return MDT_Keyboard;
+		serializingType = MDT_Keyboard;
 	else if (fn & MFID_8_Vibration)
-		return MDT_PurupuruPack;
+		serializingType = MDT_PurupuruPack;
 	else if (fn & MFID_9_Mouse)
-		return MDT_Mouse;
+		serializingType = MDT_Mouse;
 	else if (fn & MFID_11_Camera)
-		return MDT_Dreameye;
+		serializingType = MDT_Dreameye;
 
-	return MDT_None;
+	return serializingType;
 }
 
-u32 MapleLinkDevice::virtualVmuDma(u32 cmd)
+void DppMapleLinkDevice::establishVirtualVmu()
 {
 	if (!virtualVmu)
 	{
@@ -1658,6 +1669,11 @@ u32 MapleLinkDevice::virtualVmuDma(u32 cmd)
 		virtualVmu->config = config;
 		virtualVmu->OnSetup();
 	}
+}
+
+u32 DppMapleLinkDevice::virtualVmuDma(u32 cmd)
+{
+	establishVirtualVmu();
 
 	return virtualVmu->Dma(
 		cmd,
@@ -1668,7 +1684,7 @@ u32 MapleLinkDevice::virtualVmuDma(u32 cmd)
 	);
 }
 
-u32 MapleLinkDevice::dma(u32 cmd)
+u32 DppMapleLinkDevice::dma(u32 cmd)
 {
 	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (!link)
@@ -1732,18 +1748,73 @@ u32 MapleLinkDevice::dma(u32 cmd)
 	return rxMsg.command;
 }
 
-bool MapleLinkDevice::usingExternalStorage() const
+bool DppMapleLinkDevice::usingExternalStorage() const
 {
 	return storageLinked;
 }
 
+bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
+{
+	deserializingType = type;
+	return (type != MDT_None && get_device_type() == type);
+}
 
-MapleLinkMainDevice::MapleLinkMainDevice() : MapleLinkDevice(MFID_0_Input) {}
+void DppMapleLinkDevice::serialize(Serializer& ser) const
+{
+	// Assumption: the caller would have called get_device_type() just before serialize(), so serializingType should be
+	//             set to the expected serialization type
+
+	if (serializingType == MDT_SegaVMU && virtualVmu)
+	{
+		virtualVmu->serialize(ser);
+	}
+	else if (serializingType != MDT_None)
+	{
+		// Serialize default state for the serializing type
+		std::shared_ptr<maple_device> dummyDev = maple_Create(serializingType);
+		// Setup without installing
+		dummyDev->Setup(bus_id, bus_port, player_num, false);
+		dummyDev->serialize(ser);
+	}
+	else
+	{
+		ERROR_LOG(INPUT, "DppMapleLinkDevice received serialize for MDT_None");
+	}
+}
+
+void DppMapleLinkDevice::deserialize(Deserializer& deser)
+{
+	// Assumption: the caller would have called deserializingFor() just before deserialize(), so deserializingType
+	//             should be set to the expected deserialization type
+
+	if (deserializingType == MDT_SegaVMU)
+	{
+		establishVirtualVmu();
+		virtualVmu->deserialize(deser);
+	}
+	else if (deserializingType != MDT_None)
+	{
+		// Just throw out the data
+		std::shared_ptr<maple_device> dummyDev = maple_Create(deserializingType);
+		dummyDev->deserialize(deser);
+	}
+	else
+	{
+		ERROR_LOG(INPUT, "DppMapleLinkDevice received deserialize for MDT_None");
+	}
+
+	// Done deserializing - reset type
+	deserializingType = MDT_None;
+}
+
+
+MapleLinkMainDevice::MapleLinkMainDevice() : DppMapleLinkDevice(MFID_0_Input) {}
 
 MapleDeviceType MapleLinkMainDevice::get_device_type()
 {
 	// This is mainly used by the serializer
-	return MDT_SegaController;
+	serializingType = MDT_SegaController;
+	return serializingType;
 }
 
 u32 MapleLinkMainDevice::dma(u32 cmd)
@@ -1790,7 +1861,7 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 		}
 	}
 
-	return MapleLinkDevice::dma(cmd);
+	return DppMapleLinkDevice::dma(cmd);
 }
 
 } // namespace dream_pico_port

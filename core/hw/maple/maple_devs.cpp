@@ -36,7 +36,7 @@ const char* maple_densha_controller_name    = "TAITO 001 Controller";
 const char* maple_sega_brand = "Produced By or Under License From SEGA ENTERPRISES,LTD.";
 
 //fill in the info
-void maple_device::Setup(u32 bus, u32 port, int playerNum)
+void maple_device::Setup(u32 bus, u32 port, int playerNum, bool install)
 {
 	maple_port = (bus << 6) | (1 << port);
 	bus_port = port;
@@ -48,7 +48,8 @@ void maple_device::Setup(u32 bus, u32 port, int playerNum)
 
 	config = new MapleConfigMap(this);
 	OnSetup();
-	MapleDevices[bus][port] = shared_from_this();
+	if (install)
+		MapleDevices[bus][port] = shared_from_this();
 }
 maple_device::~maple_device()
 {

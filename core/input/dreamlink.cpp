@@ -74,8 +74,8 @@ void BaseDreamLink::disableStorage()
 						continue;
 					}
 
-					std::shared_ptr<MapleLinkDeviceMeta> mapleDevMeta =
-						std::dynamic_pointer_cast<MapleLinkDeviceMeta>(link->dreamlink);
+					std::shared_ptr<MapleLinkDevice> mapleDevMeta =
+						std::dynamic_pointer_cast<MapleLinkDevice>(link->dreamlink);
 					if (mapleDevMeta && mapleDevMeta->usingExternalStorage())
 					{
 						maple_ReconnectDevice(bus, port);
