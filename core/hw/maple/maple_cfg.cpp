@@ -212,22 +212,22 @@ bool maple_atomiswave_coin_chute(int slot)
 #endif
 }
 
+static void mcfg_CreateDreamLink(MapleLink& link, u32 bus, u32 port, s32 player_num = -1)
+{
+	if (MapleDevices[bus][port] != nullptr)
+		return;
+
+	INFO_LOG(MAPLE, "MapleLink device created on %d,%d", bus, port);
+	std::shared_ptr<maple_device> dev = link.createMapleDevice();
+	dev->Setup(bus, port, player_num);
+}
+
 static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num = -1)
 {
 	if (MapleDevices[bus][port] != nullptr)
 		return;
 
-	std::shared_ptr<maple_device> dev;
-	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus, port);
-	if (link)
-	{
-		INFO_LOG(MAPLE, "MapleLink device created on %d,%d", bus, port);
-		dev = link->createMapleDevice(type);
-	}
-	else
-	{
-		dev = maple_Create(type);
-	}
+	std::shared_ptr<maple_device> dev = maple_Create(type);
 	dev->Setup(bus, port, player_num);
 }
 
@@ -333,14 +333,16 @@ void createDreamLinkDevices()
 
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
-		std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX);
-		if (link)
+		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX);
+		if (mainLink)
 		{
-			mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, MAPLE_MAIN_DEV_IDX);
+			mcfg_CreateDreamLink(mainLink.value(), bus, MAPLE_MAIN_DEV_IDX);
 
 			for (int port = MAPLE_FIRST_EXT_DEV_IDX; port <= MAPLE_LAST_EXT_DEV_IDX; ++port)
 			{
-				if (MapleLinkRegistry::GetMapleLink(bus, port))
+				std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus, port);
+
+				if (extLink)
 				{
 					bool selected = true;
 					if (port < config::DreamLinkSelect[bus].size())
@@ -350,7 +352,7 @@ void createDreamLinkDevices()
 
 					if (selected)
 					{
-						mcfg_Create(MapleDeviceType::MDT_DreamLink, bus, port);
+						mcfg_CreateDreamLink(extLink.value(), bus, port);
 					}
 				}
 			}

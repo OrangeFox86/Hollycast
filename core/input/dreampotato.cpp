@@ -266,7 +266,7 @@ public:
 		return "DreamPotato";
 	}
 
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override {
+	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
 		return std::make_shared<DreamPotatoVmu>();
 	}
 

@@ -55,9 +55,9 @@ bool MapleLink::isConnected()
 	return dreamlink->isConnected();
 }
 
-std::shared_ptr<maple_device> MapleLink::createMapleDevice(MapleDeviceType type)
+std::shared_ptr<maple_device> MapleLink::createMapleDevice()
 {
-	return dreamlink->createMapleDevice(type, bus, port);
+	return dreamlink->createMapleDevice(bus, port);
 }
 
 static bool relayMapleLink(u8 bus, u8 port, const MapleMsg& msg)

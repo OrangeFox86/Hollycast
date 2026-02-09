@@ -59,6 +59,7 @@ static char *maple_device_types[] =
 };
 
 constexpr int MDT_DreamPotato = 100;
+constexpr int MDT_DreamLink = 101;
 
 static char *maple_expansion_device_types[] =
 {
@@ -321,7 +322,7 @@ static MapleDeviceType maple_expansion_device_type_from_index(int idx)
 	case 4:
 		return (MapleDeviceType)MDT_DreamPotato;
 	case 5:
-		return MDT_DreamLink;
+		return (MapleDeviceType)MDT_DreamLink;
 	case 0:
 	default:
 		return MDT_None;

@@ -114,10 +114,9 @@ public:
 
 protected:
 	//! Create the maple device needed to interface this device to the emulator
-	//! @param[in] type The user-selected device type
 	//! @param[in] bus The bus used for this device [0,3]
 	//! @param[in] port The port for this device [0,5]
-	virtual std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) = 0;
+	virtual std::shared_ptr<maple_device> createMapleDevice(int bus, int port) = 0;
 };
 
 //! The class a DreamLink device should inherit from
@@ -167,7 +166,7 @@ protected:
 
 	//! Overridden from DreamLink
 	//! This is the default implementation which may be overridden by child
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type, int bus, int port) override;
+	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override;
 
 	//! May be called by the child to attempt to reestablish connection after it is lost
 	void asyncRetryConnect();

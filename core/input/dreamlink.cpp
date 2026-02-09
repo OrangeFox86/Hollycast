@@ -118,22 +118,16 @@ void BaseDreamLink::unregisterLink(bool isTerminal)
 	PrioritizedRegistry::Get().unregisterLink(this, isTerminal);
 }
 
-std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(MapleDeviceType type, int bus, int port)
+std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(int bus, int port)
 {
-	// Support basic controller with VMU and PuruPuru pack when MDT_DreamLink set for type
-	if (type == MapleDeviceType::MDT_DreamLink)
+	// Support basic controller with VMU and PuruPuru pack
+	switch (port)
 	{
-		switch (port)
-		{
-			case 0: return std::make_shared<MapleLinkVmu>();
-			case 1: return std::make_shared<MapleLinkPuruPuru>();
-			case 5: return maple_Create(MapleDeviceType::MDT_SegaController);
-			default: return std::make_shared<MapleLinkStub>();
-		}
+		case 0: return std::make_shared<MapleLinkVmu>();
+		case 1: return std::make_shared<MapleLinkPuruPuru>();
+		case 5: return maple_Create(MapleDeviceType::MDT_SegaController);
+		default: return std::make_shared<MapleLinkStub>();
 	}
-
-	// Default create otherwise
-	return maple_Create(type);
 }
 
 void BaseDreamLink::asyncRetryConnect()

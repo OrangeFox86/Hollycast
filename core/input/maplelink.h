@@ -62,10 +62,7 @@ public:
 	bool isConnected();
 
 	//! Create the maple device needed to interface this device to the emulator
-	//! @param[in] type The user-selected device type
-	//! @param[in] bus The bus used for this device [0,3]
-	//! @param[in] port The port for this device [0,4]
-	std::shared_ptr<maple_device> createMapleDevice(MapleDeviceType type);
+	std::shared_ptr<maple_device> createMapleDevice();
 
 	//! The associated dreamlink
 	const DreamLink::Ptr dreamlink;
