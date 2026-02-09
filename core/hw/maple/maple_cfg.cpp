@@ -333,6 +333,17 @@ void createDreamLinkDevices()
 
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
+		// Check for network expansion devices first
+		for (int port = 0; port < config::NetworkExpansionDevices[bus].size(); ++port)
+		{
+			std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus, port);
+			if (extLink && config::NetworkExpansionDevices[bus][port])
+			{
+				mcfg_CreateDreamLink(extLink.value(), bus, port);
+			}
+		}
+
+		// Check for DreamLink controllers
 		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX);
 		if (mainLink)
 		{
