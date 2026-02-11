@@ -84,7 +84,10 @@ void DreamLinkGamepad::close()
 const char* DreamLinkGamepad::dreamLinkStatus()
 {
 	using namespace i18n;
-	return (dreamlink->isConnected() ? T("Connected") : T("Disconnected"));
+	return (dreamlink->isConnected()
+		? T("Connected")
+		: (dreamlink->isUpdateRequired() ? T("Firmware Update Required") : T("Disconnected"))
+	);
 }
 
 void DreamLinkGamepad::set_maple_port(int port)

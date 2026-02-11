@@ -91,6 +91,11 @@ bool BaseDreamLink::isGameRunning() const
 	return PrioritizedRegistry::Get().isGameRunning();
 }
 
+bool BaseDreamLink::isUpdateRequired() const
+{
+	return false;
+}
+
 void BaseDreamLink::term()
 {
 	unregisterLink(true);
@@ -204,7 +209,14 @@ void BaseDreamLink::connectionWorkerThread()
 
 				connect();
 				if (isConnected())
+				{
 					break;
+				}
+				else if (isUpdateRequired())
+				{
+					NOTICE_LOG(INPUT, "DreamLink connection failed; update required");
+					break;
+				}
 
 				NOTICE_LOG(INPUT, "DreamLink connection failed; retrying connection in 1 second");
 
