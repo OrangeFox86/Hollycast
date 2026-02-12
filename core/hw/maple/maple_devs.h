@@ -6,6 +6,7 @@
 #include "input/gamepad.h"
 #include "serialize.h"
 #include "hw/hwreg.h"
+#include "hw/sh4/sh4_sched.h"
 
 #include <memory>
 #include <vector>
@@ -176,6 +177,11 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	u8 bus_id;              //0 .. 3
 	u8 player_num;			// for Atomiswave
 	char logical_port[3];  //A0, etc
+	// When true, initiate reconnect on next linkStatus
+	bool reconnect_requested = false;
+	// When >0, currently shown as disconnected, and the time will be when to reconnect
+	u64 reconnect_time = 0;
+
 	MapleConfigMap* config;
 
 	//fill in the info
@@ -196,7 +202,32 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	virtual MapleDeviceType get_device_type() = 0;
 	virtual bool get_lightgun_pos() { return false; }
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
-	virtual bool linkStatus() { return true; }
+	virtual bool linkStatus()
+	{
+		if (reconnect_requested) {
+			// Reconnect in 100 ms
+			reconnect_time = sh4_sched_now64() + (SH4_MAIN_CLOCK / 10);
+			reconnect_requested = false;
+			return false;
+		} else if (reconnect_time == 0) {
+			return true;
+		}
+		else
+		{
+			u64 now = sh4_sched_now64();
+			if (reconnect_time <= now)
+			{
+				reconnect_time = 0;
+				return true;
+			}
+		}
+
+		return false;
+	}
+	void requestReconnect()
+	{
+		reconnect_requested = true;
+	}
 };
 
 std::shared_ptr<maple_device> maple_Create(MapleDeviceType type);
@@ -384,6 +415,7 @@ struct maple_sega_vmu: maple_base
 	~maple_sega_vmu() override;
 	u32 dma(u32 cmd) override;
 	const void *getData(size_t& size) const override;
+	void setLcd(bool saveDecoded = true);
 };
 
 struct maple_microphone: maple_base

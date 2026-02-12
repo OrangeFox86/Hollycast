@@ -54,19 +54,9 @@ public:
 		return Get().getMapleLink(bus, port);
 	}
 
-	//! Static retrieval function for storage enabled flag
-	//! @return true if storage is enabled on any active maple link
-	static inline bool StorageEnabled() {
-		return Get().storageEnabled();
-	}
-
     //! Non-static retrieval function for the designated MapleLink at the given bus/port
 	//! @see GetMapleLink
     std::optional<MapleLink> getMapleLink(int bus, int port);
-
-	//! Non-static retrieval function for storage enabled flag
-	//! @see  StorageEnabled
-	bool storageEnabled();
 
 private:
     //! Called by a BaseDreamLink in order to register it in this registry

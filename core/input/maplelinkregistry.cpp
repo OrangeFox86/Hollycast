@@ -47,23 +47,6 @@ std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port)
     return MapleLink(std::move(link), bus, port);
 }
 
-bool MapleLinkRegistry::storageEnabled()
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    for (auto& perPort : links)
-    {
-        for (DreamLink::WPtr& wptr : perPort)
-        {
-            DreamLink::Ptr link = wptr.lock();
-            if (link && link->storageEnabled())
-                return true;
-        }
-    }
-
-    return false;
-}
-
 std::size_t MapleLinkRegistry::registerLinks(const DreamLink::Ptr& dreamlink, u32 bus, u32 portsMask)
 {
     portsMask &= DreamLink::ALL_PORTS_MASK;

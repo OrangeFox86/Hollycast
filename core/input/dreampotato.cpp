@@ -231,6 +231,9 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	bool linkStatus() override
 	{
+		if (!MapleLinkVmu::linkStatus())
+			return false;
+
 		auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 		if (!link)
 			return false;

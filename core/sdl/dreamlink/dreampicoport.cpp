@@ -86,7 +86,7 @@ struct DppVirtualVmu : public maple_sega_vmu
 
 	virtual ~DppVirtualVmu()
 	{
-		// Need to nullify the config to avoid double delete
+		// Need to nullify the config here to avoid double delete
 		config->ResetImage();
 		config = nullptr;
 	}
@@ -121,16 +121,21 @@ struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
 	std::mutex writeMutex;
 	//! Virtual VMU used to display a virtual screen and optionally save to file
 	std::unique_ptr<DppVirtualVmu> virtualVmu;
+	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	//! The last returned value from get_device_type()
 	MapleDeviceType serializingType = MDT_None;
 	//! The device type currently deserializing for
 	MapleDeviceType deserializingType = MDT_None;
+
+	//! Magic number used on serialize()
+	static constexpr const u8 vmuSerializeMagic[4] = {0x04, 0x3d, 0x8b, 0xde};
 
 	//! Constructor
 	//! @param[in] supportedFns Supported functions mask (default: any function)
 	DppMapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~DppMapleLinkDevice();
 	std::shared_ptr<class DreamPicoPort> getDreamPicoPort() const;
+	void OnSetup() override;
 	bool linkStatus() override;
 	MapleDeviceType get_device_type() override;
 	static MapleDeviceType fnCodeToMapleDeviceType(u32 fnCodeMask);
@@ -830,8 +835,17 @@ std::shared_ptr<DreamPicoPort> DppMapleLinkDevice::getDreamPicoPort() const
 	return std::dynamic_pointer_cast<DreamPicoPort>(link->dreamlink);
 }
 
+void DppMapleLinkDevice::OnSetup()
+{
+	memset(cachedBlocks, 0, sizeof(cachedBlocks));
+	maple_base::OnSetup();
+}
+
 bool DppMapleLinkDevice::linkStatus()
 {
+	if (!maple_base::linkStatus())
+		return false;
+
 	auto link = getDreamPicoPort();
 	bool isLinked = (
 		link &&
@@ -935,10 +949,16 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		firstWord = inMsg->readData<u32>(0);
 	}
 
+	bool isMemory = false;
+	u8 memoryBlock = 0;
+
 	if (
 		firstWord == MFID_1_Storage &&
 		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError)
 	) {
+		isMemory = true;
+		memoryBlock = inMsg->data[7];
+
 		if (!link->storageEnabled()) {
 			// Use virtual memory and return without accessing physical memory
 			// This will use file-backed memory and automatically save when needed
@@ -965,7 +985,8 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 	const MapleMsg& txMsg = *inMsg;
 	MapleMsg rxMsg;
 	std::vector<u32> output;
-	if (link && link->sendReceive(txMsg, rxMsg)) {
+	const bool dataReceived = (link && link->sendReceive(txMsg, rxMsg));
+	if (dataReceived) {
 		// If this message came from a main peripheral, clear out attached flags (will be handled by base)
 		if (rxMsg.originAP & 0x20) {
 			rxMsg.originAP = (rxMsg.originAP & 0xE0);
@@ -976,6 +997,14 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		}
 	} else {
 		rxMsg.command = MDRS_JVSNone;
+	}
+
+	// Save to cachedBlocks if this was a memory command
+	if (isMemory) {
+		cachedBlocks[memoryBlock] = (
+			dataReceived &&
+			(rxMsg.command == MDRS_DeviceReply || rxMsg.command == MDRS_DataTransfer)
+		);
 	}
 
 	// If doing write operation, save time at this point
@@ -1027,6 +1056,14 @@ void DppMapleLinkDevice::serialize(Serializer& ser) const
 	if (serializingType == MDT_SegaVMU && virtualVmu)
 	{
 		// Note: if (serializingType == MDT_SegaVMU) then virtualVmu will be set
+
+		// lcd_data_decoded isn't used on deserialize anymore
+		// This data is instead used to store magic followed by cached block flags
+		memcpy(&virtualVmu->lcd_data_decoded[0], &vmuSerializeMagic[0], sizeof(vmuSerializeMagic));
+		for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
+			virtualVmu->lcd_data_decoded[sizeof(vmuSerializeMagic) + i] = (cachedBlocks[i] ? 0xFF : 0);
+		}
+
 		virtualVmu->serialize(ser);
 	}
 	else
@@ -1047,6 +1084,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 	if (deserializingType == MDT_None)
 	{
 		ERROR_LOG(INPUT, "DppMapleLinkDevice received deserialize for MDT_None");
+		requestReconnect();
 		return;
 	}
 	else if (deserializingType >= MDT_Count)
@@ -1056,13 +1094,65 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 			"DppMapleLinkDevice received invalid type for deserialize [%i]",
 			static_cast<int>(deserializingType)
 		);
+		requestReconnect();
 		return;
 	}
 
-	if (deserializingType == MDT_SegaVMU)
+	auto link = getDreamPicoPort();
+	MapleDeviceType detectedType = fnCodeToMapleDeviceType(link->getFunctionCode(bus_port));
+
+	if (detectedType != deserializingType)
+	{
+		// Signal that the device has changed
+		requestReconnect();
+	}
+
+	if (deserializingType == MDT_SegaVMU && detectedType == deserializingType)
 	{
 		establishVirtualVmu();
+		u8 prevFlashData[128_KB];
+		memcpy(&prevFlashData[0], &virtualVmu->flash_data[0], sizeof(prevFlashData));
 		virtualVmu->deserialize(deser);
+
+		// Determine if the device needs to be reconnected
+		if (usingExternalStorage()) {
+			if (memcmp(&virtualVmu->lcd_data_decoded[0], &vmuSerializeMagic[0], sizeof(vmuSerializeMagic)) != 0) {
+				// Coming from a virtual VMU - cause reconnect
+				requestReconnect();
+			} else {
+				for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
+					const bool isCached = (virtualVmu->lcd_data_decoded[sizeof(vmuSerializeMagic) + i] != 0);
+					if (isCached) {
+						if (!cachedBlocks[i]) {
+							// Try up to 4 times to read this block
+							for (u32 j = 0; j < 4; ++j) {
+								MapleMsg msg{};
+								msg.command = 0x0B;
+								msg.destAP = 1; // TODO: fix for port number
+								msg.originAP = 0; // TODO: fix for DreamConn (not needed for DreamPort)
+								msg.pushData(MFID_1_Storage);
+								const u32 block = (i & 0xFF) << 24;
+								msg.pushData(block);
+
+								MapleMsg rxMsg;
+								if (link->sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
+									// Something read!
+									memcpy(&virtualVmu->flash_data[i * 512], &rxMsg.data[8], 512);
+									cachedBlocks[i] = true;
+									break;
+								}
+							}
+						}
+
+						if (!cachedBlocks[i] || (prevFlashData[i] != virtualVmu->flash_data[i]))
+						{
+							requestReconnect();
+							break;
+						}
+					}
+				}
+			}
+		}
 	}
 	else
 	{
@@ -1081,7 +1171,12 @@ MapleLinkMainDevice::MapleLinkMainDevice() : DppMapleLinkDevice(MFID_0_Input) {}
 MapleDeviceType MapleLinkMainDevice::get_device_type()
 {
 	// This is mainly used by the serializer
-	serializingType = MDT_SegaController;
+	if (!linkStatus()) {
+		serializingType = MDT_None;
+	} else {
+		serializingType = MDT_SegaController;
+	}
+
 	return serializingType;
 }
 
