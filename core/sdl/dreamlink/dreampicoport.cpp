@@ -1120,6 +1120,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 				// Coming from a virtual VMU - cause reconnect
 				requestReconnect();
 			} else {
+				bool copyPrevCache = true;
 				for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
 					const bool isCached = (virtualVmu->lcd_data_decoded[sizeof(vmuSerializeMagic) + i] != 0);
 					if (isCached) {
@@ -1128,8 +1129,9 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 							for (u32 j = 0; j < 4; ++j) {
 								MapleMsg msg{};
 								msg.command = 0x0B;
-								msg.destAP = 1; // TODO: fix for port number
-								msg.originAP = 0; // TODO: fix for DreamConn (not needed for DreamPort)
+								// Hardware bus number will be overridden by link->sendReceive()
+								msg.destAP = 1 << bus_port;
+								msg.originAP = 0;
 								msg.pushData(MFID_1_Storage);
 								const u32 block = (i & 0xFF) << 24;
 								msg.pushData(block);
@@ -1137,17 +1139,29 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 								MapleMsg rxMsg;
 								if (link->sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
 									// Something read!
-									memcpy(&virtualVmu->flash_data[i * 512], &rxMsg.data[8], 512);
+									memcpy(&prevFlashData[i * 512], &rxMsg.data[8], 512);
 									cachedBlocks[i] = true;
 									break;
 								}
 							}
 						}
 
-						if (!cachedBlocks[i] || (prevFlashData[i] != virtualVmu->flash_data[i]))
-						{
+						if (
+							!cachedBlocks[i] ||
+							(memcmp(&prevFlashData[i * 512], &virtualVmu->flash_data[i * 512], 512) != 0)
+						) {
 							requestReconnect();
+							copyPrevCache = false;
 							break;
+						}
+					}
+				}
+
+				if (copyPrevCache) {
+					// Copy cached data from the previous data set to the new
+					for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
+						if (cachedBlocks[i]) {
+							memcpy(&virtualVmu->flash_data[i * 512], &prevFlashData[i * 512], 512);
 						}
 					}
 				}
@@ -1158,6 +1172,8 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 	{
 		// Just throw out the data
 		std::shared_ptr<maple_device> dummyDev = maple_Create(deserializingType);
+		// Setup without installing
+		dummyDev->Setup(bus_id, bus_port, player_num, false);
 		dummyDev->deserialize(deser);
 	}
 

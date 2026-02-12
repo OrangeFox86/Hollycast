@@ -571,6 +571,7 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 					{
 						// Flush the data and require reconnect
 						std::shared_ptr<maple_device> dummyDev = maple_Create(typeEnum);
+						dummyDev->Setup(i, j, -1, false);
 						dummyDev->deserialize(deser);
 						maple_ReconnectDevice(i, j);
 					}
