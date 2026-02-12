@@ -29,12 +29,8 @@
 #include <chrono>
 
 BaseDreamLink::BaseDreamLink(bool storageSupported) :
-	storageSupported(storageSupported),
-	vmuStorage(storageSupported)
+	storageSupported(storageSupported)
 {
-	if (isGameRunning()) {
-		vmuStorage = vmuStorage && config::UsePhysicalVmuMemory;
-	}
 }
 
 BaseDreamLink::~BaseDreamLink()
@@ -44,47 +40,9 @@ BaseDreamLink::~BaseDreamLink()
 
 bool BaseDreamLink::storageEnabled()
 {
-	if (!isGameRunning())
-		return storageSupported && config::UsePhysicalVmuMemory;
-	else
-		return vmuStorage;
+	return storageSupported && config::UsePhysicalVmuMemory;
 }
 
-
-void BaseDreamLink::disableStorage()
-{
-	if (!vmuStorage)
-		return;
-	WARN_LOG(INPUT, "State loaded but VMU has storage enabled");
-	vmuStorage = false;
-	if (isGameRunning())
-	{
-		// Simulate a removal and reinsertion event for devices using external memory
-		emu.run([bus=linkedBus, ports=connectedPortsMask]() {
-			for (int port = 0; port < MAPLE_DEVS_PER_PORT; ++port)
-			{
-				if (DreamLink::isValidBus(bus) && (ports & (1 << port)))
-				{
-					auto link = MapleLinkRegistry::GetMapleLink(bus, port);
-					if (!link)
-					{
-						continue;
-					}
-
-					std::shared_ptr<MapleLinkDevice> mapleDevMeta =
-						std::dynamic_pointer_cast<MapleLinkDevice>(link->dreamlink);
-					if (mapleDevMeta && mapleDevMeta->usingExternalStorage())
-					{
-						maple_ReconnectDevice(bus, port);
-					}
-				}
-			}
-		});
-
-		os_notify("ATTENTION: State loaded with physical VMU memory enabled", 6000,
-				"Physical memory has detached from local state");
-	}
-}
 
 bool BaseDreamLink::isGameRunning() const
 {
@@ -102,7 +60,6 @@ void BaseDreamLink::term()
 	stopConnectionWorkerThread();
 
 	// Invalidate internal data
-	vmuStorage = false;
     linkedBus = -1;
     linkedPortsMask = 0;
     connectedPortsMask = 0;
@@ -110,7 +67,6 @@ void BaseDreamLink::term()
 
 void BaseDreamLink::onGameStarted()
 {
-	vmuStorage = storageSupported && config::UsePhysicalVmuMemory && isConnected();
 }
 
 void BaseDreamLink::registerLink(int bus, u32 portsMask)
@@ -256,14 +212,12 @@ void BaseDreamLink::stopConnectionWorkerThread()
 
 BaseDreamLink::PrioritizedRegistry::PrioritizedRegistry()
 {
-	EventManager::listen(Event::LoadState, EventHandler, this);
 	EventManager::listen(Event::Start, EventHandler, this);
 	EventManager::listen(Event::Terminate, EventHandler, this);
 }
 
 BaseDreamLink::PrioritizedRegistry::~PrioritizedRegistry()
 {
-	EventManager::unlisten(Event::LoadState, EventHandler, this);
 	EventManager::unlisten(Event::Start, EventHandler, this);
 	EventManager::unlisten(Event::Terminate, EventHandler, this);
 }
@@ -382,9 +336,6 @@ void BaseDreamLink::PrioritizedRegistry::eventHandler(Event event)
 				break;
 			case Event::Terminate:
 				ptr->onGameTermination();
-				break;
-			case Event::LoadState:
-				ptr->disableStorage();
 				break;
 			default:
 				break;

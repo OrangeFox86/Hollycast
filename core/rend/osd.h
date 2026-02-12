@@ -25,6 +25,7 @@ extern bool vmu_lcd_status[8];
 extern u64 vmuLastChanged[8];
 
 void push_vmu_screen(int bus_id, int bus_port, u8* buffer);
+void reset_vmu_screen(int bus_id, int bus_port);
 
 // Crosshair
 const u32 *getCrosshairTextureData();

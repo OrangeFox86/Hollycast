@@ -53,7 +53,11 @@ void maple_device::Setup(u32 bus, u32 port, int playerNum, bool install)
 }
 maple_device::~maple_device()
 {
-    delete config;
+	if (config)
+	{
+		config->ResetImage();
+    	delete config;
+	}
 }
 
 static inline void mutualExclusion(u32& keycode, u32 mask)
@@ -351,26 +355,9 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 		if (b != 0)
 		{
 			config->SetImage(lcd_data_decoded);
-			updateMapleLinkScreen();
 			break;
 		}
 	fullSaveNeeded = true;
-}
-
-void maple_sega_vmu::updateMapleLinkScreen()
-{
-	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-	if (!link)
-		return;
-
-	MapleMsg msg;
-	msg.command = MDCF_BlockWrite;
-	msg.destAP = maple_port;
-	msg.originAP = bus_id << 6;
-	msg.pushData(MFID_2_LCD);
-	msg.pushData(0);    // PT, phase, block#
-	msg.pushData(lcd_data);
-	link->send(msg);
 }
 
 bool maple_sega_vmu::fullSave()
@@ -453,7 +440,6 @@ maple_sega_vmu::~maple_sega_vmu()
 	if (file != nullptr)
 		std::fclose(file);
 	memset(lcd_data, 0, sizeof(lcd_data));
-	updateMapleLinkScreen();
 }
 
 u32 maple_sega_vmu::dma(u32 cmd)

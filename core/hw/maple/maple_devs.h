@@ -378,7 +378,6 @@ struct maple_sega_vmu: maple_base
 	MapleDeviceType get_device_type() override;
 	void serialize(Serializer& ser) const override;
 	void deserialize(Deserializer& deser) override;
-	void updateMapleLinkScreen();
 	virtual bool fullSave();
 	void initializeVmu();
 	void OnSetup() override;

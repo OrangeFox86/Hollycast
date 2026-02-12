@@ -172,6 +172,11 @@ void MapleConfigMap::SetImage(u8 *img)
 	push_vmu_screen(dev->bus_id, dev->bus_port, img);
 }
 
+void MapleConfigMap::ResetImage()
+{
+	reset_vmu_screen(dev->bus_id, dev->bus_port);
+}
+
 void MapleConfigMap::GetAbsCoordinates(int& x, int& y)
 {
 	const MapleInputState& inputState = mapleInputState[playerNum()];

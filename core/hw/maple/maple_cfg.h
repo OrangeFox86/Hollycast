@@ -77,6 +77,7 @@ public:
 	void GetMouseInput(u8& buttons, int& x, int& y, int& wheel);
 	void GetKeyboardInput(u8& shift, u8 keys[6]);
 	void SetImage(u8 *img);
+	void ResetImage();
 
 	static void (*UpdateVibration)(u32 port, float power, float inclination, u32 duration_ms);
 	bool invertMouseY = false;
@@ -137,6 +138,7 @@ constexpr int maple_getPortCount(MapleDeviceType type)
 
 bool maple_atomiswave_coin_chute(int slot);
 void push_vmu_screen(int bus_id, int bus_port, u8* buffer);
+void reset_vmu_screen(int bus_id, int bus_port);
 void insertRfidCard(int playerNum);
 const u8 *getRfidCardData(int playerNum);
 void setRfidCardData(int playerNum, u8 *data);

@@ -148,8 +148,6 @@ public:
 	void term() override;
 
 protected:
-    //! Disable VMU storage for this link
-	void disableStorage();
 	//! Called when a game has started
 	virtual void onGameStarted();
 	//! Called when a game has terminated
@@ -193,9 +191,6 @@ protected:
     const bool storageSupported;
 
 private:
-    //! Runtime storage enable flag
-	bool vmuStorage = false;
-
     //! Currently linked bus
     int linkedBus = -1;
     //! All available ports

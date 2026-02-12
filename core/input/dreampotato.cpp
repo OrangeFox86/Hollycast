@@ -353,8 +353,6 @@ void DreamPotato::disconnect()
 {
 	if (!connected)
 		return;
-	if (storageEnabled())
-		disableStorage();
 	connected = false;
 	iostream.close();
 	NOTICE_LOG(INPUT, "Disconnected from DreamPotato[%d]", bus);
