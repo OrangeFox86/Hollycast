@@ -119,6 +119,18 @@ void mcfg_DestroyDevices(bool full = true);
 void mcfg_SerializeDevices(Serializer& ser);
 void mcfg_DeserializeDevices(Deserializer& deser);
 
+//! Serialize a default device state to the Serializer without installing the device
+//! @param[out] ser The serializer to write to
+//! @param[in] forType The device type to serialize
+//! @param[in] bus The bus to serialize
+//! @param[in] port The port to serialize
+//! @param[in] playerNum The player number to serialize
+void mcfg_SerializeDefaultDevice(Serializer& ser, MapleDeviceType forType, u32 bus, u32 port, int playerNum = -1);
+//! Deserialize and discard a device from the stream
+//! @param[in,out] deser The deserializer to increment the pointer of
+//! @param[in] forType The device type to discard
+void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType);
+
 constexpr int maple_getPortCount(MapleDeviceType type)
 {
 	switch (type)

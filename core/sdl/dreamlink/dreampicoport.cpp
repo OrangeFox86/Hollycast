@@ -1079,10 +1079,7 @@ void DppMapleLinkDevice::serialize(Serializer& ser) const
 	else
 	{
 		// Serialize default state for the serializing type
-		std::shared_ptr<maple_device> dummyDev = maple_Create(serializingType);
-		// Setup without installing
-		dummyDev->Setup(bus_id, bus_port, player_num, false);
-		dummyDev->serialize(ser);
+		mcfg_SerializeDefaultDevice(ser, serializingType, bus_id, bus_port, player_num);
 	}
 }
 
@@ -1206,10 +1203,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 	else
 	{
 		// Just throw out the data
-		std::shared_ptr<maple_device> dummyDev = maple_Create(deserializingType);
-		// Setup without installing
-		dummyDev->Setup(bus_id, bus_port, player_num, false);
-		dummyDev->deserialize(deser);
+		mcfg_DeserializeDiscardDevice(deser, deserializingType);
 	}
 
 	// Done deserializing - reset type

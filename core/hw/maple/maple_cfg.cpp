@@ -570,9 +570,7 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 					else
 					{
 						// Flush the data and require reconnect
-						std::shared_ptr<maple_device> dummyDev = maple_Create(typeEnum);
-						dummyDev->Setup(i, j, -1, false);
-						dummyDev->deserialize(deser);
+						mcfg_DeserializeDiscardDevice(deser, typeEnum);
 						maple_ReconnectDevice(i, j);
 					}
 				}
@@ -584,6 +582,20 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 		}
 	if (deser.version() < Deserializer::V23 && EEPROM != nullptr)
 		memcpy(EEPROM, eeprom, sizeof(eeprom));
+}
+
+void mcfg_SerializeDefaultDevice(Serializer& ser, MapleDeviceType forType, u32 bus, u32 port, int playerNum)
+{
+	std::shared_ptr<maple_device> dummyDev = maple_Create(forType);
+	dummyDev->Setup(bus, port, playerNum, false);
+	dummyDev->serialize(ser);
+}
+
+void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType)
+{
+	std::shared_ptr<maple_device> dummyDev = maple_Create(forType);
+	dummyDev->Setup(0, 0, -1, false);
+	dummyDev->deserialize(deser);
 }
 
 std::shared_ptr<MIE> getMieDevice()
