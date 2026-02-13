@@ -27,6 +27,7 @@
 #include "ui/gui.h"
 #include "cfg/option.h"
 #include "oslib/i18n.h"
+#include "oslib/oslib.h"
 #include "log/Log.h"
 
 #include "DreamPicoPortApi.hpp"
@@ -105,7 +106,8 @@ struct DppVirtualVmu : public maple_sega_vmu
 		file = nullptr;
 		memset(flash_data, 0, sizeof(flash_data));
 		memset(lcd_data, 0, sizeof(lcd_data));
-		memset(lcd_data_decoded, 0, sizeof(lcd_data_decoded));
+		accessed_blocks_valid = true;
+		memset(accessed_blocks, 0, sizeof(accessed_blocks));
 		fullSaveNeeded = false;
 	}
 };
@@ -121,7 +123,6 @@ struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
 	std::mutex writeMutex;
 	//! Virtual VMU used to display a virtual screen and optionally save to file
 	std::unique_ptr<DppVirtualVmu> virtualVmu;
-	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	//! The last returned value from get_device_type()
 	MapleDeviceType serializingType = MDT_None;
 	//! The device type currently deserializing for
@@ -837,7 +838,6 @@ std::shared_ptr<DreamPicoPort> DppMapleLinkDevice::getDreamPicoPort() const
 
 void DppMapleLinkDevice::OnSetup()
 {
-	memset(cachedBlocks, 0, sizeof(cachedBlocks));
 	maple_base::OnSetup();
 }
 
@@ -950,20 +950,29 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 	}
 
 	bool isMemory = false;
+	bool isMemoryRead = false;
 	u8 memoryBlock = 0;
 
 	if (
 		firstWord == MFID_1_Storage &&
 		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError)
 	) {
-		isMemory = true;
-		memoryBlock = inMsg->data[7];
+		isMemoryRead = (cmd == MDCF_BlockRead);
+		isMemory = (isMemoryRead || cmd == MDCF_BlockWrite);
+		if (isMemory) {
+			memoryBlock = inMsg->data[7];
+		}
 
 		if (!link->storageEnabled()) {
 			// Use virtual memory and return without accessing physical memory
 			// This will use file-backed memory and automatically save when needed
 			return virtualVmuDma(cmd);
 		} else if (cmd == MDCF_BlockWrite) {
+			os_notify(
+				"ATTENTION: You are saving to a physical VMU",
+				6000,
+				"Do not disconnect the VMU or close the game"
+			);
 			// Send write to virtual memory and also continue below
 			virtualVmuDma(cmd);
 		} // else: continue below to read the data
@@ -983,10 +992,9 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 	}
 
 	const MapleMsg& txMsg = *inMsg;
-	MapleMsg rxMsg;
+	MapleMsg rxMsg{};
 	std::vector<u32> output;
-	const bool dataReceived = (link && link->sendReceive(txMsg, rxMsg));
-	if (dataReceived) {
+	if (link && link->sendReceive(txMsg, rxMsg)) {
 		// If this message came from a main peripheral, clear out attached flags (will be handled by base)
 		if (rxMsg.originAP & 0x20) {
 			rxMsg.originAP = (rxMsg.originAP & 0xE0);
@@ -999,12 +1007,19 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		rxMsg.command = MDRS_JVSNone;
 	}
 
-	// Save to cachedBlocks if this was a memory command
+	// Save to accessed_blocks if this was a memory command
 	if (isMemory) {
-		cachedBlocks[memoryBlock] = (
-			dataReceived &&
-			(rxMsg.command == MDRS_DeviceReply || rxMsg.command == MDRS_DataTransfer)
-		);
+		bool success = false;
+		if (isMemoryRead) {
+			success = (rxMsg.size >= 130 && rxMsg.command == MDRS_DataTransfer);
+			if (success) {
+				// Mirror read data to the virtual VMU
+				memcpy(&virtualVmu->flash_data[memoryBlock * 512], &rxMsg.data[8], 512);
+			}
+		} else {
+			success = (rxMsg.command == MDRS_DeviceReply);
+		}
+		virtualVmu->accessed_blocks[memoryBlock] = success;
 	}
 
 	// If doing write operation, save time at this point
@@ -1030,7 +1045,15 @@ bool DppMapleLinkDevice::usingExternalStorage() const
 bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 {
 	deserializingType = type;
-	return (type != MDT_None && get_device_type() == type);
+	auto link = getDreamPicoPort();
+	MapleDeviceType detectedType = fnCodeToMapleDeviceType(link->getFunctionCode(bus_port));
+	const bool isSameType = (type != MDT_None && detectedType == type);
+
+	if (!isSameType) {
+		os_notify("ATTENTION: Current hardware configuration changed since last save state", 6000);
+	}
+
+	return isSameType;
 }
 
 void DppMapleLinkDevice::serialize(Serializer& ser) const
@@ -1056,14 +1079,6 @@ void DppMapleLinkDevice::serialize(Serializer& ser) const
 	if (serializingType == MDT_SegaVMU && virtualVmu)
 	{
 		// Note: if (serializingType == MDT_SegaVMU) then virtualVmu will be set
-
-		// lcd_data_decoded isn't used on deserialize anymore
-		// This data is instead used to store magic followed by cached block flags
-		memcpy(&virtualVmu->lcd_data_decoded[0], &vmuSerializeMagic[0], sizeof(vmuSerializeMagic));
-		for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
-			virtualVmu->lcd_data_decoded[sizeof(vmuSerializeMagic) + i] = (cachedBlocks[i] ? 0xFF : 0);
-		}
-
 		virtualVmu->serialize(ser);
 	}
 	else
@@ -1103,67 +1118,92 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 
 	if (detectedType != deserializingType)
 	{
-		// Signal that the device has changed
+		// Should never reach here
+		ERROR_LOG(
+			INPUT,
+			"DppMapleLinkDevice::deserialize received non-matching type [%i]; detected type: [%i]",
+			static_cast<int>(deserializingType),
+			static_cast<int>(detectedType)
+		);
 		requestReconnect();
 	}
 
 	if (deserializingType == MDT_SegaVMU && detectedType == deserializingType)
 	{
 		establishVirtualVmu();
-		u8 prevFlashData[128_KB];
-		memcpy(&prevFlashData[0], &virtualVmu->flash_data[0], sizeof(prevFlashData));
+		u8 currentKnownFlash[sizeof(virtualVmu->flash_data)];
+		memcpy(&currentKnownFlash[0], &virtualVmu->flash_data[0], sizeof(currentKnownFlash));
+		u8 currentAccessedBlocks[sizeof(virtualVmu->accessed_blocks)];
+		memcpy(&currentAccessedBlocks[0], &virtualVmu->accessed_blocks[0], sizeof(currentAccessedBlocks));
 		virtualVmu->deserialize(deser);
 
 		// Determine if the device needs to be reconnected
 		if (usingExternalStorage()) {
-			if (memcmp(&virtualVmu->lcd_data_decoded[0], &vmuSerializeMagic[0], sizeof(vmuSerializeMagic)) != 0) {
-				// Coming from a virtual VMU - cause reconnect
+			if (!virtualVmu->accessed_blocks_valid) {
+				// Legacy save file - clear cached data and cause reconnect
+				virtualVmu->accessed_blocks_valid = true;
+				memset(&virtualVmu->flash_data[0], 0, sizeof(virtualVmu->flash_data));
+				memset(&virtualVmu->accessed_blocks[0], 0, sizeof(virtualVmu->accessed_blocks));
 				requestReconnect();
+				os_notify(
+					"ATTENTION: External storage differs from VMU memory in loaded state",
+					6000,
+					"VMU will appear to reconnect in-game"
+				);
 			} else {
-				bool copyPrevCache = true;
-				for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
-					const bool isCached = (virtualVmu->lcd_data_decoded[sizeof(vmuSerializeMagic) + i] != 0);
+				bool dataMatches = true;
+				for (std::size_t i = sizeof(currentAccessedBlocks); i > 0; --i) {
+					const u8 block = (i - 1);
+					const bool isCached = (virtualVmu->accessed_blocks[block] != 0);
 					if (isCached) {
-						if (!cachedBlocks[i]) {
+						if (!currentAccessedBlocks[block]) {
 							// Try up to 4 times to read this block
 							for (u32 j = 0; j < 4; ++j) {
 								MapleMsg msg{};
 								msg.command = 0x0B;
 								// Hardware bus number will be overridden by link->sendReceive()
-								msg.destAP = 1 << bus_port;
-								msg.originAP = 0;
+								msg.destAP = (bus_id << 6) | (1 << bus_port);
+								msg.originAP = bus_id << 6;
 								msg.pushData(MFID_1_Storage);
-								const u32 block = (i & 0xFF) << 24;
-								msg.pushData(block);
+								const u32 locationWord = (block & 0xFF) << 24;
+								msg.pushData(locationWord);
 
 								MapleMsg rxMsg;
 								if (link->sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
 									// Something read!
-									memcpy(&prevFlashData[i * 512], &rxMsg.data[8], 512);
-									cachedBlocks[i] = true;
+									memcpy(&currentKnownFlash[block * 512], &rxMsg.data[8], 512);
+									currentAccessedBlocks[block] = true;
 									break;
 								}
 							}
 						}
 
 						if (
-							!cachedBlocks[i] ||
-							(memcmp(&prevFlashData[i * 512], &virtualVmu->flash_data[i * 512], 512) != 0)
+							!currentAccessedBlocks[block] ||
+							(memcmp(&currentKnownFlash[block * 512], &virtualVmu->flash_data[block * 512], 512) != 0)
 						) {
 							requestReconnect();
-							copyPrevCache = false;
+							os_notify(
+								"ATTENTION: External storage differs from VMU memory in loaded state",
+								6000,
+								"VMU will appear to reconnect in-game"
+							);
+							dataMatches = false;
 							break;
 						}
 					}
 				}
 
-				if (copyPrevCache) {
-					// Copy cached data from the previous data set to the new
-					for (std::size_t i = 0; i < sizeof(cachedBlocks); ++i) {
-						if (cachedBlocks[i]) {
-							memcpy(&virtualVmu->flash_data[i * 512], &prevFlashData[i * 512], 512);
-						}
-					}
+				if (dataMatches) {
+					// Set the screen to what is in state
+					MapleMsg msg;
+					msg.command = MDCF_BlockWrite;
+					msg.destAP = (bus_id << 6) | (1 << bus_port);
+					msg.originAP = bus_id << 6;
+					msg.pushData(MFID_2_LCD);
+					msg.pushData(0);    // PT, phase, block#
+					msg.pushData(virtualVmu->lcd_data);
+					link->send(msg);
 				}
 			}
 		}

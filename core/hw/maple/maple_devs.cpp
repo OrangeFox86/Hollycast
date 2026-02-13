@@ -343,19 +343,31 @@ void maple_sega_vmu::serialize(Serializer& ser) const
 	maple_base::serialize(ser);
 	ser << flash_data;
 	ser << lcd_data;
-	// lcd_data_decoded no longer needs to be serialized, but this is done for backwards compatibility
-	ser << lcd_data_decoded;
+	ser << serialize_magic;
+	ser << accessed_blocks;
+	// For backwards compatibility
+	u8 padding[ser_pad_size] = {};
+	ser << padding;
 }
 void maple_sega_vmu::deserialize(Deserializer& deser)
 {
 	maple_base::deserialize(deser);
 	deser >> flash_data;
 	deser >> lcd_data;
-	deser >> lcd_data_decoded;
+	u8 deser_magic[sizeof(serialize_magic)];
+	deser >> deser_magic;
+	deser >> accessed_blocks;
+	// For backward compatibility
+	u8 padding[ser_pad_size];
+	deser >> padding;
+
+	accessed_blocks_valid = (memcmp(&deser_magic[0], &serialize_magic[0], sizeof(serialize_magic)) == 0);
+	if (!accessed_blocks_valid)
+		memset(&accessed_blocks[0], 0, sizeof(accessed_blocks));
 	for (u8 b : lcd_data)
 		if (b != 0)
 		{
-			setLcd(false);
+			setLcd();
 			break;
 		}
 	fullSaveNeeded = true;
@@ -394,6 +406,8 @@ void maple_sega_vmu::OnSetup()
 {
 	memset(flash_data, 0, sizeof(flash_data));
 	memset(lcd_data, 0, sizeof(lcd_data));
+	accessed_blocks_valid = true;
+	memset(accessed_blocks, 0, sizeof(accessed_blocks));
 
 	// Load existing vmu file if found
 	std::string rpath = hostfs::getVmuPath(logical_port, false);
@@ -581,6 +595,8 @@ u32 maple_sega_vmu::dma(u32 cmd)
 					else
 						DEBUG_LOG(MAPLE, "VMU %s block read: Block %d addr %x len %d", logical_port, Block, Block*512, 512);
 					wptr(flash_data+Block*512,512);
+					if (Block < sizeof(accessed_blocks))
+						accessed_blocks[Block] = true;
 				}
 				return MDRS_DataTransfer;//data transfer
 
@@ -657,6 +673,8 @@ u32 maple_sega_vmu::dma(u32 cmd)
 						return MDRE_FileError; //invalid params
 					}
 					rptr(&flash_data[write_adr],write_len);
+					if (Block < sizeof(accessed_blocks))
+						accessed_blocks[Block] = true;
 
 					if (file != nullptr)
 					{
@@ -751,27 +769,29 @@ const void *maple_sega_vmu::getData(size_t& size) const
 	return flash_data;
 }
 
-void maple_sega_vmu::setLcd(bool saveDecoded)
+void maple_sega_vmu::setLcd()
 {
-	u8 decoded[48*32]; // Optional buffer space
-	u8* const decodedPtr = (saveDecoded ? &lcd_data_decoded[0] : &decoded[0]);
-	u8 white=0xff,black=0x00;
-
-	for(int y=0;y<32;++y)
+	if (config)
 	{
-		u8* dst=decodedPtr+y*48;
-		u8* src=lcd_data+6*y+5;
-		for(int x=0;x<6;++x)
+		u8 decoded[48*32];
+		u8 white=0xff,black=0x00;
+
+		for(int y=0;y<32;++y)
 		{
-			u8 col=*src--;
-			for(int l=0;l<8;l++)
+			u8* dst=decoded+y*48;
+			u8* src=lcd_data+6*y+5;
+			for(int x=0;x<6;++x)
 			{
-				*dst++=col&1?black:white;
-				col>>=1;
+				u8 col=*src--;
+				for(int l=0;l<8;l++)
+				{
+					*dst++=col&1?black:white;
+					col>>=1;
+				}
 			}
 		}
+		config->SetImage(decoded);
 	}
-	config->SetImage(decodedPtr);
 }
 
 /*

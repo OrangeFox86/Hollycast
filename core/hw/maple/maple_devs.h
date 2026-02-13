@@ -403,7 +403,10 @@ struct maple_sega_vmu: maple_base
 	FILE *file = nullptr;
 	u8 flash_data[128_KB];
 	u8 lcd_data[192];
-	u8 lcd_data_decoded[48*32];
+	static constexpr const u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
+	bool accessed_blocks_valid = false;
+	u8 accessed_blocks[256];
+	static constexpr const std::size_t ser_pad_size = (48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks);
 	bool fullSaveNeeded = false;
 
 	MapleDeviceType get_device_type() override;
@@ -415,7 +418,7 @@ struct maple_sega_vmu: maple_base
 	~maple_sega_vmu() override;
 	u32 dma(u32 cmd) override;
 	const void *getData(size_t& size) const override;
-	void setLcd(bool saveDecoded = true);
+	void setLcd();
 };
 
 struct maple_microphone: maple_base
