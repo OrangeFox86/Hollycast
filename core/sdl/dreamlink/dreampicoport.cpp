@@ -104,7 +104,7 @@ struct DppVirtualVmu : public maple_sega_vmu
 
 		// Nullify the file and zero out all data under maple_sega_vmu
 		file = nullptr;
-		memset(flash_data, 0, sizeof(flash_data));
+		initializeVmu(); // Start with a valid VMU memory state
 		memset(lcd_data, 0, sizeof(lcd_data));
 		accessed_blocks_valid = true;
 		memset(accessed_blocks, 0, sizeof(accessed_blocks));
@@ -957,25 +957,20 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		firstWord == MFID_1_Storage &&
 		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError)
 	) {
-		isMemoryRead = (cmd == MDCF_BlockRead);
-		isMemory = (isMemoryRead || cmd == MDCF_BlockWrite);
-		if (isMemory) {
-			memoryBlock = inMsg->data[7];
-		}
-
 		if (!link->storageEnabled()) {
 			// Use virtual memory and return without accessing physical memory
 			// This will use file-backed memory and automatically save when needed
 			return virtualVmuDma(cmd);
 		} else if (cmd == MDCF_BlockWrite) {
-			os_notify(
-				"ATTENTION: You are saving to a physical VMU",
-				6000,
-				"Do not disconnect the VMU or close the game"
-			);
 			// Send write to virtual memory and also continue below
 			virtualVmuDma(cmd);
 		} // else: continue below to read the data
+
+		isMemoryRead = (cmd == MDCF_BlockRead);
+		isMemory = (isMemoryRead || cmd == MDCF_BlockWrite);
+		if (isMemory) {
+			memoryBlock = inMsg->data[7];
+		}
 	} else if (cmd == MDCF_BlockWrite && firstWord == MFID_2_LCD) {
 		// Send to virtual screen and also continue below
 		virtualVmuDma(cmd);
@@ -1050,7 +1045,7 @@ bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 	const bool isSameType = (type != MDT_None && detectedType == type);
 
 	if (!isSameType) {
-		os_notify("ATTENTION: Current hardware configuration changed since last save state", 6000);
+		os_notify(i18n::T("ATTENTION: Current hardware configuration changed since last save state"), 6000);
 	}
 
 	return isSameType;
@@ -1146,9 +1141,9 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 				memset(&virtualVmu->accessed_blocks[0], 0, sizeof(virtualVmu->accessed_blocks));
 				requestReconnect();
 				os_notify(
-					"ATTENTION: External storage differs from VMU memory in loaded state",
+					i18n::T("ATTENTION: External storage differs from VMU memory in loaded state"),
 					6000,
-					"VMU will appear to reconnect in-game"
+					i18n::T("VMU will appear to reconnect in-game")
 				);
 			} else {
 				bool dataMatches = true;
@@ -1184,9 +1179,9 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 						) {
 							requestReconnect();
 							os_notify(
-								"ATTENTION: External storage differs from VMU memory in loaded state",
+								i18n::T("ATTENTION: External storage differs from VMU memory in loaded state"),
 								6000,
-								"VMU will appear to reconnect in-game"
+								i18n::T("VMU will appear to reconnect in-game")
 							);
 							dataMatches = false;
 							break;
