@@ -145,7 +145,7 @@ struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
 	u32 virtualVmuDma(u32 cmd);
 	u32 dma(u32 cmd) override;
 
-	bool usingExternalStorage() const override;
+	bool usingExternalStorage() const;
 
 	bool deserializingFor(MapleDeviceType type) override;
 	void serialize(Serializer& ser) const override;

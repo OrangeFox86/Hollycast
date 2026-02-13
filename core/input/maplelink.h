@@ -83,9 +83,6 @@ public:
 //! Virtual class which all maple link devices must inheirt from
 struct MapleLinkDevice
 {
-	//! @return true iff there is a current link to external storage
-	virtual bool usingExternalStorage() const = 0;
-
 	//! This is called by the deserialization process to relay what deserialization virtual device type
 	//! @param[in] type The type that should be assumed for subsequent deserialize
 	//! @return true iff this MapleLink is setup to accept this type
@@ -97,10 +94,6 @@ struct MapleLinkVmu : maple_sega_vmu, MapleLinkDevice
 {
 	u32 dma(u32 cmd) override;
 	u32 dma(std::optional<MapleLink>& link, u32 cmd);
-	inline bool usingExternalStorage() const override
-	{
-		return false;
-	}
 	inline bool deserializingFor(MapleDeviceType type) override
 	{
 		return (type == MDT_SegaVMU);
@@ -116,10 +109,6 @@ struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDevice
 {
 	u32 dma(u32 cmd) override;
 	u32 dma(std::optional<MapleLink>& link, u32 cmd);
-	inline bool usingExternalStorage() const override
-	{
-		return false;
-	}
 	inline bool deserializingFor(MapleDeviceType type) override
 	{
 		return (type == MDT_PurupuruPack);
@@ -137,7 +126,6 @@ struct MapleLinkStub : maple_base, MapleLinkDevice
 	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }
 	inline u32 dma(u32 cmd) override { return MDRS_JVSNone; }
 	inline bool linkStatus() override { return false; }
-	inline bool usingExternalStorage() const { return false; }
 	inline bool deserializingFor(MapleDeviceType type) override { return false; }
 	inline void serialize(Serializer& ser) const override
 	{
