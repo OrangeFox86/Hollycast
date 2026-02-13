@@ -1085,7 +1085,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
 			{
 				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
-				if (link && !link->dreamlink->isUpdateRequired())
+				if (link && (link->dreamlink->getIssueDescription() == nullptr))
 					dream_link_names[bus] = link->dreamlink->getName();
 				else
 					dream_link_names[bus] = "";

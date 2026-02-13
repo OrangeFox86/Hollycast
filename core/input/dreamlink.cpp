@@ -43,15 +43,14 @@ bool BaseDreamLink::storageEnabled()
 	return storageSupported && config::UsePhysicalVmuMemory;
 }
 
-
 bool BaseDreamLink::isGameRunning() const
 {
 	return PrioritizedRegistry::Get().isGameRunning();
 }
 
-bool BaseDreamLink::isUpdateRequired() const
+const char* BaseDreamLink::getIssueDescription() const
 {
-	return false;
+	return nullptr;
 }
 
 void BaseDreamLink::term()
@@ -168,10 +167,14 @@ void BaseDreamLink::connectionWorkerThread()
 				{
 					break;
 				}
-				else if (isUpdateRequired())
+				else
 				{
-					NOTICE_LOG(INPUT, "DreamLink connection failed; update required");
-					break;
+					const char* issueDesc = getIssueDescription();
+					if (issueDesc != nullptr)
+					{
+						NOTICE_LOG(INPUT, "DreamLink connection failed: %s", issueDesc);
+						break;
+					}
 				}
 
 				NOTICE_LOG(INPUT, "DreamLink connection failed; retrying connection in 1 second");

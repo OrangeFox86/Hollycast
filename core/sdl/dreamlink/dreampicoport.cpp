@@ -569,8 +569,12 @@ public:
 		return (dpp_comms && dpp_comms->isConnected());
 	}
 
-	bool isUpdateRequired() const override {
-		return update_required;
+	const char* getIssueDescription() const override {
+		if (update_required) {
+			return i18n::T("Firmware Update Required");
+		} else {
+			return SDLDreamLink::getIssueDescription();
+		}
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {

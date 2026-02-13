@@ -68,8 +68,10 @@ public:
 	virtual void disconnect() = 0;
 	//! @return true iff the link is operational
 	virtual bool isConnected() = 0;
-	//! @return true iff firmware update is required
-	virtual bool isUpdateRequired() const = 0;
+	//! This should be overridden by the child in order to report fatal errors preventing all operations
+	//! @return nullptr if no issue exists
+	//! @return pointer to the issue description string; no operation is expected to succeed in this case
+	virtual const char* getIssueDescription() const = 0;
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
@@ -141,8 +143,8 @@ public:
 	bool storageEnabled() override;
 	//! @return true iff a game has been started
 	bool isGameRunning() const;
-	//! @return true iff firmware update is required
-	bool isUpdateRequired() const override;
+	//! Child may override this if it needs to report fatal errors
+	const char* getIssueDescription() const override;
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	void term() override;
