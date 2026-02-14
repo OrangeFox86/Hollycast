@@ -19,6 +19,7 @@
 #include "cfg/option.h"
 #include "hw/maple/maple_if.h"
 #include "hw/maple/maple_devs.h"
+#include "oslib/i18n.h"
 #include "oslib/oslib.h"
 
 #include <memory>
@@ -60,6 +61,100 @@ std::shared_ptr<maple_device> MapleLink::createMapleDevice()
 	return dreamlink->createMapleDevice(bus, port);
 }
 
+void MapleLinkDevice::deserializeVmu(
+	Deserializer &deser,
+	MapleLink& link,
+	maple_base& dev,
+	maple_sega_vmu& vmu,
+	bool usingExternalMemory
+)
+{
+	bool dataMatches = true;
+
+	u8 currentKnownFlash[sizeof(vmu.flash_data)];
+	memcpy(&currentKnownFlash[0], &vmu.flash_data[0], sizeof(currentKnownFlash));
+	u8 currentAccessedBlocks[sizeof(vmu.accessed_blocks)];
+	memcpy(&currentAccessedBlocks[0], &vmu.accessed_blocks[0], sizeof(currentAccessedBlocks));
+	vmu.deserialize(deser);
+
+	// Determine if the device needs to be reconnected
+	if (usingExternalMemory) {
+		if (!vmu.accessed_blocks_valid) {
+			// Legacy save file - cause reconnect
+			dataMatches = false;
+			os_notify(
+				i18n::T("ATTENTION: External storage differs from VMU memory in loaded state"),
+				6000,
+				i18n::T("VMU will appear to reconnect in-game")
+			);
+		} else {
+			for (std::size_t i = sizeof(currentAccessedBlocks); i > 0; --i) {
+				const u8 block = (i - 1);
+				const bool isCached = (vmu.accessed_blocks[block] != 0);
+				if (isCached) {
+					if (!currentAccessedBlocks[block]) {
+						// Try up to 4 times to read this block
+						for (u32 j = 0; j < 4; ++j) {
+							MapleMsg msg{};
+							msg.command = MDCF_BlockRead;
+							// Hardware bus number will be overridden by link->sendReceive()
+							msg.destAP = (dev.bus_id << 6) | (1 << dev.bus_port);
+							msg.originAP = dev.bus_id << 6;
+							msg.pushData(MFID_1_Storage);
+							const u32 locationWord = (block & 0xFF) << 24;
+							msg.pushData(locationWord);
+
+							MapleMsg rxMsg;
+							if (link.sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
+								// Something read!
+								memcpy(&currentKnownFlash[block * 512], &rxMsg.data[8], 512);
+								currentAccessedBlocks[block] = true;
+								break;
+							}
+						}
+					}
+
+					if (
+						!currentAccessedBlocks[block] ||
+						(memcmp(&currentKnownFlash[block * 512], &vmu.flash_data[block * 512], 512) != 0)
+					) {
+						os_notify(
+							i18n::T("ATTENTION: External storage differs from VMU memory in loaded state"),
+							6000,
+							i18n::T("VMU will appear to reconnect in-game")
+						);
+						dataMatches = false;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (dataMatches) {
+		mirrorLcd(link, dev, vmu);
+	} else {
+		dev.requestReconnect();
+		// Reset the virtual VMU data
+		vmu.accessed_blocks_valid = true;
+		memset(&vmu.flash_data[0], 0, sizeof(vmu.flash_data));
+		memset(&vmu.accessed_blocks[0], 0, sizeof(vmu.accessed_blocks));
+	}
+}
+
+void MapleLinkDevice::mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu& vmu)
+{
+	// Set the screen to what is in state
+	MapleMsg msg;
+	msg.command = MDCF_BlockWrite;
+	msg.destAP = (dev.bus_id << 6) | (1 << dev.bus_port);
+	msg.originAP = dev.bus_id << 6;
+	msg.pushData(MFID_2_LCD);
+	msg.pushData(0);    // PT, phase, block#
+	msg.pushData(vmu.lcd_data);
+	link.send(msg);
+}
+
 MapleLinkVmu::MapleLinkVmu(const MapleLink& link) : MapleLinkDeviceBase<maple_sega_vmu>(link)
 {}
 
@@ -75,6 +170,12 @@ u32 MapleLinkVmu::dma(u32 cmd)
 		}
 	}
 	return rv;
+}
+
+void MapleLinkVmu::deserialize(Deserializer& deser)
+{
+	maple_sega_vmu::deserialize(deser);
+	mirrorLcd();
 }
 
 MapleLinkPuruPuru::MapleLinkPuruPuru(const MapleLink& link) : MapleLinkDeviceBase<maple_sega_purupuru>(link)

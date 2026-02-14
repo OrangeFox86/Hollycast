@@ -113,17 +113,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	void deserialize(Deserializer& deser) override
 	{
-		if (!link.storageEnabled())
-		{
-			MapleLinkVmu::deserialize(deser);
-			return;
-		}
-
-		// Ignore the VMU data from the loaded state
-		u8 savedData[sizeof(flash_data)];
-		memcpy(savedData, flash_data, sizeof(savedData));
-		MapleLinkVmu::deserialize(deser);
-		memcpy(flash_data, savedData, sizeof(savedData));
+		deserializeVmu(deser, link.storageEnabled());
 	}
 
 	MapleDeviceRV readBlock(unsigned block)
