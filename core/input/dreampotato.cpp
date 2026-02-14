@@ -83,6 +83,9 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 		initializeVmu(); // Start with a valid VMU memory state
 		memset(lcd_data, 0, sizeof(lcd_data));
+		accessed_blocks_valid = true;
+		memset(accessed_blocks, 0, sizeof(accessed_blocks));
+		fullSaveNeeded = false;
 	}
 
 	bool fullSave() override
