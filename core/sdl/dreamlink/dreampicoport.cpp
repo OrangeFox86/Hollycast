@@ -251,7 +251,7 @@ public:
 	virtual ~ApiDreamPicoPortComms() = default;
 
 	void changeSoftwareBus(int software_bus) {
-		software_bus = software_bus;
+		this->software_bus = software_bus;
 	}
 
 	bool isConnected() const {
@@ -562,7 +562,7 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(0);
-				emu.run([bus=software_bus]() { maple_ReconnectDevice(bus, 0); });
+				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
 			}
 		}
 
@@ -571,7 +571,7 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(1);
-				emu.run([bus=software_bus]() { maple_ReconnectDevice(bus, 1); });
+				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
 			}
 		}
 	}
