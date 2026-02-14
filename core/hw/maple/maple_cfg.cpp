@@ -245,7 +245,7 @@ void createDreamLinkDevices(
 	std::initializer_list<u32> allowedPorts = {}
 )
 {
-	// The purpose of this function is only to create the MDT_DreamLink devices where necessary
+	// The purpose of this function is only to create the DreamLink devices where necessary
 
 	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
 	{
