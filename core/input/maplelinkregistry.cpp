@@ -29,7 +29,7 @@ MapleLinkRegistry& MapleLinkRegistry::Get()
     return singleton;
 }
 
-std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port)
+std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port, int linkBusOffset)
 {
     if (!DreamLink::isValidBus(bus) || !DreamLink::isValidPort(port))
         return std::nullopt;
@@ -38,7 +38,7 @@ std::optional<MapleLink> MapleLinkRegistry::getMapleLink(int bus, int port)
 
     {
         std::lock_guard<std::mutex> lock(mutex);
-        link = links[bus][port].lock();
+        link = links[bus + linkBusOffset][port].lock();
     }
 
     if (!link)

@@ -266,7 +266,7 @@ void createDreamLinkDevices(
 			continue;
 		}
 
-		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus + linkBusOffset, MAPLE_MAIN_DEV_IDX);
+		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX, linkBusOffset);
 		if (mainLink)
 		{
 			mcfg_CreateDreamLink(mainLink.value(), bus, MAPLE_MAIN_DEV_IDX);
@@ -281,7 +281,7 @@ void createDreamLinkDevices(
 					continue;
 				}
 
-				std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus + linkBusOffset, port);
+				std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus, port, linkBusOffset);
 
 				if (extLink)
 				{
