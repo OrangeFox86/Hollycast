@@ -485,6 +485,15 @@ public:
 		}
 	}
 
+	//! Transform a DreamPicoPort port index into flycast port index
+	static int dppPortToFcPort(int forPort) {
+		if (forPort == 0) {
+			return 5;
+		} else {
+			return forPort - 1;
+		}
+	}
+
     u32 getFunctionCode(int forPort) const {
 		forPort = fcPortToDppPort(forPort);
 		u32 mask = 0;
@@ -807,6 +816,8 @@ private:
 
 public:
     bool queryPeripherals(bool clearOnFailure = true) {
+		std::vector<std::vector<std::array<uint32_t, 2>>> prev = peripherals;
+
 		if (clearOnFailure) {
 			peripherals.clear();
 		}
@@ -822,6 +833,29 @@ public:
 		}
 
 		peripherals = std::move(optPeriph.value());
+
+		// If game is running, send game ID to any newly attached VMUs
+		if (isGameRunning()) {
+			auto portContainsMemory = [](const std::vector<std::array<uint32_t, 2>>& portData) {
+				bool containsMemory = false;
+				for (const auto& fns : portData) {
+					if (SWAP32(fns[0]) == MFID_1_Storage) {
+						containsMemory = true;
+						break;
+					}
+				}
+				return containsMemory;
+			};
+
+			for (int port = 0; port < peripherals.size(); ++port) {
+				if (
+					portContainsMemory(peripherals[port]) &&
+					(port >= prev.size() || !portContainsMemory(prev[port]))
+				) {
+					sendGameId(dppPortToFcPort(port));
+				}
+			}
+		}
 
 		return true;
 	}
