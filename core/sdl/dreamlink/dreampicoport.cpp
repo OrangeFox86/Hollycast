@@ -113,7 +113,7 @@ struct DppVirtualVmu : public maple_sega_vmu
 };
 
 //! Generically handles any MapleLink device when supported
-struct DppMapleLinkDevice : public MapleLinkDeviceBase<>
+struct DppMapleLinkDevice : public MapleLinkDeviceBase<maple_base>
 {
 	//! The supported functions mask for this device
 	const u32 supportedFns;
@@ -251,7 +251,7 @@ public:
 	virtual ~ApiDreamPicoPortComms() = default;
 
 	void changeSoftwareBus(int software_bus) {
-		this->software_bus = software_bus;
+		software_bus = software_bus;
 	}
 
 	bool isConnected() const {
@@ -562,7 +562,7 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(0);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
+				emu.run([bus=software_bus]() { maple_ReconnectDevice(bus, 0); });
 			}
 		}
 
@@ -571,7 +571,7 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(1);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
+				emu.run([bus=software_bus]() { maple_ReconnectDevice(bus, 1); });
 			}
 		}
 	}
@@ -863,7 +863,7 @@ public:
 
 
 DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) :
-	MapleLinkDeviceBase<>(link), supportedFns(supportedFns)
+	MapleLinkDeviceBase<maple_base>(link), supportedFns(supportedFns)
 {
 	linkedDpp = std::dynamic_pointer_cast<DreamPicoPort>(link.dreamlink);
 }
@@ -966,7 +966,7 @@ void DppMapleLinkDevice::establishVirtualVmu()
 	if (!virtualVmu)
 	{
 		// Create the virtual VMU and have it share my data
-		virtualVmu = std::make_unique<DppVirtualVmu>(!usingExternalStorage(), this);
+		virtualVmu = std::make_unique<DppVirtualVmu>(!usingExternalStorage(), dynamic_cast<maple_device*>(this));
 		virtualVmu->OnSetup();
 	}
 }

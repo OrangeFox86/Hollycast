@@ -111,16 +111,12 @@ protected:
 };
 
 //! Base class all maple link devices must inherit from
-//! @tparam MapleDeviceBase The base maple_device class to inherit functionality from (must be base of maple_base)
-template <typename MapleDeviceBase = maple_base, typename Enable = void>
-struct MapleLinkDeviceBase;
-
-template <typename MapleDeviceBase>
-struct MapleLinkDeviceBase<
+//! @tparam MapleDeviceBase The maple_base class to inherit functionality from
+template <
 	typename MapleDeviceBase,
-	std::enable_if_t<std::is_base_of_v<maple_base, MapleDeviceBase>>
-> :
-	public MapleDeviceBase, MapleLinkDevice
+	typename std::enable_if_t<std::is_base_of_v<maple_base, MapleDeviceBase>>* = nullptr
+>
+struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 {
 	//! The linked device
 	MapleLink link;
@@ -209,9 +205,9 @@ struct MapleLinkPuruPuru : MapleLinkDeviceBase<maple_sega_purupuru>
 
 //! Stub class which may be used as a placeholder device when no function is needed. This is used to reserve a space
 //! in maple devices array so that a lower priority DreamLink can't install itself there.
-struct MapleLinkStub : MapleLinkDeviceBase<>
+struct MapleLinkStub : MapleLinkDeviceBase<maple_base>
 {
-	inline MapleLinkStub() : MapleLinkDeviceBase<>(MapleLink(nullptr, 0, 0)) {}
+	inline MapleLinkStub() : MapleLinkDeviceBase<maple_base>(MapleLink(nullptr, 0, 0)) {}
 
 	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }
 	inline u32 dma(u32 cmd) override { return MDRS_JVSNone; }
