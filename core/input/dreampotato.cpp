@@ -65,13 +65,15 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	bool userNotified = false;
 
+	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
+	{}
+
 	void OnSetup() override
 	{
 		// All data must be re-read
 		memset(cachedBlocks, 0, sizeof(cachedBlocks));
 
-		auto link = getMapleLink();
-		if (!link || !link->storageEnabled())
+		if (link.storageEnabled())
 		{
 			MapleLinkVmu::OnSetup();
 			return;
@@ -89,8 +91,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	bool fullSave() override
 	{
-		auto link = getMapleLink();
-		if (!link || !link->storageEnabled())
+		if (link.storageEnabled())
 		{
 			return MapleLinkVmu::fullSave();
 		}
@@ -101,8 +102,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	}
 
 	void serialize(Serializer& ser) const override {
-		auto link = getMapleLink();
-		if (!link || !link->storageEnabled())
+		if (link.storageEnabled())
 		{
 			MapleLinkVmu::serialize(ser);
 			return;
@@ -113,8 +113,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	void deserialize(Deserializer& deser) override
 	{
-		auto link = getMapleLink();
-		if (!link || !link->storageEnabled())
+		if (!link.storageEnabled())
 		{
 			MapleLinkVmu::deserialize(deser);
 			return;
@@ -127,15 +126,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		memcpy(flash_data, savedData, sizeof(savedData));
 	}
 
-	std::optional<MapleLink> getMapleLink() const
-	{
-		std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-		if (!link)
-			ERROR_LOG(MAPLE, "DreamPotatoVmu[%s]: MapleLink is null", logical_port);
-		return link;
-	}
-
-	MapleDeviceRV readBlock(MapleLink& link, unsigned block)
+	MapleDeviceRV readBlock(unsigned block)
 	{
 		if (cachedBlocks[block])
 			return MDRS_JVSNone;
@@ -162,11 +153,10 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	u32 dma(u32 cmd) override
 	{
-		auto link = getMapleLink();
-		if (!link || !link->storageEnabled())
-			return MapleLinkVmu::dma(link, cmd);
+		if (!link.storageEnabled())
+			return MapleLinkVmu::dma(cmd);
 
-		if (!link->isConnected())
+		if (!link.isConnected())
 			return MDRS_JVSNone;
 
 		if (dma_count_in >= 4)
@@ -186,7 +176,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 						userNotified = true;
 					}
 					MapleMsg rxMsg;
-					if (!link->sendReceive(*inMsg, rxMsg)) {
+					if (!link.sendReceive(*inMsg, rxMsg)) {
 						ERROR_LOG(MAPLE, "Failed to write VMU %s: I/O error", logical_port);
 						return MDRE_FileError;
 					}
@@ -200,7 +190,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 				case MDCF_BlockRead:
 				{
 					u8 block = inMsg->data[7];
-					MapleDeviceRV rc = readBlock(link.value(), block);
+					MapleDeviceRV rc = readBlock(block);
 					if (rc != MDRS_JVSNone)
 						return rc;
 					break;
@@ -208,7 +198,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 				case MDCF_GetMediaInfo:
 					// block 255 contains the media info
-					readBlock(link.value(), 255);
+					readBlock(255);
 					break;
 
 				default:
@@ -225,11 +215,8 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		if (!MapleLinkVmu::linkStatus())
 			return false;
 
-		auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-		if (!link)
-			return false;
-		if (link->storageEnabled())
-			return link->isConnected();
+		if (link.storageEnabled())
+			return link.isConnected();
 		else
 			return true; // local storage means this must always remain "linked"
 	}
@@ -261,7 +248,7 @@ public:
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
-		return std::make_shared<DreamPotatoVmu>();
+		return std::make_shared<DreamPotatoVmu>(MapleLink(shared_from_this(), bus, port));
 	}
 
 	void connect();

@@ -224,7 +224,7 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 
 		return false;
 	}
-	void requestReconnect()
+	virtual void requestReconnect()
 	{
 		reconnect_requested = true;
 	}

@@ -8,6 +8,9 @@
 #include "serialize.h"
 #include "input/maplelinkregistry.h"
 
+#include <initializer_list>
+#include <algorithm>
+
 MapleInputState mapleInputState[4];
 extern bool maple_ddt_pending_reset;
 extern std::vector<std::pair<u32, std::vector<u32>>> mapleDmaOut;
@@ -217,14 +220,14 @@ bool maple_atomiswave_coin_chute(int slot)
 #endif
 }
 
-static void mcfg_CreateDreamLink(MapleLink& link, u32 bus, u32 port, s32 player_num = -1)
+static void mcfg_CreateDreamLink(MapleLink& link, u32 bus, u32 port)
 {
 	if (MapleDevices[bus][port] != nullptr)
 		return;
 
 	INFO_LOG(MAPLE, "MapleLink device created on %d,%d", bus, port);
 	std::shared_ptr<maple_device> dev = link.createMapleDevice();
-	dev->Setup(bus, port, player_num);
+	dev->Setup(bus, port);
 }
 
 static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num = -1)
@@ -236,8 +239,73 @@ static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num 
 	dev->Setup(bus, port, player_num);
 }
 
+void createDreamLinkDevices(
+	int linkBusOffset = 0,
+	std::initializer_list<u32> allowedBusses = {},
+	std::initializer_list<u32> allowedPorts = {}
+)
+{
+	// The purpose of this function is only to create the MDT_DreamLink devices where necessary
+
+	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
+	{
+		// Only add DreamLink for this device if allowedBusses is empty or bus is found in allowedBusses
+		if (
+			allowedBusses.size() > 0 &&
+			std::find(allowedBusses.begin(), allowedBusses.end(), bus) == allowedBusses.end()
+		)
+		{
+			continue;
+		}
+		// For DreamLinkSelect devices, the main device must be allowed in allowedPorts too
+		else if (
+			allowedPorts.size() > 0 &&
+			std::find(allowedPorts.begin(), allowedPorts.end(), MAPLE_MAIN_DEV_IDX) == allowedPorts.end()
+		)
+		{
+			continue;
+		}
+
+		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus + linkBusOffset, MAPLE_MAIN_DEV_IDX);
+		if (mainLink)
+		{
+			mcfg_CreateDreamLink(mainLink.value(), bus, MAPLE_MAIN_DEV_IDX);
+
+			for (int port = MAPLE_FIRST_EXT_DEV_IDX; port <= MAPLE_LAST_EXT_DEV_IDX; ++port)
+			{
+				if (
+					allowedPorts.size() > 0 &&
+					std::find(allowedPorts.begin(), allowedPorts.end(), port) == allowedPorts.end()
+				)
+				{
+					continue;
+				}
+
+				std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus + linkBusOffset, port);
+
+				if (extLink)
+				{
+					bool selected = true;
+					if (port < config::DreamLinkSelect[bus].size())
+					{
+						selected = config::DreamLinkSelect[bus][port];
+					}
+
+					if (selected)
+					{
+						mcfg_CreateDreamLink(extLink.value(), bus, port);
+					}
+				}
+			}
+		}
+	}
+}
+
 static void createNaomiDevices()
 {
+	// Check for and instantiate DreamLink devices first, only on buses 1 and 2, main device and first port
+	createDreamLinkDevices(-1, {1,2}, {0, MAPLE_MAIN_DEV_IDX});
+
 	const std::string& gameId = settings.content.gameId;
 	mcfg_Create(MDT_NaomiJamma, 0, MAPLE_MAIN_DEV_IDX);
 	if (gameId == "THE TYPING OF THE DEAD"
@@ -283,6 +351,9 @@ static void createNaomiDevices()
 
 static void createAtomiswaveDevices()
 {
+	// Check for and instantiate DreamLink devices first, only main devices are allowed
+	createDreamLinkDevices(0, {0,1,2,3}, {MAPLE_MAIN_DEV_IDX});
+
 	const std::string& gameId = settings.content.gameId;
 	// Looks like two controllers needs to be on bus 0 and 1 for digital inputs
 	// Then other devices on port 2 and 3 for analog axes, light guns, ...
@@ -329,39 +400,6 @@ static void createAtomiswaveDevices()
 			MapleDevices[3][MAPLE_MAIN_DEV_IDX]->config->invertMouseY = true;
 		}
 		settings.input.mouseGame = true;
-	}
-}
-
-void createDreamLinkDevices()
-{
-	// The purpose of this function is only to create the MDT_DreamLink devices where necessary
-
-	for (int bus = 0; bus < MAPLE_PORTS; ++bus)
-	{
-		std::optional<MapleLink> mainLink = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX);
-		if (mainLink)
-		{
-			mcfg_CreateDreamLink(mainLink.value(), bus, MAPLE_MAIN_DEV_IDX);
-
-			for (int port = MAPLE_FIRST_EXT_DEV_IDX; port <= MAPLE_LAST_EXT_DEV_IDX; ++port)
-			{
-				std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus, port);
-
-				if (extLink)
-				{
-					bool selected = true;
-					if (port < config::DreamLinkSelect[bus].size())
-					{
-						selected = config::DreamLinkSelect[bus][port];
-					}
-
-					if (selected)
-					{
-						mcfg_CreateDreamLink(extLink.value(), bus, port);
-					}
-				}
-			}
-		}
 	}
 }
 

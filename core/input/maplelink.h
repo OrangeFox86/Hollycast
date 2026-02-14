@@ -56,7 +56,7 @@ public:
 	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg);
 
 	//! True if VMU reads and writes should be sent to the device
-	bool storageEnabled();
+	bool storageEnabled() const;
 
 	//! True if the link is operational
 	bool isConnected();
@@ -80,7 +80,7 @@ public:
  *   subsequent deserialize will handle the incoming data
 */
 
-//! Virtual class which all maple link devices must inheirt from
+//! Virtual class which describes additional interfaces for a MapleLinkDevice
 struct MapleLinkDevice
 {
 	//! This is called by the deserialization process to relay what deserialization virtual device type
@@ -89,11 +89,36 @@ struct MapleLinkDevice
 	virtual bool deserializingFor(MapleDeviceType type) = 0;
 };
 
-//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
-struct MapleLinkVmu : maple_sega_vmu, MapleLinkDevice
+//! Base class all maple link devices must inherit from
+//! @tparam MapleDeviceBase The base maple_device class to inherit functionality from (must be base of maple_base)
+template <typename MapleDeviceBase = maple_base, typename Enable = void>
+struct MapleLinkDeviceBase;
+
+template <typename MapleDeviceBase>
+struct MapleLinkDeviceBase<
+	typename MapleDeviceBase,
+	std::enable_if_t<std::is_base_of_v<maple_base, MapleDeviceBase>>
+> :
+	public MapleDeviceBase, MapleLinkDevice
 {
+	//! The linked device
+	MapleLink link;
+
+	//! Default constructor (deleted)
+	MapleLinkDeviceBase() = delete;
+
+	//! Constructor
+	//! @param[in] link The link to set
+	explicit MapleLinkDeviceBase(const MapleLink& link) : link(link) {}
+};
+
+//! Basic maple link VMU device which relays only screen and timer data to the MapleLink
+struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
+{
+	MapleLinkVmu() = delete;
+	MapleLinkVmu(const MapleLink& link);
+
 	u32 dma(u32 cmd) override;
-	u32 dma(std::optional<MapleLink>& link, u32 cmd);
 	inline bool deserializingFor(MapleDeviceType type) override
 	{
 		return (type == MDT_SegaVMU);
@@ -105,10 +130,12 @@ struct MapleLinkVmu : maple_sega_vmu, MapleLinkDevice
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
-struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDevice
+struct MapleLinkPuruPuru : MapleLinkDeviceBase<maple_sega_purupuru>
 {
+	MapleLinkPuruPuru() = delete;
+	MapleLinkPuruPuru(const MapleLink& link);
+
 	u32 dma(u32 cmd) override;
-	u32 dma(std::optional<MapleLink>& link, u32 cmd);
 	inline bool deserializingFor(MapleDeviceType type) override
 	{
 		return (type == MDT_PurupuruPack);
@@ -121,8 +148,10 @@ struct MapleLinkPuruPuru : maple_sega_purupuru, MapleLinkDevice
 
 //! Stub class which may be used as a placeholder device when no function is needed. This is used to reserve a space
 //! in maple devices array so that a lower priority DreamLink can't install itself there.
-struct MapleLinkStub : maple_base, MapleLinkDevice
+struct MapleLinkStub : MapleLinkDeviceBase<>
 {
+	inline MapleLinkStub() : MapleLinkDeviceBase<>(MapleLink(nullptr, 0, 0)) {}
+
 	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }
 	inline u32 dma(u32 cmd) override { return MDRS_JVSNone; }
 	inline bool linkStatus() override { return false; }

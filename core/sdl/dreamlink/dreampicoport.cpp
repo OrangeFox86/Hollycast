@@ -113,10 +113,12 @@ struct DppVirtualVmu : public maple_sega_vmu
 };
 
 //! Generically handles any MapleLink device when supported
-struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
+struct DppMapleLinkDevice : public MapleLinkDeviceBase<>
 {
 	//! The supported functions mask for this device
 	const u32 supportedFns;
+	//! The linked DreamPicoPort
+	std::shared_ptr<class DreamPicoPort> linkedDpp;
 	//! The last time write was performed
 	std::chrono::steady_clock::time_point lastWriteTime;
 	//! Mutex serializing write operations
@@ -133,11 +135,11 @@ struct DppMapleLinkDevice : public maple_base, public MapleLinkDevice
 
 	//! Constructor
 	//! @param[in] supportedFns Supported functions mask (default: any function)
-	DppMapleLinkDevice(u32 supportedFns = std::numeric_limits<u32>::max());
+	DppMapleLinkDevice(const MapleLink& link, u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~DppMapleLinkDevice();
-	std::shared_ptr<class DreamPicoPort> getDreamPicoPort() const;
 	void OnSetup() override;
 	bool linkStatus() override;
+	void requestReconnect() override;
 	MapleDeviceType get_device_type() override;
 	static MapleDeviceType fnCodeToMapleDeviceType(u32 fnCodeMask);
 	void establishVirtualDevice(MapleDeviceType dev);
@@ -158,7 +160,7 @@ struct MapleLinkMainDevice : public DppMapleLinkDevice
 	//! Constructor
 	//! Only input devices are currently supported here - even lightguns and DreamEye implement MFID_0_Input
 	//! This should support everything except for keyboard & mouse
-	MapleLinkMainDevice();
+	MapleLinkMainDevice(const MapleLink& link);
 	MapleDeviceType get_device_type() override;
 	u32 dma(u32 cmd) override;
 };
@@ -579,9 +581,9 @@ public:
 
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
 		if (port == 5) {
-			return std::make_shared<MapleLinkMainDevice>();
+			return std::make_shared<MapleLinkMainDevice>(MapleLink(shared_from_this(), bus, port));
 		} else {
-			return std::make_shared<DppMapleLinkDevice>();
+			return std::make_shared<DppMapleLinkDevice>(MapleLink(shared_from_this(), bus, port));
 		}
 	}
 
@@ -826,22 +828,20 @@ public:
 };
 
 
-DppMapleLinkDevice::DppMapleLinkDevice(u32 supportedFns) : supportedFns(supportedFns)
-{}
+DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) :
+	MapleLinkDeviceBase<>(link), supportedFns(supportedFns)
+{
+	linkedDpp = std::dynamic_pointer_cast<DreamPicoPort>(link.dreamlink);
+}
 
 DppMapleLinkDevice::~DppMapleLinkDevice()
 {}
 
-std::shared_ptr<DreamPicoPort> DppMapleLinkDevice::getDreamPicoPort() const
-{
-	std::optional<MapleLink> link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
-	if (!link)
-		return nullptr;
-	return std::dynamic_pointer_cast<DreamPicoPort>(link->dreamlink);
-}
-
 void DppMapleLinkDevice::OnSetup()
 {
+	// It doesn't make any sense for these to differ for DppMapleLinkDevices
+	player_num = bus_id;
+
 	maple_base::OnSetup();
 }
 
@@ -850,11 +850,10 @@ bool DppMapleLinkDevice::linkStatus()
 	if (!maple_base::linkStatus())
 		return false;
 
-	auto link = getDreamPicoPort();
 	bool isLinked = (
-		link &&
-		link->isConnected() &&
-		((link->getFunctionCode(bus_port) & supportedFns) != 0)
+		linkedDpp &&
+		linkedDpp->isConnected() &&
+		((linkedDpp->getFunctionCode(bus_port) & supportedFns) != 0)
 	);
 
 	if (!isLinked) {
@@ -864,16 +863,28 @@ bool DppMapleLinkDevice::linkStatus()
 	return isLinked;
 }
 
+void DppMapleLinkDevice::requestReconnect()
+{
+	if (virtualVmu)
+	{
+		// Reset the virtual VMU data
+		virtualVmu->accessed_blocks_valid = true;
+		memset(&virtualVmu->flash_data[0], 0, sizeof(virtualVmu->flash_data));
+		memset(&virtualVmu->accessed_blocks[0], 0, sizeof(virtualVmu->accessed_blocks));
+	}
+
+	maple_base::requestReconnect();
+}
+
 MapleDeviceType DppMapleLinkDevice::get_device_type()
 {
 	// This is mainly used by the serializer
 	serializingType = MDT_None;
 
-	auto link = getDreamPicoPort();
-	if (!link)
+	if (linkedDpp)
 		return serializingType;
 
-	serializingType = fnCodeToMapleDeviceType(link->getFunctionCode(bus_port));
+	serializingType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
 
 	establishVirtualDevice(serializingType);
 
@@ -941,11 +952,10 @@ u32 DppMapleLinkDevice::virtualVmuDma(u32 cmd)
 
 u32 DppMapleLinkDevice::dma(u32 cmd)
 {
-	auto link = getDreamPicoPort();
-	if (!link)
+	if (!linkedDpp)
 		return MDRS_JVSNone;
 
-	establishVirtualDevice(fnCodeToMapleDeviceType(link->getFunctionCode(bus_port)));
+	establishVirtualDevice(fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port)));
 
 	// Deserialize the first data word without popping off of dma
 	u32 firstWord = 0;
@@ -961,7 +971,7 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		firstWord == MFID_1_Storage &&
 		(cmd == MDCF_GetMediaInfo || cmd == MDCF_BlockRead || cmd == MDCF_BlockWrite || cmd == MDCF_GetLastError)
 	) {
-		if (!link->storageEnabled()) {
+		if (!linkedDpp->storageEnabled()) {
 			// Use virtual memory and return without accessing physical memory
 			// This will use file-backed memory and automatically save when needed
 			return virtualVmuDma(cmd);
@@ -993,7 +1003,7 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 	const MapleMsg& txMsg = *inMsg;
 	MapleMsg rxMsg{};
 	std::vector<u32> output;
-	if (link && link->sendReceive(txMsg, rxMsg)) {
+	if (linkedDpp && linkedDpp->sendReceive(txMsg, rxMsg)) {
 		// If this message came from a main peripheral, clear out attached flags (will be handled by base)
 		if (rxMsg.originAP & 0x20) {
 			rxMsg.originAP = (rxMsg.originAP & 0xE0);
@@ -1033,10 +1043,9 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 bool DppMapleLinkDevice::usingExternalStorage() const
 {
 	bool extStorage = false;
-	auto link = getDreamPicoPort();
-	if (link)
+	if (linkedDpp)
 	{
-		extStorage = link->storageEnabled();
+		extStorage = linkedDpp->storageEnabled();
 	}
 	return extStorage;
 }
@@ -1044,8 +1053,7 @@ bool DppMapleLinkDevice::usingExternalStorage() const
 bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 {
 	deserializingType = type;
-	auto link = getDreamPicoPort();
-	MapleDeviceType detectedType = fnCodeToMapleDeviceType(link->getFunctionCode(bus_port));
+	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
 	const bool isSameType = (type != MDT_None && detectedType == type);
 
 	if (!isSameType) {
@@ -1109,8 +1117,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 		return;
 	}
 
-	auto link = getDreamPicoPort();
-	MapleDeviceType detectedType = fnCodeToMapleDeviceType(link->getFunctionCode(bus_port));
+	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
 
 	if (detectedType != deserializingType)
 	{
@@ -1136,10 +1143,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 		// Determine if the device needs to be reconnected
 		if (usingExternalStorage()) {
 			if (!virtualVmu->accessed_blocks_valid) {
-				// Legacy save file - clear cached data and cause reconnect
-				virtualVmu->accessed_blocks_valid = true;
-				memset(&virtualVmu->flash_data[0], 0, sizeof(virtualVmu->flash_data));
-				memset(&virtualVmu->accessed_blocks[0], 0, sizeof(virtualVmu->accessed_blocks));
+				// Legacy save file - cause reconnect
 				requestReconnect();
 				os_notify(
 					i18n::T("ATTENTION: External storage differs from VMU memory in loaded state"),
@@ -1165,7 +1169,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 								msg.pushData(locationWord);
 
 								MapleMsg rxMsg;
-								if (link->sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
+								if (linkedDpp->sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
 									// Something read!
 									memcpy(&currentKnownFlash[block * 512], &rxMsg.data[8], 512);
 									currentAccessedBlocks[block] = true;
@@ -1199,7 +1203,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 					msg.pushData(MFID_2_LCD);
 					msg.pushData(0);    // PT, phase, block#
 					msg.pushData(virtualVmu->lcd_data);
-					link->send(msg);
+					linkedDpp->send(msg);
 				}
 			}
 		}
@@ -1215,7 +1219,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 }
 
 
-MapleLinkMainDevice::MapleLinkMainDevice() : DppMapleLinkDevice(MFID_0_Input) {}
+MapleLinkMainDevice::MapleLinkMainDevice(const MapleLink& link) : DppMapleLinkDevice(link, MFID_0_Input) {}
 
 MapleDeviceType MapleLinkMainDevice::get_device_type()
 {
@@ -1239,8 +1243,7 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 		PlainJoystickState pjs;
 		config->GetInput(&pjs);
 
-		auto link = getDreamPicoPort();
-		if (!link || !link->isConnected())
+		if (!linkedDpp->isConnected())
 		{
 			// Not connected
 			return MDRS_JVSNone;
@@ -1252,7 +1255,7 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 			// byte 1: 0  0  a5 a4 a3 a2 a1 a0
 			// byte 2: R2 L2 D2 U2 D  X  Y  Z
 			// byte 3: R  L  D  U  St A  B  C
-			const u32 fnDef = link->getFunctionDefinitions(bus_port)[0]; // MFID_0_Input def is always at [0]
+			const u32 fnDef = linkedDpp->getFunctionDefinitions(bus_port)[0]; // MFID_0_Input def is always at [0]
 
 			// Function
 			w32(MFID_0_Input);
