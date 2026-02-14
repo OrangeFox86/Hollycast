@@ -257,8 +257,27 @@ void createDreamLinkDevices(
 		{
 			continue;
 		}
+
+		// Check for network expansion devices first
+		for (int port = 0; port < config::NetworkExpansionDevices[bus].size(); ++port)
+		{
+			if (
+				allowedPorts.size() > 0 &&
+				std::find(allowedPorts.begin(), allowedPorts.end(), port) == allowedPorts.end()
+			)
+			{
+				continue;
+			}
+
+			std::optional<MapleLink> extLink = MapleLinkRegistry::GetMapleLink(bus, port);
+			if (extLink && config::NetworkExpansionDevices[bus][port])
+			{
+				mcfg_CreateDreamLink(extLink.value(), bus, port);
+			}
+		}
+
 		// For DreamLinkSelect devices, the main device must be allowed in allowedPorts too
-		else if (
+		if (
 			allowedPorts.size() > 0 &&
 			std::find(allowedPorts.begin(), allowedPorts.end(), MAPLE_MAIN_DEV_IDX) == allowedPorts.end()
 		)

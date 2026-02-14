@@ -62,7 +62,6 @@ namespace dreampotato
 //! A specialized VMU which interfaces with a MapleLink's VMU, including read/write operations
 struct DreamPotatoVmu : public MapleLinkVmu
 {
-	bool cachedBlocks[256]; //!< Set to true for block that has been loaded/written
 	bool userNotified = false;
 
 	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
@@ -70,9 +69,6 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	void OnSetup() override
 	{
-		// All data must be re-read
-		memset(cachedBlocks, 0, sizeof(cachedBlocks));
-
 		if (link.storageEnabled())
 		{
 			MapleLinkVmu::OnSetup();
@@ -85,7 +81,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 			file = nullptr;
 		}
 
-		memset(flash_data, 0, sizeof(flash_data));
+		initializeVmu(); // Start with a valid VMU memory state
 		memset(lcd_data, 0, sizeof(lcd_data));
 	}
 
@@ -118,7 +114,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	MapleDeviceRV readBlock(unsigned block)
 	{
-		if (cachedBlocks[block])
+		if (accessed_blocks[block])
 			return MDRS_JVSNone;
 
 		MapleMsg txMsg;
@@ -132,7 +128,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		{
 			DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: read block %d", logical_port, block);
 			memcpy(&flash_data[block * 4 * 128], &rxMsg.data[8], 4 * 128);
-			cachedBlocks[block] = true;
+			accessed_blocks[block] = true;
 		}
 		else {
 			ERROR_LOG(MAPLE, "Failed to read VMU %s: I/O error", logical_port);
@@ -172,7 +168,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 					}
 					if (rxMsg.command != MDRS_DeviceReply)
 						return rxMsg.command;
-					cachedBlocks[inMsg->data[7]] = true;
+					accessed_blocks[inMsg->data[7]] = true;
 					DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: write block %d", logical_port, inMsg->data[7]);
 					break;
 				}

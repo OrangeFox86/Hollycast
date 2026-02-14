@@ -75,7 +75,7 @@ void MapleLinkDevice::deserializeVmu(
 	memcpy(&currentKnownFlash[0], &vmu.flash_data[0], sizeof(currentKnownFlash));
 	u8 currentAccessedBlocks[sizeof(vmu.accessed_blocks)];
 	memcpy(&currentAccessedBlocks[0], &vmu.accessed_blocks[0], sizeof(currentAccessedBlocks));
-	vmu.deserialize(deser);
+	vmu.maple_sega_vmu::deserialize(deser);
 
 	// Determine if the device needs to be reconnected
 	if (usingExternalMemory) {
