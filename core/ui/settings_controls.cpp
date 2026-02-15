@@ -1246,9 +1246,9 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 		OptionCheckbox(T("Per Game VMU A1"), config::PerGameVmu, T("When enabled, each game has its own VMU on port 1 of controller A."));
 		{
 			DisabledScope scope(game_started);
-			OptionCheckbox(T("Use Physical VMU Storage"), config::UsePhysicalVmuMemory,
-					T("Enables read and write access to physical VMU storage via DreamPicoPort or DreamPotato. "
-				"This is not compatible with load state events."));
+			OptionCheckbox(T("Use External VMU Storage"), config::UsePhysicalVmuMemory,
+					T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+				"VMUs may appear to reconnect after loading state."));
 		}
 		{
 			DisabledScope scope(!is_there_any_xhair);

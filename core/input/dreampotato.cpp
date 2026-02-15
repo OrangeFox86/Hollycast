@@ -67,27 +67,6 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
 	{}
 
-	void OnSetup() override
-	{
-		if (link.storageEnabled())
-		{
-			MapleLinkVmu::OnSetup();
-			return;
-		}
-
-		// Ensure file is not being used
-		if (file != nullptr) {
-			std::fclose(file);
-			file = nullptr;
-		}
-
-		initializeVmu(); // Start with a valid VMU memory state
-		memset(lcd_data, 0, sizeof(lcd_data));
-		accessed_blocks_valid = true;
-		memset(accessed_blocks, 0, sizeof(accessed_blocks));
-		fullSaveNeeded = false;
-	}
-
 	bool fullSave() override
 	{
 		if (link.storageEnabled())

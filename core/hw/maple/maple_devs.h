@@ -410,7 +410,7 @@ struct maple_sega_vmu: maple_base
 	static constexpr const u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
 	//! When false, the loaded state does not contain accessed_blocks
 	bool accessed_blocks_valid = false;
-	//! For each block, determines wheter the block has been accessed (read/written) by the game (1 == accessed)
+	//! For each block, determines whether the block has been accessed (read/written) by the game (1 == accessed)
 	u8 accessed_blocks[256];
 	//! Number of bytes to pad out the serialized save-state data (for backwards compatibility reasons)
 	static constexpr const std::size_t ser_pad_size = (48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks);

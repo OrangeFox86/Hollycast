@@ -158,6 +158,27 @@ void MapleLinkDevice::mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu
 MapleLinkVmu::MapleLinkVmu(const MapleLink& link) : MapleLinkDeviceBase<maple_sega_vmu>(link)
 {}
 
+void MapleLinkVmu::OnSetup()
+{
+	if (link.storageEnabled())
+	{
+		maple_sega_vmu::OnSetup();
+		return;
+	}
+
+	// Ensure file is not being used
+	if (file != nullptr) {
+		std::fclose(file);
+		file = nullptr;
+	}
+
+	initializeVmu(); // Start with a valid VMU memory state
+	memset(lcd_data, 0, sizeof(lcd_data));
+	accessed_blocks_valid = true;
+	memset(accessed_blocks, 0, sizeof(accessed_blocks));
+	fullSaveNeeded = false;
+}
+
 u32 MapleLinkVmu::dma(u32 cmd)
 {
 	u32 rv = maple_sega_vmu::dma(cmd);
