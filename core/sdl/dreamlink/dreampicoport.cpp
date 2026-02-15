@@ -868,6 +868,9 @@ DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) 
 	MapleLinkDeviceBase<maple_base>(link), supportedFns(supportedFns)
 {
 	linkedDpp = std::dynamic_pointer_cast<DreamPicoPort>(link.dreamlink);
+	if (!linkedDpp) {
+		ERROR_LOG(INPUT, "DppMapleLinkDevice created without an associated DreamPicoPort");
+	}
 }
 
 DppMapleLinkDevice::~DppMapleLinkDevice()
@@ -1078,19 +1081,18 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 
 bool DppMapleLinkDevice::usingExternalStorage() const
 {
-	bool extStorage = false;
-	if (linkedDpp)
-	{
-		extStorage = linkedDpp->storageEnabled();
-	}
-	return extStorage;
+	return link.storageEnabled();
 }
 
 bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 {
 	deserializingType = type;
-	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
-	const bool isSameType = (type != MDT_None && detectedType == type);
+	bool isSameType = false;
+
+	if (linkedDpp) {
+		MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
+		isSameType = (type != MDT_None && detectedType == type);
+	}
 
 	if (!isSameType) {
 		os_notify(i18n::T("ATTENTION: Current hardware configuration changed since last save state"), 6000);
@@ -1147,6 +1149,16 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 		ERROR_LOG(
 			INPUT,
 			"DppMapleLinkDevice received invalid type for deserialize [%i]",
+			static_cast<int>(deserializingType)
+		);
+		requestReconnect();
+		return;
+	}
+	else if (!linkedDpp)
+	{
+		ERROR_LOG(
+			INPUT,
+			"DppMapleLinkDevice no link setup to deserialize [%i]",
 			static_cast<int>(deserializingType)
 		);
 		requestReconnect();
