@@ -129,7 +129,10 @@ void mcfg_SerializeDefaultDevice(Serializer& ser, MapleDeviceType forType, u32 b
 //! Deserialize and discard a device from the stream
 //! @param[in,out] deser The deserializer to increment the pointer of
 //! @param[in] forType The device type to discard
-void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType);
+//! @param[in] bus The bus to deserialize
+//! @param[in] port The port to deserialize
+//! @param[in] playerNum The player number to deserialize
+void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType, u32 bus, u32 port, int playerNum = -1);
 
 constexpr int maple_getPortCount(MapleDeviceType type)
 {

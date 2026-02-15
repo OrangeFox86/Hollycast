@@ -627,7 +627,7 @@ void mcfg_DeserializeDevices(Deserializer& deser)
 					else
 					{
 						// Flush the data and require reconnect
-						mcfg_DeserializeDiscardDevice(deser, typeEnum);
+						mcfg_DeserializeDiscardDevice(deser, typeEnum, i, j, dev->player_num);
 						maple_ReconnectDevice(i, j);
 					}
 				}
@@ -648,10 +648,10 @@ void mcfg_SerializeDefaultDevice(Serializer& ser, MapleDeviceType forType, u32 b
 	dummyDev->serialize(ser);
 }
 
-void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType)
+void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType, u32 bus, u32 port, int playerNum)
 {
 	std::shared_ptr<maple_device> dummyDev = maple_Create(forType);
-	dummyDev->Setup(0, 0, -1, false);
+	dummyDev->Setup(bus, port, playerNum, false);
 	dummyDev->deserialize(deser);
 }
 

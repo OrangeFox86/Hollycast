@@ -1173,7 +1173,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 	else
 	{
 		// Just throw out the data
-		mcfg_DeserializeDiscardDevice(deser, deserializingType);
+		mcfg_DeserializeDiscardDevice(deser, deserializingType, bus_id, bus_port, player_num);
 	}
 
 	// Done deserializing - reset type
