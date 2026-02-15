@@ -407,13 +407,18 @@ struct maple_sega_vmu: maple_base
 	//! The VMU display
 	u8 lcd_data[192];
 	//! Magic value used to validate accessed_blocks in save state
-	static constexpr const u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
+	static constexpr u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
 	//! When false, the loaded state does not contain accessed_blocks
 	bool accessed_blocks_valid = false;
 	//! For each block, determines whether the block has been accessed (read/written) by the game (1 == accessed)
 	u8 accessed_blocks[256];
+	//! The last clock tick memory was written
+	u64 last_write_tick;
+	//! The tick when state was serialized
+	u64 save_tick;
 	//! Number of bytes to pad out the serialized save-state data (for backwards compatibility reasons)
-	static constexpr const std::size_t ser_pad_size = (48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks);
+	static constexpr std::size_t ser_pad_size =
+		((48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks) - sizeof(last_write_tick) - sizeof(save_tick));
 	//! When true, the entire flash_data must be written to file on next operation
 	bool fullSaveNeeded = false;
 

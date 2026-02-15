@@ -79,16 +79,6 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		return true;
 	}
 
-	void serialize(Serializer& ser) const override {
-		if (link.storageEnabled())
-		{
-			MapleLinkVmu::serialize(ser);
-			return;
-		}
-
-		throw Serializer::Exception("Can't save linked VMU data");
-	}
-
 	void deserialize(Deserializer& deser) override
 	{
 		deserializeVmu(deser, link.storageEnabled());

@@ -345,6 +345,9 @@ void maple_sega_vmu::serialize(Serializer& ser) const
 	ser << lcd_data;
 	ser << serialize_magic;
 	ser << accessed_blocks;
+	ser << last_write_tick;
+	const u64 now = sh4_sched_now64();
+	ser << now;
 	// For backwards compatibility
 	u8 padding[ser_pad_size] = {};
 	ser << padding;
@@ -357,6 +360,8 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 	u8 deser_magic[sizeof(serialize_magic)];
 	deser >> deser_magic;
 	deser >> accessed_blocks;
+	deser >> last_write_tick;
+	deser >> save_tick;
 	// For backward compatibility
 	u8 padding[ser_pad_size];
 	deser >> padding;
@@ -408,6 +413,8 @@ void maple_sega_vmu::OnSetup()
 	memset(lcd_data, 0, sizeof(lcd_data));
 	accessed_blocks_valid = true;
 	memset(accessed_blocks, 0, sizeof(accessed_blocks));
+	last_write_tick = 0;
+	save_tick = 0;
 
 	// Load existing vmu file if found
 	std::string rpath = hostfs::getVmuPath(logical_port, false);
@@ -675,6 +682,7 @@ u32 maple_sega_vmu::dma(u32 cmd)
 					rptr(&flash_data[write_adr],write_len);
 					if (Block < sizeof(accessed_blocks))
 						accessed_blocks[Block] = true;
+					last_write_tick = sh4_sched_now64();
 
 					if (file != nullptr)
 					{

@@ -108,6 +108,8 @@ struct DppVirtualVmu : public maple_sega_vmu
 		memset(lcd_data, 0, sizeof(lcd_data));
 		accessed_blocks_valid = true;
 		memset(accessed_blocks, 0, sizeof(accessed_blocks));
+		last_write_tick = 0;
+		save_tick = 0;
 		fullSaveNeeded = false;
 	}
 };
@@ -915,7 +917,7 @@ MapleDeviceType DppMapleLinkDevice::get_device_type()
 	// This is mainly used by the serializer
 	serializingType = MDT_None;
 
-	if (linkedDpp)
+	if (!linkedDpp)
 		return serializingType;
 
 	serializingType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
@@ -1205,7 +1207,7 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 		PlainJoystickState pjs;
 		config->GetInput(&pjs);
 
-		if (!linkedDpp->isConnected())
+		if (!linkedDpp || !linkedDpp->isConnected())
 		{
 			// Not connected
 			return MDRS_JVSNone;
