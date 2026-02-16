@@ -109,7 +109,7 @@ struct DppVirtualVmu : public maple_sega_vmu
 		accessed_blocks_valid = true;
 		memset(accessed_blocks, 0, sizeof(accessed_blocks));
 		last_write_tick = 0;
-		save_tick = 0;
+		loaded_us_since_write = 0;
 		fullSaveNeeded = false;
 	}
 };

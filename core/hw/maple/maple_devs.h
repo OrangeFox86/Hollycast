@@ -414,11 +414,11 @@ struct maple_sega_vmu: maple_base
 	u8 accessed_blocks[256];
 	//! The last clock tick memory was written
 	u64 last_write_tick;
-	//! The tick when state was serialized
-	u64 save_tick;
+	//! After deserialize, this is set to number of microseconds since last write (or 0 for no write or not valid)
+	u64 loaded_us_since_write;
 	//! Number of bytes to pad out the serialized save-state data (for backwards compatibility reasons)
 	static constexpr std::size_t ser_pad_size =
-		((48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks) - sizeof(last_write_tick) - sizeof(save_tick));
+		((48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks) - sizeof(loaded_us_since_write));
 	//! When true, the entire flash_data must be written to file on next operation
 	bool fullSaveNeeded = false;
 

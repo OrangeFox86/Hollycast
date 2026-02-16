@@ -87,8 +87,8 @@ void MapleLinkDevice::deserializeVmu(
 				6000,
 				i18n::T("VMU will appear to reconnect in-game")
 			);
-		} else if (vmu.save_tick > 0 && vmu.save_tick < (vmu.last_write_tick + (SH4_MAIN_CLOCK / 10))) {
-			// Write was in progress during save state - cause reconnect
+		} else if (vmu.loaded_us_since_write > 0 && vmu.loaded_us_since_write < 100000) {
+			// Less than 100 ms since last write, meaning write was in progress during save state - cause reconnect
 			dataMatches = false;
 			os_notify(
 				i18n::T("ATTENTION: VMU write was in progress during save"),
@@ -185,7 +185,7 @@ void MapleLinkVmu::OnSetup()
 	accessed_blocks_valid = true;
 	memset(accessed_blocks, 0, sizeof(accessed_blocks));
 	last_write_tick = 0;
-	save_tick = 0;
+	loaded_us_since_write = 0;
 	fullSaveNeeded = false;
 }
 

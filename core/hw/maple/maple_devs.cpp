@@ -345,9 +345,14 @@ void maple_sega_vmu::serialize(Serializer& ser) const
 	ser << lcd_data;
 	ser << serialize_magic;
 	ser << accessed_blocks;
-	ser << last_write_tick;
-	const u64 now = sh4_sched_now64();
-	ser << now;
+	u64 us_since_write = 0; // 0 means no write
+	if (last_write_tick > 0)
+	{
+		us_since_write = ((sh4_sched_now64() - last_write_tick) / (SH4_MAIN_CLOCK / 1000000));
+		if (us_since_write == 0)
+			++us_since_write; // Increment to 1 in order to make valid
+	}
+	ser << us_since_write;
 	// For backwards compatibility
 	u8 padding[ser_pad_size] = {};
 	ser << padding;
@@ -360,15 +365,16 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 	u8 deser_magic[sizeof(serialize_magic)];
 	deser >> deser_magic;
 	deser >> accessed_blocks;
-	deser >> last_write_tick;
-	deser >> save_tick;
+	deser >> loaded_us_since_write;
 	// For backward compatibility
 	u8 padding[ser_pad_size];
 	deser >> padding;
 
 	accessed_blocks_valid = (memcmp(&deser_magic[0], &serialize_magic[0], sizeof(serialize_magic)) == 0);
-	if (!accessed_blocks_valid)
+	if (!accessed_blocks_valid) {
 		memset(&accessed_blocks[0], 0, sizeof(accessed_blocks));
+		loaded_us_since_write = 0;
+	}
 	for (u8 b : lcd_data)
 		if (b != 0)
 		{
@@ -414,7 +420,7 @@ void maple_sega_vmu::OnSetup()
 	accessed_blocks_valid = true;
 	memset(accessed_blocks, 0, sizeof(accessed_blocks));
 	last_write_tick = 0;
-	save_tick = 0;
+	loaded_us_since_write = 0;
 
 	// Load existing vmu file if found
 	std::string rpath = hostfs::getVmuPath(logical_port, false);
