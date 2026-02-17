@@ -192,7 +192,7 @@ bool MapleLinkVmu::fullSave()
 {
 	if (!link.storageEnabled())
 	{
-		return MapleLinkVmu::fullSave();
+		return maple_sega_vmu::fullSave();
 	}
 
 	// Skip virtual save when using MapleLink VMU
