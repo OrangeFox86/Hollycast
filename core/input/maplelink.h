@@ -175,6 +175,7 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	MapleLinkVmu(const MapleLink& link);
 
 	void OnSetup() override;
+	bool fullSave() override;
 	u32 dma(u32 cmd) override;
 	inline bool deserializingFor(MapleDeviceType type) override
 	{

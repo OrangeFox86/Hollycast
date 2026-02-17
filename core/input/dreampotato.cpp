@@ -67,18 +67,6 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
 	{}
 
-	bool fullSave() override
-	{
-		if (link.storageEnabled())
-		{
-			return MapleLinkVmu::fullSave();
-		}
-
-		// Skip virtual save when using MapleLink VMU
-		DEBUG_LOG(MAPLE, "Full save ignored for MapleLink VMU");
-		return true;
-	}
-
 	void deserialize(Deserializer& deser) override
 	{
 		deserializeVmu(deser, link.storageEnabled());

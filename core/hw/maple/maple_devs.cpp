@@ -15,6 +15,7 @@
 #include <ctime>
 #include <thread>
 #include <chrono>
+#include <limits>
 
 const char* maple_sega_controller_name = "Dreamcast Controller";
 const char* maple_sega_vmu_name        = "Visual Memory";
@@ -347,12 +348,10 @@ void maple_sega_vmu::serialize(Serializer& ser) const
 	ser << lcd_data;
 	ser << serialize_magic;
 	ser << accessed_blocks;
-	u64 us_since_write = 0; // 0 means no write
+	u64 us_since_write = std::numeric_limits<u64>::max();
 	if (last_write_tick > 0)
 	{
 		us_since_write = ((sh4_sched_now64() - last_write_tick) / (SH4_MAIN_CLOCK / 1000000));
-		if (us_since_write == 0)
-			++us_since_write; // Increment to 1 in order to make valid
 	}
 	ser << us_since_write;
 	// For backwards compatibility
@@ -375,7 +374,7 @@ void maple_sega_vmu::deserialize(Deserializer& deser)
 	accessed_blocks_valid = (memcmp(&deser_magic[0], &serialize_magic[0], sizeof(serialize_magic)) == 0);
 	if (!accessed_blocks_valid) {
 		memset(&accessed_blocks[0], 0, sizeof(accessed_blocks));
-		loaded_us_since_write = 0;
+		loaded_us_since_write = std::numeric_limits<u64>::max();
 	}
 	for (u8 b : lcd_data)
 		if (b != 0)
@@ -422,7 +421,7 @@ void maple_sega_vmu::OnSetup()
 	accessed_blocks_valid = true;
 	memset(accessed_blocks, 0, sizeof(accessed_blocks));
 	last_write_tick = 0;
-	loaded_us_since_write = 0;
+	loaded_us_since_write = std::numeric_limits<u64>::max();
 
 	// Load existing vmu file if found
 	std::string rpath = hostfs::getVmuPath(logical_port, false);

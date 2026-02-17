@@ -87,7 +87,7 @@ void MapleLinkDevice::deserializeVmu(
 				6000,
 				i18n::T("VMU will appear to reconnect in-game")
 			);
-		} else if (vmu.loaded_us_since_write > 0 && vmu.loaded_us_since_write < 100000) {
+		} else if (vmu.loaded_us_since_write < 100000) {
 			// Less than 100 ms since last write, meaning write was in progress during save state - cause reconnect
 			dataMatches = false;
 			os_notify(
@@ -96,8 +96,7 @@ void MapleLinkDevice::deserializeVmu(
 				i18n::T("VMU will appear to reconnect in-game")
 			);
 		} else {
-			for (std::size_t i = sizeof(currentAccessedBlocks); i > 0; --i) {
-				const u8 block = (i - 1);
+			for (int block = static_cast<int>(sizeof(currentAccessedBlocks) - 1); block >= 0; --block) {
 				const bool isCached = (vmu.accessed_blocks[block] != 0);
 				if (isCached) {
 					if (!currentAccessedBlocks[block]) {
@@ -185,8 +184,20 @@ void MapleLinkVmu::OnSetup()
 	accessed_blocks_valid = true;
 	memset(accessed_blocks, 0, sizeof(accessed_blocks));
 	last_write_tick = 0;
-	loaded_us_since_write = 0;
+	loaded_us_since_write = std::numeric_limits<u64>::max();
 	fullSaveNeeded = false;
+}
+
+bool MapleLinkVmu::fullSave()
+{
+	if (!link.storageEnabled())
+	{
+		return MapleLinkVmu::fullSave();
+	}
+
+	// Skip virtual save when using MapleLink VMU
+	DEBUG_LOG(MAPLE, "Full save ignored for MapleLink VMU");
+	return true;
 }
 
 u32 MapleLinkVmu::dma(u32 cmd)
