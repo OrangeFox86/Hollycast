@@ -414,7 +414,7 @@ struct maple_sega_vmu: maple_base
 	u8 accessed_blocks[256];
 	//! The last clock tick memory was written
 	u64 last_write_tick;
-	//! After deserialize, this is set to number of microseconds since last write (or 0 for no write or not valid)
+	//! After deserialize, this is set to number of microseconds since last write (or u64 max for no write or not valid)
 	u64 loaded_us_since_write;
 	//! Number of bytes to pad out the serialized save-state data (for backwards compatibility reasons)
 	static constexpr std::size_t ser_pad_size =
