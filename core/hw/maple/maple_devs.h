@@ -178,9 +178,9 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	u8 player_num;			// for Atomiswave
 	char logical_port[3];  //A0, etc
 	// When true, initiate reconnect on next linkStatus
-	bool reconnect_requested = false;
+	bool reconnect_requested;
 	// When >0, currently shown as disconnected, and the time will be when to reconnect
-	u64 reconnect_time = 0;
+	u64 reconnect_time;
 
 	MapleConfigMap* config;
 
@@ -409,7 +409,7 @@ struct maple_sega_vmu: maple_base
 	//! Magic value used to validate accessed_blocks in save state
 	static constexpr u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
 	//! When false, the loaded state does not contain accessed_blocks
-	bool accessed_blocks_valid = false;
+	bool accessed_blocks_valid;
 	//! For each block, determines whether the block has been accessed (read/written) by the game (1 == accessed)
 	u8 accessed_blocks[256];
 	//! The last clock tick memory was written

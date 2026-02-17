@@ -45,6 +45,8 @@ void maple_device::Setup(u32 bus, u32 port, int playerNum, bool install)
 	logical_port[1] = bus_port == MAPLE_MAIN_DEV_IDX ? 'x' : '1' + bus_port;
 	logical_port[2] = 0;
 	player_num = playerNum == -1 ? bus_id : playerNum;
+	reconnect_requested = false;
+	reconnect_time = 0;
 
 	config = new MapleConfigMap(this);
 	OnSetup();
