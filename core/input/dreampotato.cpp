@@ -77,17 +77,11 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		if (accessed_blocks[block])
 			return MDRS_JVSNone;
 
-		MapleMsg txMsg;
-		txMsg.command = MDCF_BlockRead;
-		txMsg.originAP = inMsg->originAP;
-		txMsg.destAP = inMsg->destAP;
-		txMsg.pushData(MFID_1_Storage);
-		txMsg.pushData<u32>(block << 24); // (BE) partition #, phase, block #
-		MapleMsg rxMsg;
-		if (link.sendReceive(txMsg, rxMsg) && rxMsg.size == 130)
+		std::optional<MapleMsg> rxMsg = sendRead(inMsg->destAP, inMsg->originAP, block);
+		if (rxMsg.has_value() && rxMsg->size == 130)
 		{
 			DEBUG_LOG(MAPLE, "DreamPotatoVmu[%s]: read block %d", logical_port, block);
-			memcpy(&flash_data[block * 4 * 128], &rxMsg.data[8], 4 * 128);
+			memcpy(&flash_data[block * 4 * 128], &rxMsg->data[8], 4 * 128);
 			accessed_blocks[block] = true;
 		}
 		else {

@@ -102,19 +102,16 @@ void MapleLinkDevice::deserializeVmu(
 					if (!currentAccessedBlocks[block]) {
 						// Try up to 4 times to read this block
 						for (u32 j = 0; j < 4; ++j) {
-							MapleMsg msg{};
-							msg.command = MDCF_BlockRead;
-							// Hardware bus number will be overridden by link->sendReceive()
-							msg.destAP = (dev.bus_id << 6) | (1 << dev.bus_port);
-							msg.originAP = dev.bus_id << 6;
-							msg.pushData(MFID_1_Storage);
-							const u32 locationWord = (block & 0xFF) << 24;
-							msg.pushData(locationWord);
+							std::optional<MapleMsg> rxMsg = sendRead(
+								link,
+								(dev.bus_id << 6) | (1 << dev.bus_port),
+								dev.bus_id << 6,
+								block
+							);
 
-							MapleMsg rxMsg;
-							if (link.sendReceive(msg, rxMsg) && rxMsg.size >= 130) {
+							if (rxMsg.has_value() && rxMsg->size >= 130) {
 								// Something read!
-								memcpy(&currentKnownFlash[block * 512], &rxMsg.data[8], 512);
+								memcpy(&currentKnownFlash[block * 512], &rxMsg->data[8], 512);
 								currentAccessedBlocks[block] = true;
 								break;
 							}
@@ -147,6 +144,24 @@ void MapleLinkDevice::deserializeVmu(
 		memset(&vmu.flash_data[0], 0, sizeof(vmu.flash_data));
 		memset(&vmu.accessed_blocks[0], 0, sizeof(vmu.accessed_blocks));
 	}
+}
+
+std::optional<MapleMsg> MapleLinkDevice::sendRead(MapleLink& link, u8 dest, u8 origin, u8 block)
+{
+	MapleMsg msg{};
+	msg.command = MDCF_BlockRead;
+	msg.destAP = dest;
+	msg.originAP = origin;
+	msg.pushData(MFID_1_Storage);
+	const u32 locationWord = (block & 0xFF) << 24; // (BE) partition #, phase, block #
+	msg.pushData(locationWord);
+
+	MapleMsg rxMsg;
+	if (!link.sendReceive(msg, rxMsg)) {
+		return std::nullopt;
+	}
+
+	return rxMsg;
 }
 
 void MapleLinkDevice::mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu& vmu)

@@ -90,11 +90,11 @@ struct MapleLinkDevice
 
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice
-	//! @param deser The deserializer to pull data from
-	//! @param link The MapleLink to communicate with during deserialization
-	//! @param dev The device that the DreamLink created
-	//! @param vmu The vmu device used for deserialization (may or may not be the same as dev)
-	//! @param usingExternalMemory When true, do checks that external memory matches deserialized data
+	//! @param[in] deser The deserializer to pull data from
+	//! @param[in] link The MapleLink to communicate with during deserialization
+	//! @param[in] dev The device that the DreamLink created
+	//! @param[in] vmu The vmu device used for deserialization (may or may not be the same as dev)
+	//! @param[in] usingExternalMemory When true, do checks that external memory matches deserialized data
 	static void deserializeVmu(
 		Deserializer& deser,
 		MapleLink& link,
@@ -103,10 +103,19 @@ protected:
 		bool usingExternalMemory
 	);
 
+	//! Send a read request to the external VMU memory
+	//! @param[in] link The MapleLink to communicate with
+	//! @param[in] dest Destination address
+	//! @param[in] origin Origin address
+	//! @param[in] block Block index
+	//! @return std::nullopt if execution failed
+	//! @return the received response from the external VMU
+	static std::optional<MapleMsg> sendRead(MapleLink& link, u8 dest, u8 origin, u8 block);
+
 	//! Mirrors the LCD data from VMU data to a MapleLink device
-	//! @param link The MapleLink to send LCD data to
-	//! @param dev The device that the DreamLink created
-	//! @param vmu The VMU containing LCD data (may or may not be the same as dev)
+	//! @param[in] link The MapleLink to send LCD data to
+	//! @param[in] dev The device that the DreamLink created
+	//! @param[in] vmu The VMU containing LCD data (may or may not be the same as dev)
 	static void mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu& vmu);
 };
 
@@ -186,6 +195,17 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	using maple_sega_vmu::serialize;
 	//! Performs deserialization and writes deserialized LCD
 	void deserialize(Deserializer& deser) override;
+
+	//! Send a read request to the external VMU memory
+	//! @param[in] dest Destination address
+	//! @param[in] origin Origin address
+	//! @param[in] block Block index
+	//! @return std::nullopt if execution failed
+	//! @return the received response from the external VMU
+	inline std::optional<MapleMsg> sendRead(u8 dest, u8 origin, u8 block)
+	{
+		return MapleLinkDevice::sendRead(link, dest, origin, block);
+	}
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
