@@ -34,7 +34,6 @@ static asio::error_code sendMsg(const MapleMsg& msg, tcp::socket& sock)
 {
 	static char buffer[1024 * 3 + 2];
 	char *p = buffer;
-
 	p += sprintf(p, "%02X %02X %02X %02X", msg.command, msg.destAP, msg.originAP, msg.size);
 	const u32 sz = msg.getDataSize();
 	for (u32 i = 0; i < sz; i++)
@@ -52,22 +51,19 @@ static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioCon
 {
 	asio::streambuf buf;
 	asio::error_code read_ec = asio::error::would_block;
-	size_t read_n = 0;
-	
-	// TODO: it feels like 'asio::use_future' could be cleaner but don't have that working yet
 	asio::async_read_until(sock, buf, "\r\n",
-		[&read_ec, &read_n](const asio::error_code& ec, size_t n) {
+		[&read_ec](const asio::error_code& ec, size_t n) {
 			read_ec = ec;
-			read_n = n;
 		});
 
 	ioContext.restart();
 	ioContext.run_for(timeout);
-
 	if (read_ec == asio::error::would_block)
 	{
+		// Timeout. Cancel the ongoing socket operation and drain the
+		// ioContext queue so that the callback runs while 'buf' is still live
 		sock.cancel();
-		ioContext.run(); // drain pending i/o queue
+		ioContext.run();
 		return false;
 	}
 
@@ -85,7 +81,6 @@ static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioCon
 	return true;
 }
 
-
 namespace dreampotato
 {
 
@@ -93,7 +88,6 @@ namespace dreampotato
 struct DreamPotatoVmu : public MapleLinkVmu
 {
 	bool userNotified = false;
-	u32 fnCode = 0;
 
 	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
 	{}
@@ -181,41 +175,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		return MapleLinkVmu::dma(cmd);
 	}
 
-	void poll()
-	{
-		// TODO: check for changes in device configuration.
-		// 'DreamPotato::checkConnection()' may be more appropriate place
-		return;
-
-		MapleMsg txMsg;
-		txMsg.command = MDC_DeviceRequest;
-		txMsg.destAP = (link.bus << 6) | link.port;
-		txMsg.originAP = link.bus << 6;
-		MapleMsg rxMsg;
-		// Note: connected *must* be true or infinite recursion loop
-		if (!link.sendReceive(txMsg, rxMsg))
-			// error has been logged and disconnect() called
-			return;
-
-		u32 newFnCode = rxMsg.readData<u32>();
-		if (newFnCode != fnCode) {
-			requestReconnect();
-			fnCode = newFnCode;
-		}
-	}
-
-	bool linkStatus() override
-	{
-		poll();
-
-		if (!MapleLinkVmu::linkStatus())
-			return false;
-
-		if (link.storageEnabled())
-			return link.isConnected();
-		else
-			return true; // local storage means this must always remain "linked"
-	}
+	bool linkStatus() override;
 };
 
 class DreamPotato : public BaseDreamLink
@@ -228,6 +188,9 @@ class DreamPotato : public BaseDreamLink
 	static constexpr u16 BASE_PORT = 37393;
 	time_t lastMsg = 0;
 	u32 initedPorts = 0;
+
+	//! Ports which contain a docked VMU in DreamPotato
+	u32 dockedPorts = 0;
 
 public:
 	DreamPotato(int bus)
@@ -254,42 +217,115 @@ public:
 	void disconnect() override;
 	void init(u32 ports);
 
+	bool isPortDocked(int port)
+	{
+		return dockedPorts & port;
+	}
+
+	void updateExpansionDevs()
+	{
+		// Check which expansion slots contain VMUs
+		MapleMsg msg;
+		msg.command = MDCF_GetCondition;
+		msg.destAP = (bus << 6) | 0x20;
+		msg.originAP = bus << 6;
+		msg.pushData(MFID_0_Input);
+
+		auto ec = sendMsg(msg, sock);
+		if (ec)
+		{
+			WARN_LOG(INPUT, "DreamPotato[%d] updateExpansionDevs error: %s", bus, ec.message().c_str());
+			disconnect();
+		}
+		if (!receiveMsg(msg, sock, ioContext)) {
+			WARN_LOG(INPUT, "DreamPotato[%d] read timeout", bus);
+			disconnect();
+		}
+
+		dockedPorts = msg.originAP & 0x1f;
+	}
+
+	bool isSocketDisconnected() {
+		// A socket was disconnected if 'select()' says the socket is ready to read, and a subsequent 'recv()' fails or says 0 bytes available to read.
+		auto nativeHandle = sock.native_handle();
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(nativeHandle, &readfds);
+		timeval timeout = { 0, 0 };
+		// nfds should be set to the highest-numbered file descriptor plus 1.
+		// See https://www.man7.org/linux/man-pages/man2/select.2.html
+		int nfds = nativeHandle + 1;
+		int nReady = select(nfds, &readfds, nullptr, nullptr, &timeout);
+		bool socketIsReady = nReady > 0 && FD_ISSET(nativeHandle, &readfds);
+		if (!socketIsReady)
+			return false;
+
+		char dest;
+		int len = recv(nativeHandle, &dest, sizeof(dest), MSG_PEEK);
+		return len <= 0;
+	}
+
 	void checkConnection()
 	{
-		// Complete connection if needed
+		// Possibly complete a pending connection.
 		ioContext.poll();
 
-		time_t now = getTimeMs();
-		if (now - lastMsg < 1000)
-			return;
+		// TODO: we should probably poll the attached devices, to both get up-to-date info,
+		// and effectively get a heartbeat for the connection,
+		// instead of needing to both check for reset message and tcp disconnect.
 
-		// Handle periodic tasks
-		lastMsg = now;
+		// Check for a refresh message, which indicates we should re-query which expansion slots have VMUs in them
+		constexpr std::string_view refreshMessage = "FF FF FF FF\r\n";
+		constexpr int resetMessageSize = refreshMessage.length();
+		asio::error_code ec;
+		if (sock.available(ec) >= resetMessageSize)
+		{
+			std::array<u8, resetMessageSize> data;
+			sock.read_some(asio::buffer(data), ec);
+			if (ec)
+			{
+				WARN_LOG(INPUT, "DreamPotato reset message error: %s", ec.message().c_str());
+				return;
+			}
+
+			// TODO: associated MapleLinks should request a reconnect.
+			// Tricky as multiple links might both call thru checkConnection() and thus need a reconnect.
+			std::string line(data.begin(), data.end());
+			if (line == refreshMessage)
+				updateExpansionDevs();
+		}
+
+		// Detect a graceful TCP disconnect.
+		if (isSocketDisconnected())
+		{
+			disconnect();
+			return;
+		}
+
 		if (!connected)
 		{
-			// Been >=1000ms since last connection attempt. Try again.
-			connect();
-			return;
-		}
+			time_t now = getTimeMs();
+			if (now - lastMsg < 1000)
+				return;
 
-		bool nonBlocking = sock.non_blocking();
-		std::error_code ec;
-		if (!nonBlocking)
-			sock.non_blocking(true, ec);
-		// We don't expect to have anything to read
-		u8 buf;
-		size_t read = sock.read_some(asio::buffer(&buf, 1), ec);
-		if (!nonBlocking) {
-			std::error_code ignored;
-			sock.non_blocking(false, ignored);
-		}
-		if (read != 1 && !!ec && ec != asio::error::would_block)
-		{
-			connected = false;
+			lastMsg = now;
+			// Been >=1000ms since last connection attempt. Try again.
 			connect();
 		}
 	}
 };
+
+bool DreamPotatoVmu::linkStatus()
+{
+	if (!MapleLinkVmu::linkStatus() || !link.isConnected())
+		return false;
+
+	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
+	return potato->isPortDocked(link.port + 1);
+
+	// TODO: should disabling physical memory really cause the VMU to report as connected always?
+	// May want to revert that. Using DreamPotato without physical memory is a rare case.
+}
 
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;
 
@@ -320,6 +356,7 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 	}
 
 	connected = true;
+	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);
 }
 
@@ -329,6 +366,9 @@ void DreamPotato::disconnect()
 		return;
 
 	connected = false;
+	dockedPorts = 0;
+	// TODO: accessedBlocks of associated MapleLinks should be cleared.
+
 	asio::error_code ec;
 	sock.close(ec);
 	if (ec)
