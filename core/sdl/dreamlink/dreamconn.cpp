@@ -30,8 +30,35 @@
 
 #ifdef USE_DREAMCONN
 
-asio::error_code sendMsg(const MapleMsg& msg, asio::ip::tcp::iostream& stream);
-bool receiveMsg(MapleMsg& msg, std::istream& stream);
+// TODO: drop use of iostream, use async connection like DreamPotato
+static asio::error_code sendMsg(const MapleMsg& msg, asio::ip::tcp::iostream& stream)
+{
+	static char buffer[1024 * 3 + 2];
+	char *p = buffer;
+	p += sprintf(p, "%02X %02X %02X %02X", msg.command, msg.destAP, msg.originAP, msg.size);
+	const u32 sz = msg.getDataSize();
+	for (u32 i = 0; i < sz; i++)
+		p += sprintf(p, " %02X", msg.data[i]);
+	strcpy(p, "\r\n");
+	p += 2;
+	asio::ip::tcp::socket& sock = static_cast<asio::ip::tcp::socket&>(stream.socket());
+	asio::error_code ec;
+	asio::write(sock, asio::buffer(buffer, p - buffer), ec);
+	return ec;
+}
+
+static bool receiveMsg(MapleMsg& msg, std::istream& stream)
+{
+	std::string response;
+	if (!std::getline(stream, response))
+		return false;
+	sscanf(response.c_str(), "%hhx %hhx %hhx %hhx", &msg.command, &msg.destAP, &msg.originAP, &msg.size);
+	if ((msg.getDataSize() - 1) * 3 + 13 >= response.length())
+		return false;
+	for (unsigned i = 0; i < msg.getDataSize(); i++)
+		sscanf(&response[i * 3 + 12], "%hhx", &msg.data[i]);
+	return !stream.fail();
+}
 
 //! DreamConn implementation class
 //! This is here mainly so asio.hpp can be included in this source file instead of the header.
@@ -64,7 +91,7 @@ public:
 		if (ec) {
 			WARN_LOG(INPUT, "DreamConn[%d] send failed: %s", bus, ec.message().c_str());
 			maple_io_connected = false;
-			asyncRetryConnect();
+			// TODO: reconnect automatically
 			return false;
 		}
 		return true;
@@ -78,7 +105,7 @@ public:
 		if (!receiveMsg(rxMsg, iostream)) {
 			WARN_LOG(INPUT, "DreamConn[%d] receive failed", bus);
 			maple_io_connected = false;
-			asyncRetryConnect();
+			// TODO: reconnect automatically
 			return false;
 		}
 		return true;
@@ -93,7 +120,7 @@ public:
 			{
 				// A different TCP port is used depending on the bus - need to reconnect
 				maple_io_connected = false;
-				asyncRetryConnect();
+				// TODO: reconnect automatically
 			}
 		}
 	}

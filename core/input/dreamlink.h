@@ -137,8 +137,6 @@ protected:
 	BaseDreamLink(bool storageSupported);
 
 public:
-    //! Destructor (virtual)
-	virtual ~BaseDreamLink();
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
 	//! @return true iff a game has been started
@@ -172,22 +170,6 @@ protected:
 	//! This is the default implementation which may be overridden by child
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override;
 
-	//! May be called by the child to attempt to reestablish connection after it is lost
-	void asyncRetryConnect();
-
-private:
-	//! Type of pending connection work
-	enum class ConnectionWorkType { Connect, Disconnect };
-
-	//! Do an asynchronous connect or disconnect
-	void asyncConnection(const ConnectionWorkType& type, bool getLock = true);
-
-	//! Worker thread function for processing connection/disconnection operations
-	void connectionWorkerThread();
-
-	//! Stops the connection worker thread
-	void stopConnectionWorkerThread();
-
 protected:
     //! Determines whether or not storage is supported by this DreamLink
     const bool storageSupported;
@@ -199,19 +181,6 @@ private:
     u32 linkedPortsMask = 0;
     //! All currently connected ports
     u32 connectedPortsMask = 0;
-
-	//! Flag to signal worker thread shutdown
-	bool connectionWorkerShutdown = false;
-	//! Mutex protecting connection work queue and worker thread
-	std::mutex connectionMutex;
-	//! Last submitted connection request type
-	ConnectionWorkType lastConnectRequest = ConnectionWorkType::Disconnect;
-	//! Queue of pending connection operations
-	std::list<ConnectionWorkType> connectionWorkQueue;
-	//! Condition variable to wake the worker thread
-	std::condition_variable connectionCondVar;
-	//! Worker thread for this instance
-	std::unique_ptr<std::thread> connectionWorker;
 
 	//! Singleton class which is a prioritized Registry of BaseDreamLink devices.
 	//! This registry keeps track of which devices are connected by priority and handles game events for all devices.

@@ -27,34 +27,64 @@
 #include <array>
 #include <iomanip>
 
-asio::error_code sendMsg(const MapleMsg& msg, asio::ip::tcp::iostream& stream)
+namespace ip = asio::ip;
+using tcp = ip::tcp;
+
+static asio::error_code sendMsg(const MapleMsg& msg, tcp::socket& sock)
 {
 	static char buffer[1024 * 3 + 2];
 	char *p = buffer;
+
 	p += sprintf(p, "%02X %02X %02X %02X", msg.command, msg.destAP, msg.originAP, msg.size);
 	const u32 sz = msg.getDataSize();
 	for (u32 i = 0; i < sz; i++)
 		p += sprintf(p, " %02X", msg.data[i]);
 	strcpy(p, "\r\n");
 	p += 2;
-	asio::ip::tcp::socket& sock = static_cast<asio::ip::tcp::socket&>(stream.socket());
 	asio::error_code ec;
+	// TODO: perhaps writes should also be async with timeout
 	asio::write(sock, asio::buffer(buffer, p - buffer), ec);
 	return ec;
 }
 
-bool receiveMsg(MapleMsg& msg, std::istream& stream)
+static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioContext,
+	std::chrono::milliseconds timeout = std::chrono::milliseconds(100))
 {
-	std::string response;
-	if (!std::getline(stream, response))
+	asio::streambuf buf;
+	asio::error_code read_ec = asio::error::would_block;
+	size_t read_n = 0;
+	
+	// TODO: it feels like 'asio::use_future' could be cleaner but don't have that working yet
+	asio::async_read_until(sock, buf, "\r\n",
+		[&read_ec, &read_n](const asio::error_code& ec, size_t n) {
+			read_ec = ec;
+			read_n = n;
+		});
+
+	ioContext.restart();
+	ioContext.run_for(timeout);
+
+	if (read_ec == asio::error::would_block)
+	{
+		sock.cancel();
+		ioContext.run(); // drain pending i/o queue
 		return false;
+	}
+
+	if (read_ec)
+		return false;
+
+	std::string response;
+	std::istream istream(&buf);
+	std::getline(istream, response);
 	sscanf(response.c_str(), "%hhx %hhx %hhx %hhx", &msg.command, &msg.destAP, &msg.originAP, &msg.size);
 	if ((msg.getDataSize() - 1) * 3 + 13 >= response.length())
 		return false;
 	for (unsigned i = 0; i < msg.getDataSize(); i++)
 		sscanf(&response[i * 3 + 12], "%hhx", &msg.data[i]);
-	return !stream.fail();
+	return true;
 }
+
 
 namespace dreampotato
 {
@@ -63,6 +93,7 @@ namespace dreampotato
 struct DreamPotatoVmu : public MapleLinkVmu
 {
 	bool userNotified = false;
+	u32 fnCode = 0;
 
 	DreamPotatoVmu(const MapleLink& link) : MapleLinkVmu(link)
 	{}
@@ -150,8 +181,33 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		return MapleLinkVmu::dma(cmd);
 	}
 
+	void poll()
+	{
+		// TODO: check for changes in device configuration.
+		// 'DreamPotato::checkConnection()' may be more appropriate place
+		return;
+
+		MapleMsg txMsg;
+		txMsg.command = MDC_DeviceRequest;
+		txMsg.destAP = (link.bus << 6) | link.port;
+		txMsg.originAP = link.bus << 6;
+		MapleMsg rxMsg;
+		// Note: connected *must* be true or infinite recursion loop
+		if (!link.sendReceive(txMsg, rxMsg))
+			// error has been logged and disconnect() called
+			return;
+
+		u32 newFnCode = rxMsg.readData<u32>();
+		if (newFnCode != fnCode) {
+			requestReconnect();
+			fnCode = newFnCode;
+		}
+	}
+
 	bool linkStatus() override
 	{
+		poll();
+
 		if (!MapleLinkVmu::linkStatus())
 			return false;
 
@@ -165,7 +221,9 @@ struct DreamPotatoVmu : public MapleLinkVmu
 class DreamPotato : public BaseDreamLink
 {
 	int bus;
-	asio::ip::tcp::iostream iostream;
+	asio::io_context ioContext;
+	tcp::socket sock{ioContext};
+
 	bool connected = false;
 	static constexpr u16 BASE_PORT = 37393;
 	time_t lastMsg = 0;
@@ -191,20 +249,29 @@ public:
 		return std::make_shared<DreamPotatoVmu>(MapleLink(shared_from_this(), bus, port));
 	}
 
-	void connect();
-	void disconnect();
+	void connect() override;
+	void connectComplete(const asio::error_code& ec);
+	void disconnect() override;
 	void init(u32 ports);
 
 	void checkConnection()
 	{
-		if (!connected)
-			return;
+		// Complete connection if needed
+		ioContext.poll();
+
 		time_t now = getTimeMs();
 		if (now - lastMsg < 1000)
 			return;
 
+		// Handle periodic tasks
 		lastMsg = now;
-		asio::ip::tcp::socket& sock = static_cast<asio::ip::tcp::socket&>(iostream.socket());
+		if (!connected)
+		{
+			// Been >=1000ms since last connection attempt. Try again.
+			connect();
+			return;
+		}
+
 		bool nonBlocking = sock.non_blocking();
 		std::error_code ec;
 		if (!nonBlocking)
@@ -219,7 +286,7 @@ public:
 		if (read != 1 && !!ec && ec != asio::error::would_block)
 		{
 			connected = false;
-			asyncRetryConnect();
+			connect();
 		}
 	}
 };
@@ -239,34 +306,20 @@ void DreamPotato::connect()
 {
 	if (connected)
 		return;
-	iostream = asio::ip::tcp::iostream("::1", std::to_string(BASE_PORT + bus), asio::ip::resolver_base::flags::numeric_host);
-	if (!iostream)
-		iostream = asio::ip::tcp::iostream("127.0.0.1", std::to_string(BASE_PORT + bus), asio::ip::resolver_base::flags::numeric_host);
-	if (!iostream) {
-		WARN_LOG(INPUT, "DreamPotato[%d] connection failed: %s", bus, iostream.error().message().c_str());
-		disconnect();
+
+	sock = tcp::socket{ioContext};
+	sock.async_connect(tcp::endpoint(ip::address_v6::loopback(), BASE_PORT + bus),
+		[this](const asio::error_code& ec) { connectComplete(ec); });
+}
+
+void DreamPotato::connectComplete(const asio::error_code& ec)
+{
+	if (ec) {
+		WARN_LOG(INPUT, "DreamPotato[%d] connection failed: %s", bus, ec.message().c_str());
 		return;
 	}
+
 	connected = true;
-	iostream.expires_from_now(std::chrono::milliseconds(500));
-
-	MapleMsg txMsg;
-	txMsg.command = MDC_DeviceRequest;
-	txMsg.destAP = (bus << 6) | 1;
-	txMsg.originAP = bus << 6;
-	MapleMsg rxMsg;
-	// Note: connected *must* be true or infinite recursion loop
-	if (!sendReceive(txMsg, rxMsg))
-		// error has been logged and disconnect() called
-		return;
-	const u32 fnCode = rxMsg.readData<u32>();
-	if ((fnCode & MFID_1_Storage) == 0)
-	{
-		WARN_LOG(INPUT, "Unrecognized response from DreamPotato");
-		disconnect();
-		return;
-	}
-
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);
 }
 
@@ -274,8 +327,13 @@ void DreamPotato::disconnect()
 {
 	if (!connected)
 		return;
+
 	connected = false;
-	iostream.close();
+	asio::error_code ec;
+	sock.close(ec);
+	if (ec)
+		WARN_LOG(INPUT, "DreamPotato socket close error: %s", ec.message().c_str());
+
 	NOTICE_LOG(INPUT, "Disconnected from DreamPotato[%d]", bus);
 }
 
@@ -284,13 +342,11 @@ bool DreamPotato::send(const MapleMsg& msg)
 	if (!connected)
 		return false;
 
-	iostream.expires_from_now(std::chrono::milliseconds(100));
-	asio::error_code ec = sendMsg(msg, iostream);
+	asio::error_code ec = sendMsg(msg, sock);
 	if (ec)
 	{
 		WARN_LOG(INPUT, "DreamPotato[%d] send failed: %s", bus, ec.message().c_str());
 		connected = false;
-		asyncRetryConnect();
 		return false;
 	}
 	lastMsg = getTimeMs();
@@ -302,10 +358,9 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 	if (!send(txMsg))
 		return false;
 
-	if (!receiveMsg(rxMsg, iostream)) {
+	if (!receiveMsg(rxMsg, sock, ioContext)) {
 		WARN_LOG(INPUT, "DreamPotato[%d] receive failed", bus);
 		connected = false;
-		asyncRetryConnect();
 		return false;
 	}
 	return true;
