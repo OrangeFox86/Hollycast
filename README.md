@@ -1,54 +1,30 @@
-
-**Hollycast**
-
-
 # Hollycast
 
 Hollycast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator, derived of [Flycast](https://github.com/flyinghead/flycast), the open-source Sega Dreamcast emulator.
 Our mission is simple: **follow upstream** core emulation code while delivering a **more UI-friendly**, **feature-rich**, and **power-user capable** experience.
 
-## Philosophy
+## 🚀 Mission & Philosophy
+Hollycast tracks the **Flycast** core while providing a home for the features and experiments that fall outside the upstream scope. We operate on a simple principle: **Fun is the filter.** When developers follow their passion, the community wins.
 
-### Upstream-first
-We aim to follow and regularly integrate Flycast core emulation changes. Hollycast exists to:
-- Reduce friction for users (better UX, clearer settings, sane defaults)
-- Experiment with features that may not fit upstream’s goals
-- Ship improvements that the community has been requesting
-- Allow a little bit more freedom to developers, *while* maintaing high standards to ensure **continued stability**
+* **Unlock Functionality:** We integrate community-requested features and experimental changes that Flycast chooses not to merge.
+* **Developer Freedom:** We provide a stable sandbox for "passion features" and modernizations that keep the emulator evolving.
 
-Fun will be our filter; if it's fun, do it! Developers run on passion for their craft. This should be encouraged whenever possible.
+## 🛠️ Technical Standards
+We are committed to maintaining the high bar for speed and precision set by the Flycast core.
 
-### Performance & Accuracy
-We treat performance drops and decreased accuracy as bugs. While any software can regress during development, our goal is:
-- **Match or exceed Flycast performance**
-- **Improve accuracy where possible**
-- Regressions which violate established test procedures are unacceptable in released code
+* **Performance Parity:** We aim to match or exceed the performance benchmarks of the current Flycast core.
+* **Verified Accuracy:** We utilize the core codebase’s internal test suite alongside our own growing collection of tests to prevent regressions.
+* **Core Integrity:** New features are built on a rock-solid foundation, ensuring that "fun" never comes at the cost of stability.
 
-### Features that didn’t make the cut
-Flycast is intentionally selective about what gets merged. Hollycast is where we can:
-- Explore requested features and select based on what users care about rather than maintainability
-- Add optional enhancements behind toggles when appropriate
-- Make large and experimental changes that Flycast won't allow
-- Bring some things up to date, as the emulator is getting up there in age, and some parts have not seen much attention.
+## ✨ Key Differences
+* **Modern Interface:** A reimagined UI designed for clarity.
+* **Out-of-the-box Optimization:** Sane defaults allow new users to "grab and go," while keeping advanced controls accessible for power users.
+* **Quality of Life:** Frequent updates to aged components and new features requested specifically by the daily-player community.
 
-## What’s different?
-Hollycast is focused on:
-- A **new, more modern UI**
-- More quality-of-life features (especially for daily users)
-- Advanced controls for enthusiasts without overwhelming new users
-- Much more "user Friendly" and will allow more of a "Grab and Go" experece.
-- Better Documentation of what settings do and when they need to bee used.
-- Made the settings more of a "Instal and Run" setup, where Power Users still can access all the settings,but New users, wont be overwhealmed and can hit the ground running.
+## 📦 Compatibility & Contribution
+Hollycast aims to support every platform and release offered by Flycast. If Flycast can do it, Hollycast will too — ideally with a smoother experience.
 
-
-## Compatibility
-Hollycast is based on Flycast, and aims to support the same platforms and releases where possible. If Flycast can do it, Hollycast will too — and ideally with an even smoother experience.
-
-> Note: Hollycast is community-driven and under active development. Expect rapid iteration, and please report issues with logs and steps to reproduce. If you would like to contribute, Please join the discord  open up a Feature Request with your plans, so it can be discussed first.
-
-
-
-
+> **Note:** Hollycast is under active development. If you’d like to contribute, please join our **Discord** and open a Feature Request to discuss your plans before submitting code.
 
 ### Build instructions:
 ```
