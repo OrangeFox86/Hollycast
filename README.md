@@ -24,7 +24,7 @@ We are committed to maintaining the high bar for speed and precision set by the 
 ## 📦 Compatibility & Contribution
 Hollycast aims to support every platform and release offered by Flycast. If Flycast can do it, Hollycast will too — ideally with a smoother experience.
 
-> **Note:** Hollycast is under active development. If you’d like to contribute, please join our **Discord** and open a Feature Request to discuss your plans before submitting code.
+> **Note:** Hollycast is under active development. If you’d like to contribute, please [join our Discord](https://discord.gg/pYVqGqvFJW) and open a Feature Request to discuss your plans before submitting code.
 
 ### Build instructions:
 ```
