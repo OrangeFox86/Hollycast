@@ -1,0 +1,199 @@
+{
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Configure",
+            "command": "cmake",
+            "args": [
+                "-B", "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Build",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Release",
+                "--parallel", "5"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": [
+                "Configure"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "Configure Unit Tests",
+            "command": "cmake",
+            "args": [
+                "-B", "build-ut",
+                "-DENABLE_CTEST=ON"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Build Unit Tests",
+            "command": "cmake",
+            "args": [
+                "--build", "build-ut",
+                "--config", "Debug",
+                "--parallel", "5"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Configure Unit Tests"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "Run Unit Tests",
+            "command": "./flycast",
+            "args": [],
+            "windows":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut/Debug"
+                }
+            },
+            "linux":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut"
+                }
+            },
+            "osx":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut"
+                }
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Build Unit Tests"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "Configure Debug",
+            "command": "cmake",
+            "args": [
+                "-B", "build-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Build Debug",
+            "command": "cmake",
+            "args": [
+                "--build", "build-debug",
+                "--config", "Debug",
+                "--parallel", "5"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Configure Debug"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "Build Debug and Copy cfg",
+            "command": "cp",
+            "windows": {
+                "args": [
+                    "${workspaceFolder}/.vscode/default_emu.cfg",
+                    "./Debug/emu.cfg"
+                ]
+            },
+            "linux": {
+                "args": [
+                    "${workspaceFolder}/.vscode/default_emu.cfg",
+                    "./emu.cfg"
+                ]
+            },
+            "osx": {
+                "args": [
+                    "${workspaceFolder}/.vscode/default_emu.cfg",
+                    "./emu.cfg"
+                ]
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/build-debug"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Build Debug"
+            ]
+        },
+        {
+            "label": "Clean Build Folders",
+            "type": "shell",
+            "command": "rm -rf build*",
+            "linux": {
+                "command": "rm -rf build*/"
+            },
+            "osx": {
+                "command": "rm -rf build*/"
+            },
+            "windows": {
+                "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        }
+    ],
+    "version": "2.0.0"
+}
