@@ -17,10 +17,10 @@
             "name": "(Windows) Launch Unit Tests",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-ut/Debug/flycast.exe",
+            "program": "${workspaceFolder}/build-unit-tests-debug/Debug/flycast.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build-ut/Debug/",
+            "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug/",
             "environment": [],
             "console": "externalTerminal",
             "preLaunchTask": "CMake: build unit tests (Debug)"
@@ -40,10 +40,10 @@
             "name": "(gdb) Launch Unit Tests",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-ut/flycast",
+            "program": "${workspaceFolder}/build-unit-tests-debug/flycast",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build-ut/",
+            "cwd": "${workspaceFolder}/build-unit-tests-debug/",
             "environment": [],
             "preLaunchTask": "CMake: build unit tests (Debug)"
         }

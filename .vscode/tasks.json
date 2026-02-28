@@ -119,17 +119,17 @@
             "args": [],
             "windows":{
                 "options": {
-                    "cwd": "${workspaceFolder}/build-ut/Debug"
+                    "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug"
                 }
             },
             "linux":{
                 "options": {
-                    "cwd": "${workspaceFolder}/build-ut"
+                    "cwd": "${workspaceFolder}/build-unit-tests-debug"
                 }
             },
             "osx":{
                 "options": {
-                    "cwd": "${workspaceFolder}/build-ut"
+                    "cwd": "${workspaceFolder}/build-unit-tests-debug"
                 }
             },
             "problemMatcher": [],

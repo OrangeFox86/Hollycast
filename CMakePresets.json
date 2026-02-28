@@ -19,7 +19,7 @@
         },
         {
             "name": "debug-unit-tests",
-            "binaryDir": "build-ut",
+            "binaryDir": "build-unit-tests-debug",
             "inherits": ["debug"],
             "cacheVariables": {
                 "ENABLE_CTEST": "ON"
