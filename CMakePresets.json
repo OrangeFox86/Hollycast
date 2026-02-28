@@ -1,23 +1,46 @@
 {
-    "version": 2,
+    "version": 6,
     "configurePresets": [
         {
-            "name": "clang",
-            "generator": "Ninja",
-            "binaryDir": "build-clang",
+            "name": "default",
+            "binaryDir": "build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "debug",
+            "binaryDir": "build-debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "gcc",
-            "generator": "Ninja",
-            "binaryDir": "build-gcc",
+            "name": "debug-unit-tests",
+            "binaryDir": "build-ut",
+            "inherits": ["debug"],
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "ENABLE_CTEST": "ON"
             }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "jobs": 8
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "jobs": 8
+        },
+        {
+            "name": "debug-unit-tests",
+            "configurePreset": "debug-unit-tests",
+            "jobs": 8
         }
     ]
 }

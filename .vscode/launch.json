@@ -23,7 +23,7 @@
             "cwd": "${workspaceFolder}/build-ut/Debug/",
             "environment": [],
             "console": "externalTerminal",
-            "preLaunchTask": "Build Unit Tests"
+            "preLaunchTask": "CMake: build unit tests (Debug)"
         },
         {
             "name": "(gdb) Launch",
@@ -45,7 +45,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-ut/",
             "environment": [],
-            "preLaunchTask": "Build Unit Tests"
+            "preLaunchTask": "CMake: build unit tests (Debug)"
         }
     ]
 }

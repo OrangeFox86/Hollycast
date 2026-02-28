@@ -1,144 +1,67 @@
 {
     "tasks": [
         {
-            "type": "shell",
-            "label": "Configure",
-            "command": "cmake",
-            "args": [
-                "-B", "build"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
+            "label": "CMake: configure",
+            "type": "cmake",
+            "command": "configure",
             "group": {
                 "kind": "build",
                 "isDefault": false
+            },
+            "preset": "default",
+            "problemMatcher": [],
+            "hide": true,
+            "options": {
+                "environment": {
+                    "CC": "cl.exe",
+                    "CXX": "cl.exe"
+                }
             }
         },
         {
-            "type": "shell",
-            "label": "Build",
-            "command": "cmake",
-            "args": [
-                "--build", "build",
-                "--config", "Release",
-                "--parallel", "5"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
+            "label": "CMake: build",
+            "type": "cmake",
+            "command": "build",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
+            "preset": "default",
+            "problemMatcher": [],
             "dependsOn": [
-                "Configure"
+                "CMake: configure"
             ]
         },
         {
-            "type": "shell",
-            "label": "Configure Unit Tests",
-            "command": "cmake",
-            "args": [
-                "-B", "build-ut",
-                "-DENABLE_CTEST=ON"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
+            "label": "CMake: configure (Debug)",
+            "type": "cmake",
+            "command": "configure",
             "group": {
                 "kind": "build",
                 "isDefault": false
+            },
+            "preset": "debug",
+            "problemMatcher": [],
+            "hide": true,
+            "options": {
+                "environment": {
+                    "CC": "cl.exe",
+                    "CXX": "cl.exe"
+                }
             }
         },
         {
-            "type": "shell",
-            "label": "Build Unit Tests",
-            "command": "cmake",
-            "args": [
-                "--build", "build-ut",
-                "--config", "Debug",
-                "--parallel", "5"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
+            "label": "CMake: build (Debug)",
+            "type": "cmake",
+            "command": "build",
             "group": {
                 "kind": "build",
                 "isDefault": false
             },
+            "preset": "debug",
+            "problemMatcher": [],
             "dependsOn": [
-                "Configure Unit Tests"
-            ]
-        },
-        {
-            "type": "shell",
-            "label": "Run Unit Tests",
-            "command": "./flycast",
-            "args": [],
-            "windows":{
-                "options": {
-                    "cwd": "${workspaceFolder}/build-ut/Debug"
-                }
-            },
-            "linux":{
-                "options": {
-                    "cwd": "${workspaceFolder}/build-ut"
-                }
-            },
-            "osx":{
-                "options": {
-                    "cwd": "${workspaceFolder}/build-ut"
-                }
-            },
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "dependsOn": [
-                "Build Unit Tests"
-            ]
-        },
-        {
-            "type": "shell",
-            "label": "Configure Debug",
-            "command": "cmake",
-            "args": [
-                "-B", "build-debug"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            }
-        },
-        {
-            "type": "shell",
-            "label": "Build Debug",
-            "command": "cmake",
-            "args": [
-                "--build", "build-debug",
-                "--config", "Debug",
-                "--parallel", "5"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "dependsOn": [
-                "Configure Debug"
+                "CMake: configure (Debug)"
             ]
         },
         {
@@ -172,7 +95,68 @@
                 "isDefault": false
             },
             "dependsOn": [
-                "Build Debug"
+                "CMake: build (Debug)"
+            ]
+        },
+        {
+            "label": "CMake: configure unit tests (Debug)",
+            "type": "cmake",
+            "command": "configure",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "preset": "debug-unit-tests",
+            "problemMatcher": [],
+            "hide": true,
+            "options": {
+                "environment": {
+                    "CC": "cl.exe",
+                    "CXX": "cl.exe"
+                }
+            }
+        },
+        {
+            "label": "CMake: build unit tests (Debug)",
+            "type": "cmake",
+            "command": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "preset": "debug-unit-tests",
+            "problemMatcher": [],
+            "dependsOn": [
+                "CMake: configure unit tests (Debug)"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "Run Unit Tests",
+            "command": "./flycast",
+            "args": [],
+            "windows":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut/Debug"
+                }
+            },
+            "linux":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut"
+                }
+            },
+            "osx":{
+                "options": {
+                    "cwd": "${workspaceFolder}/build-ut"
+                }
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "CMake: build unit tests (Debug)"
             ]
         },
         {
