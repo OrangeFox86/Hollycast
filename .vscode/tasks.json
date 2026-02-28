@@ -10,13 +10,7 @@
             },
             "preset": "default",
             "problemMatcher": [],
-            "hide": true,
-            "options": {
-                "environment": {
-                    "CC": "cl.exe",
-                    "CXX": "cl.exe"
-                }
-            }
+            "hide": true
         },
         {
             "label": "CMake: build",
@@ -42,13 +36,7 @@
             },
             "preset": "debug",
             "problemMatcher": [],
-            "hide": true,
-            "options": {
-                "environment": {
-                    "CC": "cl.exe",
-                    "CXX": "cl.exe"
-                }
-            }
+            "hide": true
         },
         {
             "label": "CMake: build (Debug)",
@@ -108,13 +96,7 @@
             },
             "preset": "debug-unit-tests",
             "problemMatcher": [],
-            "hide": true,
-            "options": {
-                "environment": {
-                    "CC": "cl.exe",
-                    "CXX": "cl.exe"
-                }
-            }
+            "hide": true
         },
         {
             "label": "CMake: build unit tests (Debug)",
