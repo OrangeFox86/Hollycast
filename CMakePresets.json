@@ -2,25 +2,116 @@
     "version": 6,
     "configurePresets": [
         {
-            "name": "default",
+            "name": "base",
             "binaryDir": "build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "hidden": true
+        },
+        {
+            "name": "windows",
+            "inherits": ["base"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
             }
         },
         {
-            "name": "debug",
+            "name": "linux",
+            "inherits": ["base"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "darwin",
+            "inherits": ["base"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "generator": "Xcode"
+        },
+        {
+            "name": "windows-debug",
+            "inherits": ["windows"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
             "binaryDir": "build-debug",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
-            "name": "debug-unit-tests",
+            "name": "linux-debug",
+            "inherits": ["linux"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "binaryDir": "build-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "darwin-debug",
+            "inherits": ["darwin"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "binaryDir": "build-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-unit-tests-debug",
+            "inherits": ["windows-debug"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
             "binaryDir": "build-unit-tests-debug",
-            "inherits": ["debug"],
+            "cacheVariables": {
+                "ENABLE_CTEST": "ON"
+            }
+        },
+        {
+            "name": "linux-unit-tests-debug",
+            "inherits": ["linux-debug"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "binaryDir": "build-unit-tests-debug",
+            "cacheVariables": {
+                "ENABLE_CTEST": "ON"
+            }
+        },
+        {
+            "name": "darwin-unit-tests-debug",
+            "inherits": ["darwin-debug"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "binaryDir": "build-unit-tests-debug",
             "cacheVariables": {
                 "ENABLE_CTEST": "ON"
             }
@@ -28,18 +119,48 @@
     ],
     "buildPresets": [
         {
-            "name": "default",
-            "configurePreset": "default",
+            "name": "windows",
+            "configurePreset": "windows",
             "jobs": 8
         },
         {
-            "name": "debug",
-            "configurePreset": "debug",
+            "name": "linux",
+            "configurePreset": "linux",
             "jobs": 8
         },
         {
-            "name": "debug-unit-tests",
-            "configurePreset": "debug-unit-tests",
+            "name": "darwin",
+            "configurePreset": "darwin",
+            "jobs": 8
+        },
+        {
+            "name": "windows-debug",
+            "configurePreset": "windows-debug",
+            "jobs": 8
+        },
+        {
+            "name": "linux-debug",
+            "configurePreset": "linux-debug",
+            "jobs": 8
+        },
+        {
+            "name": "darwin-debug",
+            "configurePreset": "darwin-debug",
+            "jobs": 8
+        },
+        {
+            "name": "windows-unit-tests-debug",
+            "configurePreset": "windows-unit-tests-debug",
+            "jobs": 8
+        },
+        {
+            "name": "linux-unit-tests-debug",
+            "configurePreset": "linux-unit-tests-debug",
+            "jobs": 8
+        },
+        {
+            "name": "darwin-unit-tests-debug",
+            "configurePreset": "darwin-unit-tests-debug",
             "jobs": 8
         }
     ]

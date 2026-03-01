@@ -1,0 +1,31 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "inherits": ["darwin"]
+        },
+        {
+            "name": "debug",
+            "inherits": ["darwin-debug"]
+        },
+        {
+            "name": "unit-tests-debug",
+            "inherits": ["darwin-unit-tests-debug"]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default"
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "unit-tests-debug",
+            "configurePreset": "unit-tests-debug"
+        }
+    ]
+}
