@@ -128,7 +128,7 @@
                 "kind": "build",
                 "isDefault": false
             },
-            "preset": "debug-unit-tests",
+            "preset": "unit-tests-debug",
             "problemMatcher": [],
             "dependsOn": [
                 "Copy CMakeUserPresets.json"
@@ -143,7 +143,7 @@
                 "kind": "build",
                 "isDefault": false
             },
-            "preset": "debug-unit-tests",
+            "preset": "unit-tests-debug",
             "problemMatcher": [],
             "dependsOn": [
                 "CMake: configure unit tests (Debug)"
