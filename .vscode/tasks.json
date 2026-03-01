@@ -159,6 +159,28 @@
                 "kind": "build",
                 "isDefault": false
             }
+        },
+        {
+            "type": "shell",
+            "label": "Build Android",
+            "windows": {
+                "command": "./gradlew.bat"
+            },
+            "linux": {
+                "command": "./gradlew"
+            },
+            "osx": {
+                "command": "./gradlew"
+            },
+            "args": ["assembleDebug"],
+            "options": {
+                "cwd": "${workspaceFolder}/shell/android-studio"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         }
     ],
     "version": "2.0.0"
