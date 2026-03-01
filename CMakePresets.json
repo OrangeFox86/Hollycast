@@ -36,6 +36,11 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Darwin"
             },
+            "cacheVariables": {
+                "CMAKE_OBJC_COMPILE_OBJECT": "clang",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            },
             "generator": "Xcode"
         },
         {
