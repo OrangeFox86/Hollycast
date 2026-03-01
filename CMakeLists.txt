@@ -530,7 +530,7 @@ if(NOT LIBRETRO)
 			target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2main)
 		endif()
 
-		if((APPLE OR WIN32) AND TARGET SDL2::SDL2-static)
+		if((APPLE OR WIN32 OR ANDROID) AND TARGET SDL2::SDL2-static)
 			target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2-static)
 		elseif(TARGET SDL2::SDL2)
 			target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2)
@@ -539,7 +539,12 @@ if(NOT LIBRETRO)
 			target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES})
 		endif()
 
-		target_compile_definitions(${PROJECT_NAME} PRIVATE USE_SDL USE_SDL_AUDIO)
+		target_compile_definitions(${PROJECT_NAME} PRIVATE USE_SDL)
+
+		if (NOT ANDROID)
+			target_compile_definitions(${PROJECT_NAME} PRIVATE USE_SDL_AUDIO)
+		endif()
+
 		add_subdirectory(core/sdl)
 
 		if((UNIX AND NOT APPLE AND NOT ANDROID) OR NINTENDO_SWITCH)
