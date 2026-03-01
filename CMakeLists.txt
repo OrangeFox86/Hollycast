@@ -481,9 +481,9 @@ if(NOT LIBRETRO)
 		target_link_libraries(${PROJECT_NAME} PRIVATE "-static-libgcc -static-libstdc++")
 	endif()
 
-	if(NOT ANDROID AND NOT IOS)
+	if(NOT IOS)
 		if (NOT NINTENDO_SWITCH)
-			# DreamLink enabled for non-mobile Linux, MacOS, and Windows
+			# DreamLink enabled
 			target_compile_definitions(${PROJECT_NAME} PRIVATE USE_DREAMLINK_DEVICES=1)
 			set(USE_DREAMLINK_DEVICES ON) # Must be set before adding core/sdl
 
@@ -542,7 +542,7 @@ if(NOT LIBRETRO)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE USE_SDL USE_SDL_AUDIO)
 		add_subdirectory(core/sdl)
 
-		if((UNIX AND NOT APPLE) OR NINTENDO_SWITCH)
+		if((UNIX AND NOT APPLE AND NOT ANDROID) OR NINTENDO_SWITCH)
 			find_package(CURL REQUIRED)
 			target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 		endif()
