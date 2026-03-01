@@ -191,11 +191,38 @@
             "windows": {
                 "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force"
             },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "problemMatcher": [],
             "group": {
                 "kind": "build",
                 "isDefault": false
-            }
+            },
+            "hide": true
+        },
+        {
+            "label": "Clean Build Artifacts",
+            "type": "shell",
+            "command": "rm -f CMakeUserPresets.json",
+            "linux": {
+                "command": "rm -f CMakeUserPresets.json"
+            },
+            "osx": {
+                "command": "rm -f CMakeUserPresets.json"
+            },
+            "windows": {
+                "command": "Get-ChildItem -Path . -Filter CMakeUserPresets.json | Remove-Item -Force"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": ["Clean Build Folders"]
         },
         {
             "type": "shell",

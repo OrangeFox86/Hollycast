@@ -5,7 +5,8 @@
             "name": "base",
             "binaryDir": "build",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "USE_DISCORD": "ON"
             },
             "hidden": true
         },
