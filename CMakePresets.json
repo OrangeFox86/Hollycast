@@ -44,9 +44,7 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "CMAKE_OBJC_COMPILE_OBJECT": "clang",
-                "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT": "dwarf"
             },
             "generator": "Xcode"
         },
