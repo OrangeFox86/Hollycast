@@ -18,11 +18,7 @@
                 ]
             },
             "osx": {
-                "command": "cp",
-                "args": [
-                    "${workspaceFolder}/.vscode/CMakeDarwinPresets.json",
-                    "${workspaceFolder}/CMakeUserPresets.json"
-                ]
+                "command": "CURRENT_ARCH=$(uname -m); sed \"s/{CURRENT_ARCH}/$CURRENT_ARCH/g\" ${workspaceFolder}/.vscode/CMakeDarwinPresets.json > ${workspaceFolder}/CMakeUserPresets.json"
             },
             "hide": true
         },

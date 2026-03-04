@@ -3,15 +3,24 @@
     "configurePresets": [
         {
             "name": "default",
-            "inherits": ["darwin"]
+            "inherits": ["darwin"],
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "{CURRENT_ARCH}"
+            }
         },
         {
             "name": "debug",
-            "inherits": ["darwin-debug"]
+            "inherits": ["darwin-debug"],
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "{CURRENT_ARCH}"
+            }
         },
         {
             "name": "unit-tests-debug",
-            "inherits": ["darwin-unit-tests-debug"]
+            "inherits": ["darwin-unit-tests-debug"],
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "{CURRENT_ARCH}"
+            }
         }
     ],
     "buildPresets": [
