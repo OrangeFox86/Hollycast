@@ -30,17 +30,26 @@
         {
             "name": "(Linux) Debug Flycast",
             "type": "cppdbg",
+            "MIMode": "gdb",
             "request": "launch",
             "program": "${workspaceFolder}/build-debug/flycast",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-debug/",
             "environment": [],
-            "preLaunchTask": "Build Debug"
+            "preLaunchTask": "Build Debug",
+            "setupCommands": [
+                {
+                    "description": "Ignore SIGSEGV for Dynarec",
+                    "text": "handle SIGSEGV nostop noprint pass",
+                    "ignoreFailures": false
+                }
+            ]
         },
         {
             "name": "(Linux) Debug Unit Tests",
             "type": "cppdbg",
+            "MIMode": "gdb",
             "request": "launch",
             "program": "${workspaceFolder}/build-unit-tests-debug/flycast",
             "args": [],
