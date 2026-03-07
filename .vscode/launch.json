@@ -62,18 +62,6 @@
             "initCommands": [
                 "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
             ]
-        },
-        {
-            "name": "(macOS) Launch Unit Tests",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build-unit-tests-debug/Debug/Flycast.app/Contents/MacOS/Flycast",
-            "args": [],
-            "cwd": "${workspaceFolder}/build-unit-tests-debug",
-            "preLaunchTask": "Build Unit Tests (Debug)",
-            "initCommands": [
-                "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
-        ]
-    }
+        }
     ]
 }

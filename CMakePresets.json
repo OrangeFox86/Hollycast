@@ -115,19 +115,6 @@
             "cacheVariables": {
                 "ENABLE_CTEST": "ON"
             }
-        },
-        {
-            "name": "darwin-unit-tests-debug",
-            "inherits": ["darwin-debug"],
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Darwin"
-            },
-            "binaryDir": "build-unit-tests-debug",
-            "cacheVariables": {
-                "ENABLE_CTEST": "ON"
-            }
         }
     ],
     "buildPresets": [
@@ -176,12 +163,6 @@
         {
             "name": "linux-unit-tests-debug",
             "configurePreset": "linux-unit-tests-debug",
-            "jobs": 8,
-            "configuration": "Debug"
-        },
-        {
-            "name": "darwin-unit-tests-debug",
-            "configurePreset": "darwin-unit-tests-debug",
             "jobs": 8,
             "configuration": "Debug"
         }

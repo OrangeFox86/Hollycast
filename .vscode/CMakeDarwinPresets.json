@@ -14,10 +14,6 @@
         {
             "name": "debug",
             "inherits": ["darwin-user-base", "darwin-debug"]
-        },
-        {
-            "name": "unit-tests-debug",
-            "inherits": ["darwin-user-base", "darwin-unit-tests-debug"]
         }
     ],
     "buildPresets": [
@@ -28,10 +24,6 @@
         {
             "name": "debug",
             "configurePreset": "debug"
-        },
-        {
-            "name": "unit-tests-debug",
-            "configurePreset": "unit-tests-debug"
         }
     ]
 }
