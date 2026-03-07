@@ -204,7 +204,7 @@
                 "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json"
             },
             "osx": {
-                "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json"
+                "command": "zsh -c 'setopt +o nomatch; rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json'"
             },
             "options": {
                 "cwd": "${workspaceFolder}"
