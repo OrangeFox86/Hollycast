@@ -43,14 +43,27 @@
             "command": "build",
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             },
             "preset": "default",
             "problemMatcher": [],
             "dependsOn": [
                 "CMake: configure"
+            ],
+            "hide": true
+        },
+        {
+            "label": "Build Release",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": [
+                "CMake: build"
             ]
         },
+
+
         {
             "label": "CMake: configure (Debug)",
             "type": "cmake",
@@ -78,34 +91,23 @@
             "problemMatcher": [],
             "dependsOn": [
                 "CMake: configure (Debug)"
-            ]
+            ],
+            "hide": true
         },
         {
             "type": "shell",
-            "label": "Build Debug and Copy cfg",
+            "label": "Build Debug",
             "windows": {
-                "command": "copy",
-                "args": [
-                    "${workspaceFolder}/.vscode/default_emu.cfg",
-                    "./Debug/emu.cfg"
-                ]
+                "command": "if (-not (Test-Path \"./build-debug/Debug/emu.cfg\")) { copy \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/Debug/emu.cfg }"
             },
             "linux": {
-                "command": "cp",
-                "args": [
-                    "${workspaceFolder}/.vscode/default_emu.cfg",
-                    "./emu.cfg"
-                ]
+                "command": "mkdir -p \"${userHome}/.config/flycast\" && cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" \"${userHome}/.config/flycast/emu.cfg\""
             },
             "osx": {
-                "command": "cp",
-                "args": [
-                    "${workspaceFolder}/.vscode/default_emu.cfg",
-                    "./emu.cfg"
-                ]
+                "command": "mkdir -p \"${userHome}/Library/Application Support/Flycast\" && cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" \"${userHome}/Library/Application Support/Flycast/emu.cfg\""
             },
             "options": {
-                "cwd": "${workspaceFolder}/build-debug"
+                "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [],
             "group": {
@@ -116,6 +118,8 @@
                 "CMake: build (Debug)"
             ]
         },
+
+
         {
             "label": "CMake: configure unit tests (Debug)",
             "type": "cmake",
@@ -143,11 +147,24 @@
             "problemMatcher": [],
             "dependsOn": [
                 "CMake: configure unit tests (Debug)"
-            ]
+            ],
+            "hide": true
         },
         {
+            "label": "Build Unit Tests (Debug)",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "CMake: build unit tests (Debug)"
+            ]
+        },
+
+
+        {
             "type": "shell",
-            "label": "Run Unit Tests",
+            "label": "Build and Run Unit Tests",
             "command": "./flycast",
             "args": [],
             "windows":{
@@ -171,21 +188,23 @@
                 "isDefault": false
             },
             "dependsOn": [
-                "CMake: build unit tests (Debug)"
+                "Build Unit Tests (Debug)"
             ]
         },
+
+
         {
-            "label": "Clean Build Folders",
+            "label": "Clean All Build Artifacts",
             "type": "shell",
             "command": "rm -rf build*",
+            "windows": {
+                "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"shell/android-studio/build/\", \"shell/android-studio/.gradle/\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path CMakeUserPresets.json -ErrorAction SilentlyContinue; exit 0"
+            },
             "linux": {
-                "command": "rm -rf build*/"
+                "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json"
             },
             "osx": {
-                "command": "rm -rf build*/"
-            },
-            "windows": {
-                "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force"
+                "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json"
             },
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -194,32 +213,10 @@
             "group": {
                 "kind": "build",
                 "isDefault": false
-            },
-            "hide": true
+            }
         },
-        {
-            "label": "Clean Build Artifacts",
-            "type": "shell",
-            "command": "rm -f CMakeUserPresets.json",
-            "linux": {
-                "command": "rm -f CMakeUserPresets.json"
-            },
-            "osx": {
-                "command": "rm -f CMakeUserPresets.json"
-            },
-            "windows": {
-                "command": "Get-ChildItem -Path . -Filter CMakeUserPresets.json | Remove-Item -Force"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "dependsOn": ["Clean Build Folders"]
-        },
+
+
         {
             "type": "shell",
             "label": "Build Android",
