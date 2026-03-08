@@ -95,21 +95,7 @@
             "hide": true
         },
         {
-            "type": "shell",
             "label": "Build Debug",
-            "windows": {
-                "command": "if (-not (Test-Path \"./build-debug/Debug/emu.cfg\")) { copy \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/Debug/emu.cfg }"
-            },
-            "linux": {
-                "command": "cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/emu.cfg || true"
-            },
-            "osx": {
-                "command": "cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/Debug/Flycast.app/Contents/MacOS/emu.cfg || true"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [],
             "group": {
                 "kind": "build",
                 "isDefault": false
