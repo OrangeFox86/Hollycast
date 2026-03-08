@@ -19,11 +19,13 @@
     "buildPresets": [
         {
             "name": "default",
-            "configurePreset": "default"
+            "configurePreset": "default",
+            "inherits": ["darwin"]
         },
         {
             "name": "debug",
-            "configurePreset": "debug"
+            "configurePreset": "debug",
+            "inherits": ["darwin-debug"]
         }
     ]
 }

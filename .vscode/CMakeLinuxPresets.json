@@ -17,15 +17,18 @@
     "buildPresets": [
         {
             "name": "default",
-            "configurePreset": "default"
+            "configurePreset": "default",
+            "inherits": ["linux"]
         },
         {
             "name": "debug",
-            "configurePreset": "debug"
+            "configurePreset": "debug",
+            "inherits": ["linux-debug"]
         },
         {
             "name": "unit-tests-debug",
-            "configurePreset": "unit-tests-debug"
+            "configurePreset": "unit-tests-debug",
+            "inherits": ["linux-unit-tests-debug"]
         }
     ]
 }
