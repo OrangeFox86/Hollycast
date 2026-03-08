@@ -101,10 +101,10 @@
                 "command": "if (-not (Test-Path \"./build-debug/Debug/emu.cfg\")) { copy \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/Debug/emu.cfg }"
             },
             "linux": {
-                "command": "( mkdir -p \"${userHome}/.config/flycast\" || true ) && ( cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" \"${userHome}/.config/flycast/emu.cfg\" || true )"
+                "command": "cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/emu.cfg || true"
             },
             "osx": {
-                "command": "( mkdir -p \"${userHome}/Library/Application Support/Flycast\" || true ) && ( cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" \"${userHome}/Library/Application Support/Flycast/emu.cfg\" || true )"
+                "command": "cp -n \"${workspaceFolder}/.vscode/default_emu.cfg\" ./build-debug/Debug/Flycast.app/Contents/MacOS/emu.cfg || true"
             },
             "options": {
                 "cwd": "${workspaceFolder}"
