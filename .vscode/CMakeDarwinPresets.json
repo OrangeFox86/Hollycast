@@ -5,7 +5,8 @@
             "name": "darwin-user-base",
             "cacheVariables": {
                 "CMAKE_OSX_ARCHITECTURES": "{CURRENT_ARCH}"
-            }
+            },
+            "hidden": true
         },
         {
             "name": "default",
