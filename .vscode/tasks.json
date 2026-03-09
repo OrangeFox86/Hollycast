@@ -151,21 +151,23 @@
         {
             "type": "shell",
             "label": "Build and Run Unit Tests",
-            "command": "./flycast",
             "args": [],
             "windows":{
+                "command": "./flycast.exe",
                 "options": {
                     "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug"
                 }
             },
             "linux":{
+                "command": "./flycast",
                 "options": {
                     "cwd": "${workspaceFolder}/build-unit-tests-debug"
                 }
             },
             "osx":{
+                "command": "./Flycast",
                 "options": {
-                    "cwd": "${workspaceFolder}/build-unit-tests-debug"
+                    "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug/Flycast.app/Contents/MacOS/"
                 }
             },
             "problemMatcher": [],
