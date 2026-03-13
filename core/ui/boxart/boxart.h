@@ -30,14 +30,25 @@
 
 struct GameMedia;
 
+enum class BoxartSourceMode
+{
+	ScrapedOnly = 0,
+	PhysicalOnly = 1,
+	CustomThenScraped = 2,
+};
+
 class Boxart
 {
 public:
 	GameBoxart getBoxartAndLoad(const GameMedia& media);
 	GameBoxart getBoxart(const GameMedia& media);
 	void term();
+	void refreshCustomBoxartIndex(bool force = false);
 
 private:
+	GameBoxart getPhysicalBoxart(const GameMedia& media);
+	std::string getCustomBoxartPath(const GameMedia& media);
+	bool shouldFetchOnline() const;
 	void loadDatabase();
 	void saveDatabase();
 	std::string getSaveDirectory() const {
@@ -53,12 +64,16 @@ private:
 	void fetchBoxart();
 
 	std::unordered_map<std::string, GameBoxart> games;
+	std::unordered_map<std::string, GameBoxart> physicalCache;
+	std::unordered_map<std::string, std::string> customBoxartByName;
+	std::string customBoxartRoot;
 	std::mutex mutex;
 	std::unique_ptr<Scraper> scraper;
 	std::unique_ptr<Scraper> offlineScraper;
 	std::unique_ptr<Scraper> arcadeScraper;
 	bool databaseLoaded = false;
 	bool databaseDirty = false;
+	bool customIndexLoaded = false;
 
 	std::vector<GameBoxart> toFetch;
 	std::future<void> fetching;

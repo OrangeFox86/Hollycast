@@ -175,21 +175,39 @@ void dc_savestate(int index, const u8 *pngData, u32 pngSize)
 	if (data == nullptr)
 	{
 		WARN_LOG(SAVESTATE, "Failed to save state - could not malloc %d bytes", (int)ser.size());
-		os_notify(i18n::T("Save state failed - memory full"), 5000);
-    	return;
+		os_notify("Save state failed - memory full", 5000);
+		return;
 	}
 
 	ser = Serializer(data, ser.size());
 	dc_serialize(ser);
 
-	std::string filename = hostfs::getSavestatePath(index, true);
+	std::string filename = hostfs::getSavestatePath(index, true, false);
+	if (index != -1)
+	{
+		try {
+			if (hostfs::storage().exists(filename))
+			{
+				const std::string backupFilename = hostfs::getSavestatePath(index, true, true);
+				// Keep exactly one rolling backup: previous main state.
+				nowide::remove(backupFilename.c_str());
+				if (nowide::rename(filename.c_str(), backupFilename.c_str()) != 0)
+				{
+					WARN_LOG(SAVESTATE, "Failed to rotate backup state %s -> %s",
+							filename.c_str(), backupFilename.c_str());
+				}
+			}
+		} catch (const hostfs::StorageException&) {
+			// Ignore storage exceptions and continue with regular save.
+		}
+	}
 	FILE *f = nowide::fopen(filename.c_str(), "wb");
 	if (f == nullptr)
 	{
 		WARN_LOG(SAVESTATE, "Failed to save state - could not open %s for writing", filename.c_str());
 		os_notify(i18n::T("Cannot open save file"), 5000);
 		free(data);
-    	return;
+		return;
 	}
 
 	RZipFile zipFile;
@@ -229,13 +247,13 @@ fail:
 	// delete failed savestate?
 }
 
-void dc_loadstate(int index)
+void dc_loadstate(int index, bool backup)
 {
 	if (!dc_savestateAllowed() || settings.raHardcoreMode)
 		return;
 	u32 total_size = 0;
 
-	std::string filename = hostfs::getSavestatePath(index, false);
+	std::string filename = hostfs::getSavestatePath(index, false, backup);
 	FILE *f = hostfs::storage().openFile(filename, "rb");
 	if (f == nullptr)
 	{
@@ -322,9 +340,9 @@ void dc_loadstate(int index)
 	free(data);
 }
 
-time_t dc_getStateCreationDate(int index)
+time_t dc_getStateCreationDate(int index, bool backup)
 {
-	std::string filename = hostfs::getSavestatePath(index, false);
+	std::string filename = hostfs::getSavestatePath(index, false, backup);
 	if (filename != lastStateFile)
 	{
 		lastStateFile = filename;
@@ -353,10 +371,10 @@ time_t dc_getStateCreationDate(int index)
 	return lastStateTime;
 }
 
-void dc_getStateScreenshot(int index, std::vector<u8>& pngData)
+void dc_getStateScreenshot(int index, std::vector<u8>& pngData, bool backup)
 {
 	pngData.clear();
-	std::string filename = hostfs::getSavestatePath(index, false);
+	std::string filename = hostfs::getSavestatePath(index, false, backup);
 	FILE *f = hostfs::storage().openFile(filename, "rb");
 	if (f == nullptr)
 		return;

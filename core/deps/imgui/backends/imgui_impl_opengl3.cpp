@@ -264,7 +264,6 @@ static void ImGui_ImplOpenGL3_DestroyFontsTexture()
 {
     if (g_FontTexture)
     {
-        ImGuiIO& io = ImGui::GetIO();
         glcache.DeleteTextures(1, &g_FontTexture);
         g_FontTexture = 0;
     }

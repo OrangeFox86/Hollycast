@@ -13,6 +13,8 @@
 #include "hw/maple/maple_devs.h"
 #include "sdl_gamepad.h"
 #include "sdl_keyboard.h"
+#include "ui/gui.h"
+#include "ui/settings.h"
 #include "sdl_keyboard_mac.h"
 #include "wsi/context.h"
 #include "emulator.h"
@@ -316,8 +318,16 @@ void input_sdl_handle()
 	{
 		switch (event.type)
 		{
-			case SDL_QUIT:
-				dc_exit();
+				case SDL_QUIT:
+				// Show exit dialog if game is running, otherwise exit directly
+				if (game_started)
+				{
+					showExitSaveDialog = true;
+				}
+				else
+				{
+					dc_exit();
+				}
 				break;
 
 			case SDL_KEYDOWN:

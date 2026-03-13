@@ -42,6 +42,7 @@
 #include "gui_achievements.h"
 #include "IconsFontAwesome6.h"
 #include <stb_image_write.h>
+#include <stb_image.h>
 #include "hw/pvr/Renderer_if.h"
 #include "rend/CustomTexture.h"
 #include "hw/mem/addrspace.h"
@@ -51,8 +52,7 @@
 #endif
 #include "vgamepad.h"
 #include "settings.h"
-#include "oslib/i18n.h"
-using namespace i18n;
+#include "gui_menu.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -84,6 +84,7 @@ static void (*showOnScreenKeyboard)(bool show);
 static bool keysUpNextFrame[512];
 bool uiUserScaleUpdated;
 static bool clearActiveIdNextFrame;
+bool showExitSaveDialog = false;
 
 GameScanner scanner;
 static BackgroundGameLoader gameLoader;
@@ -93,6 +94,9 @@ static std::recursive_mutex guiMutex;
 using LockGuard = std::lock_guard<std::recursive_mutex>;
 
 ImFont *largeFont;
+ImFont *settingsTitleFont;
+ImFont *settingsValueFont;
+ImFont *settingsRightValueFont;
 static Toast toast;
 static ThreadRunner uiThreadRunner;
 
@@ -116,8 +120,11 @@ static void emuEventCallback(Event event, void *)
 	}
 }
 
+static void clearThumbnailCache();
+
 void gui_init()
 {
+	DEBUG_LOG(COMMON, "gui_init() called");
 	if (inited)
 		return;
 	inited = true;
@@ -250,32 +257,17 @@ void gui_initFonts()
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Clear();
-
-	// Regular font
+	largeFont = nullptr;
+	settingsTitleFont = nullptr;
+	settingsValueFont = nullptr;
+	settingsRightValueFont = nullptr;
 	const float fontSize = uiScaled(17.f);
 	size_t dataSize;
 	std::unique_ptr<u8[]> data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
 	verify(data != nullptr);
-	ImFont *regularFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, nullptr, ranges);
-    ImFontConfig fontConfig;
-    fontConfig.MergeMode = true;
-    fontConfig.DstFont = regularFont;
-	// Font Awesome symbols (added to default font)
-	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
-	verify(data != nullptr);
-    fontConfig.FontNo = 0;
-	static ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-	io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, &fontConfig, faRanges);
-
-	// Large font
-    const float largeFontSize = uiScaled(21.f);
-	data = resource::load("fonts/Roboto-Regular.ttf", dataSize);
-	verify(data != nullptr);
-	largeFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, largeFontSize, nullptr, ranges);
-	ImFontConfig largeFontConfig;
-	largeFontConfig.MergeMode = true;
-	largeFontConfig.DstFont = largeFont;
-
+	ImFont* baseFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, nullptr, ranges);
+    ImFontConfig font_cfg;
+    font_cfg.MergeMode = true;
 #ifdef _WIN32
     u32 cp = GetACP();
     std::string fontDir = std::string(nowide::getenv("SYSTEMROOT")) + "\\Fonts\\";
@@ -374,84 +366,43 @@ void gui_initFonts()
         }
     }
 
-#elif defined(__linux__)
-	std::string locale = i18n::getCurrentLocale();
-	if (locale.find("ja_") == 0)			// Japanese
+    // Additional platform-specific CJK font loading can be added here if needed.
+#endif
+	// Font Awesome symbols (added to default font)
+	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	verify(data != nullptr);
+    font_cfg.FontNo = 0;
+	static ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, &font_cfg, faRanges);
+    // Large font without Asian glyphs
+	data = resource::load("fonts/Roboto-Regular.ttf", dataSize);
+	verify(data != nullptr);
+	const float largeFontSize = uiScaled(21.f);
+	largeFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, largeFontSize, nullptr, ranges);
+
+	data = resource::load("fonts/Jura-wght.ttf", dataSize);
+	if (data != nullptr)
+		settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, nullptr, ranges);
+
+	data = resource::load("fonts/EncodeSans-wdth-wght.ttf", dataSize);
+	if (data != nullptr)
 	{
-		const char *fonts[] = {
-				"/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
-				"/usr/share/fonts/ipa-pgothic-fonts/ipagp.ttf",	// redhat
-				"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
-				"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-				"/usr/share/fonts/adobe-source-han-sans-jp-fonts/SourceHanSansJP-Regular.otf", // redhat
-				"/usr/share/fonts/vl-gothic-fonts/VL-Gothic-Regular.ttf", // redhat
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", // redhat
-				nullptr
-		};
-		const char *largeFonts[] = {
-				"/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
-				"/usr/share/fonts/ipa-pgothic-fonts/ipagp.ttf",	// redhat
-				"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
-				"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-				"/usr/share/fonts/adobe-source-han-sans-jp-fonts/SourceHanSansJP-Bold.otf", // redhat
-				"/usr/share/fonts/vl-gothic-fonts/VL-Gothic-Regular.ttf", // redhat
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", // redhat
-				nullptr
-		};
-		addFont(fonts, fontSize, fontConfig, io.Fonts->GetGlyphRangesJapanese());
-		addFont(largeFonts, largeFontSize, largeFontConfig, io.Fonts->GetGlyphRangesJapanese());
-	}
-	else if (locale.find("ko_") == 0)		// Korean
-	{
-		const char *fonts[] = {
-				"/usr/share/fonts/truetype/unfonts-core/UnDotum.ttf",
-				"/usr/share/fonts-droid-fallback/truetype/DroidSansFallback.ttf",
-				"/usr/share/fonts/baekmuk-dotum-fonts/dotum.ttf", // redhat
-				"/usr/share/fonts/adobe-source-han-sans-kr-fonts/SourceHanSansKR-Regular.otf", // redhat
-				"/usr/share/fonts/naver-nanum-gothic-coding-fonts/NanumGothic_Coding.ttf", // redhat
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", // redhat
-				nullptr
-		};
-		const char *largeFonts[] = {
-				"/usr/share/fonts/truetype/unfonts-core/UnDotumBold.ttf",
-				"/usr/share/fonts-droid-fallback/truetype/DroidSansFallback.ttf",
-				"/usr/share/fonts/adobe-source-han-sans-kr-fonts/SourceHanSansKR-Bold.otf", // redhat
-				"/usr/share/fonts/naver-nanum-gothic-coding-fonts/NanumGothic_Coding_Bold.ttf", // redhat
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", // redhat
-				nullptr
-		};
-		addFont(fonts, fontSize, fontConfig, io.Fonts->GetGlyphRangesKorean());
-		addFont(largeFonts, largeFontSize, largeFontConfig, io.Fonts->GetGlyphRangesKorean());
-	}
-	else if (locale.find("zh_") == 0)		// Chinese
-	{
-		const ImWchar *glyphRanges = GetGlyphRangesChineseSimplifiedOfficial();
-		if (locale.find("zh_TW") == 0 || locale.find("zh_HK") == 0)
-			glyphRanges = GetGlyphRangesChineseTraditionalOfficial();
-		const char *fonts[] = {
-				"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-				"/usr/share/fonts/wqy-zenhei-fonts/wqy-zenhei.ttc", // redhat
-				"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", // redhat
-		};
-		const char *largeFonts[] = {
-				"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-				"/usr/share/fonts/wqy-zenhei-fonts/wqy-zenhei.ttc", // redhat
-				"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-				"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-				"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", // redhat
-		};
-		addFont(fonts, fontSize, fontConfig, glyphRanges);
-		addFont(largeFonts, largeFontSize, largeFontConfig, glyphRanges);
+		ImFontConfig rightValueFontCfg;
+		rightValueFontCfg.RasterizerMultiply = 4.50f;
+		settingsRightValueFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, largeFontSize, &rightValueFontCfg, ranges);
 	}
 
-	// TODO BSD, iOS, ...
-#endif
+	data = resource::load("fonts/EncodeSans-wdth-wght.ttf", dataSize);
+	if (data != nullptr)
+		settingsValueFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, uiScaled(24.f), nullptr, ranges);
+
+	if (settingsTitleFont == nullptr)
+		settingsTitleFont = baseFont != nullptr ? baseFont : largeFont;
+	if (settingsValueFont == nullptr)
+		settingsValueFont = largeFont;
+	if (settingsRightValueFont == nullptr)
+		settingsRightValueFont = largeFont;
+
     NOTICE_LOG(RENDERER, "Screen DPI is %.0f, size %d x %d. Scaling by %.2f", settings.display.dpi, settings.display.width, settings.display.height, settings.display.uiScale);
 	vgamepad::applyUiScale();
 }
@@ -560,6 +511,18 @@ static void gui_newFrame()
 	analog = joyy[0] > 0 ? (float)joyy[0] / 32768.f : 0.f;
 	io.AddKeyAnalogEvent(ImGuiKey_GamepadLStickDown, analog > 0.1f, analog);
 
+	// Emergency quit: Shift+Esc or Ctrl+Shift+Esc to force quit (bypasses save dialog)
+	// This is a safety measure in case of UI bugs
+	if (ImGui::IsKeyPressed(ImGuiKey_Escape) &&
+	    (ImGui::GetIO().KeyShift || ImGui::GetIO().KeySuper))
+	{
+		INFO_LOG(COMMON, "Emergency quit activated");
+		showExitSaveDialog = false;  // Clear any pending dialog
+		gui_stop_game();  // Stop the game immediately
+		dc_exit();  // Exit application
+		return;  // Skip the rest of this frame
+	}
+
 	ImGui::GetStyle().Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.06f, 0.06f, 0.06f, 0.94f);
 
 	if (showOnScreenKeyboard != nullptr)
@@ -666,6 +629,9 @@ void gui_start_game(const std::string& path)
 	reset_vmus();
     chat.reset();
 
+	// Clear thumbnail cache when starting a new game
+	clearThumbnailCache();
+
 	scanner.stop();
 	gui_setState(GuiState::Loading);
 	gameLoader.load(path);
@@ -680,6 +646,10 @@ void gui_stop_game(const std::string& message)
 		emu.unloadGame();
 		gui_setState(GuiState::Main);
 		reset_vmus();
+
+		// Clear thumbnail cache when stopping game
+		clearThumbnailCache();
+
 		if (!message.empty())
 			gui_error(Ts("Flycast has stopped.") + "\n\n" + message);
 	}
@@ -712,7 +682,7 @@ static void getScreenshot(std::vector<u8>& data, int width = 0)
 
 static void savestate()
 {
-	// TODO save state async: png compression, savestate file compression/write
+	// Potential optimization: move screenshot/state compression/write off the UI thread.
 	std::vector<u8> pngData;
 	getScreenshot(pngData, 640);
 	dc_savestate(config::SavestateSlot, pngData.empty() ? nullptr : &pngData[0], pngData.size());
@@ -720,10 +690,89 @@ static void savestate()
 	savestatePic.invalidate();
 }
 
-void cycleSaveStateSlot(int step)
+static void render_exit_save_dialog()
 {
-	config::SavestateSlot = (config::SavestateSlot + 10 + step) % 10;
-	SaveSettings();
+	static bool wasDialogShown = false;
+
+	if (!showExitSaveDialog)
+	{
+		wasDialogShown = false;
+		return;
+	}
+
+	// Center dialog
+	ImGui::SetNextWindowPos(
+		ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f),
+		ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+	// Only open popup if it's not already open and this is a new request
+	if (showExitSaveDialog && !wasDialogShown)
+	{
+		ImGui::OpenPopup("Exit Game?");
+		wasDialogShown = true;
+	}
+
+	if (ImGui::BeginPopupModal("Exit Game?", NULL,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar))
+	{
+		ImGui::Text("Do you want to save state before exiting?");
+		ImGui::NewLine();
+
+		// Button styling (consistent with existing dialogs)
+		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
+		ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
+
+		// Check if save is allowed
+		bool canSave = savestateAllowed();
+
+		if (ImGui::Button("Save & Exit", ImVec2(120, 0)))
+		{
+			if (canSave)
+			{
+				savestate(); // Save current state
+				ImGui::CloseCurrentPopup();
+				showExitSaveDialog = false;
+				gui_stop_game();
+			}
+			else
+			{
+				// Show error that save isn't allowed
+				ImGui::OpenPopup("Save Not Allowed");
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Exit Without Saving", ImVec2(140, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+			showExitSaveDialog = false;
+			gui_stop_game();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(80, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+			showExitSaveDialog = false;
+		}
+
+		// Error popup for save not allowed
+		if (ImGui::BeginPopupModal("Save Not Allowed", NULL,
+			ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+		{
+			ImGui::Text("Cannot save state in current mode.");
+			ImGui::Text("Possible reasons:");
+			ImGui::BulletText("No game loaded");
+			ImGui::BulletText("Network play active");
+			ImGui::BulletText("Multi-board arcade mode");
+			ImGui::NewLine();
+			if (ImGui::Button("OK", ImVec2(120, 0)))
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+
+		ImGui::EndPopup();
+	}
 }
 
 static void gui_display_commands()
@@ -754,7 +803,7 @@ static void gui_display_commands()
 		game.fileName = settings.content.fileName;
 		GameBoxart art = boxart.getBoxart(game);
 		ImguiFileTexture tex(art.boxartPath);
-		// TODO use placeholder image if not available
+		// Use a fallback image when artwork is unavailable
 		tex.draw(ScaledVec2(100, 100));
 
 		ImGui::SameLine();
@@ -832,9 +881,11 @@ static void gui_display_commands()
 				gui_setState(GuiState::Closed);
 			}
 		}
-		// Settings
-		if (IconButton(ICON_FA_GEAR, T("Settings"), ScaledVec2(buttonWidth, 50)).realize())
-			gui_setState(GuiState::Settings);
+			// Settings
+			if (ImGui::Button(ICON_FA_GEAR "  Settings", ScaledVec2(buttonWidth, 50)))
+			{
+				gui_setState(GuiState::Settings);
+			}
 
 		// Exit
 		if (IconButton(ICON_FA_POWER_OFF, commandLineStart ?  T("Exit") : T("Close Game"), ScaledVec2(buttonWidth, 50)).realize())
@@ -1064,6 +1115,8 @@ static void gui_display_content()
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(20, 8));
     ImGui::AlignTextToFramePadding();
+    // Position "GAMES" text and search bar below the menu bar (window is already positioned below menu bar)
+    ImGui::SetCursorPosY(ImGui::GetStyle().FramePadding.y);
     ImGui::Indent(uiScaled(10));
     ImGui::Text("%s", T("GAMES"));
     ImGui::Unindent(uiScaled(10));
@@ -1093,8 +1146,10 @@ static void gui_display_content()
 #else
 		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width());
 #endif
-		if (settingsBtn.realize())
-			gui_setState(GuiState::Settings);
+			if (iconButton(ICON_FA_GEAR, "Settings"))
+			{
+				gui_setState(GuiState::Settings);
+			}
     }
     else
     {
@@ -1498,6 +1553,19 @@ void gui_display_ui()
 
 	if (gui_state == GuiState::Closed)
 		return;
+
+	// Initialize ImGui frame BEFORE any early returns
+	// This ensures the menu bar is always visible, even during auto-start
+	gui_newFrame();
+	ImGui::NewFrame();
+	error_msg_shown = false;
+	bool gui_open = gui_is_open();
+
+	// Render menu bar BEFORE any early returns
+	// This ensures menu bar is visible in library mode and during auto-start
+	GuiMenu::renderMainMenuBar();
+
+	// Check for auto-start after menu bar is rendered
 	if (gui_state == GuiState::Main)
 	{
 #ifdef TARGET_UWP
@@ -1513,18 +1581,19 @@ void gui_display_ui()
 				gui_start_game("");
 			else
 				gui_start_game(settings.content.path);
-			return;
+			return; // Menu bar already rendered above
 		}
 	}
 
-	gui_newFrame();
-	ImGui::NewFrame();
-	error_msg_shown = false;
-	bool gui_open = gui_is_open();
+	// Render modal dialogs BEFORE window management
+	// This ensures modals are not affected by window stack operations
+	error_popup();
+	render_exit_save_dialog();
 
 	switch (gui_state)
 	{
 	case GuiState::Settings:
+		// Settings now always use the new UI through the compatibility facade.
 		gui_display_settings();
 		break;
 	case GuiState::Commands:
@@ -1566,7 +1635,7 @@ void gui_display_ui()
 		die("Unknown UI state");
 		break;
 	}
-	error_popup();
+
     ImGui::Render();
 	gui_endFrame(gui_open);
 	uiThreadRunner.execTasks();
@@ -1640,7 +1709,14 @@ void gui_draw_osd()
 	if (!settings.raHardcoreMode)
 		lua::overlay();
 	vgamepad::draw();
-    ImGui::Render();
+	// Render menu bar on top during gameplay
+	GuiMenu::renderMainMenuBar();
+
+	// Render modal dialogs (exit dialog, error popups)
+	error_popup();
+	render_exit_save_dialog();
+
+	ImGui::Render();
 	uiThreadRunner.execTasks();
 }
 
@@ -1736,18 +1812,35 @@ void gui_error(const std::string& what) {
 	error_msg = what;
 }
 
-void gui_loadState()
+void gui_loadState(bool backup)
 {
 	const LockGuard lock(guiMutex);
-	if (gui_state == GuiState::Closed && dc_savestateAllowed())
+
+	// Fix: Close GUI if open (menu selection scenario)
+	bool needToCloseGui = (gui_state != GuiState::Closed);
+
+	if (savestateAllowed())
 	{
 		try {
+			// Close UI if it's open (menu selection scenario)
+			if (needToCloseGui)
+			{
+				gui_setState(GuiState::Closed);
+			}
+
 			emu.stop();
-			dc_loadstate(config::SavestateSlot);
-			emu.start();
+				dc_loadstate(config::SavestateSlot, backup);
+				emu.start();
 		} catch (const FlycastException& e) {
 			gui_stop_game(e.what());
 		}
+	}
+	else
+	{
+		// User feedback when load not allowed
+		WARN_LOG(COMMON, "Load state not allowed: network=%d, multiboard=%d",
+				 settings.network.online, settings.naomi.multiboard);
+		os_notify("Cannot load state during online play", 3000);
 	}
 }
 
@@ -1799,6 +1892,11 @@ std::string gui_getCurGameBoxartUrl()
 	return art.boxartUrl;
 }
 
+void gui_refresh_custom_boxart(bool force)
+{
+	boxart.refreshCustomBoxartIndex(force);
+}
+
 void gui_runOnUiThread(std::function<void()> function) {
 	uiThreadRunner.runOnThread(function);
 }
@@ -1828,6 +1926,184 @@ void gui_takeScreenshot()
 			}
 		}
 	});
+}
+
+// Cache for save state thumbnails (keyed by slot + backup flag)
+static std::map<int, ImTextureID> thumbnailCache;
+static std::map<int, time_t> thumbnailCacheTime;
+
+static int makeThumbnailKey(int slot, bool backup)
+{
+	return backup ? (slot + 1000) : slot;
+}
+
+static ImTextureID loadSaveStateThumbnail(int slot, bool backup)
+{
+	const int key = makeThumbnailKey(slot, backup);
+	// Check cache first
+	auto cached = thumbnailCache.find(key);
+	if (cached != thumbnailCache.end())
+	{
+		// Verify cache is still valid (file hasn't changed)
+		time_t fileTime = dc_getStateCreationDate(slot, backup);
+		auto cachedTime = thumbnailCacheTime.find(key);
+		if (fileTime > 0 && cachedTime != thumbnailCacheTime.end() && fileTime == cachedTime->second)
+			return cached->second;
+	}
+
+	// Load screenshot from save state
+	std::vector<u8> pngData;
+	dc_getStateScreenshot(slot, pngData, backup);
+	if (pngData.empty())
+		return ImTextureID{};
+
+	// Decode PNG using stb_image
+	int width, height, channels;
+	stbi_set_flip_vertically_on_load(0);
+	u8* imgData = stbi_load_from_memory(
+		pngData.data(), pngData.size(),
+		&width, &height, &channels, 4);
+
+	if (!imgData)
+		return ImTextureID{};
+
+	// Create texture using imguiDriver abstraction (works with all renderers)
+	std::string texName = "savestate_" + std::to_string(key);
+	ImTextureID textureId{};
+	try {
+		textureId = imguiDriver->updateTextureAndAspectRatio(texName, imgData, width, height, false);
+	} catch (...) {
+		// Renderer might throw during resize
+		free(imgData);
+		return ImTextureID{};
+	}
+
+	free(imgData);
+
+	// Cache texture
+	thumbnailCache[key] = textureId;
+	thumbnailCacheTime[key] = dc_getStateCreationDate(slot, backup);
+
+	return textureId;
+}
+
+static void draw_save_state_menu_thumbnail(int slot, bool backup, float size)
+{
+	ImTextureID thumbnail = loadSaveStateThumbnail(slot, backup);
+	if (thumbnail)
+		ImGui::Image(thumbnail, ImVec2(size, size));
+	else
+		ImGui::Dummy(ImVec2(size, size));
+}
+
+static void clearThumbnailCache()
+{
+	// Delete textures before clearing cache
+	for (auto& entry : thumbnailCache)
+	{
+		std::string texName = "savestate_" + std::to_string(entry.first);
+		try {
+			imguiDriver->deleteTexture(texName);
+		} catch (...) {
+			// Ignore errors during shutdown/cleanup
+		}
+	}
+
+	thumbnailCache.clear();
+	thumbnailCacheTime.clear();
+}
+
+static std::string format_save_state_menu_time(time_t timestamp)
+{
+	if (timestamp <= 0)
+		return "Unknown";
+
+	struct tm tmInfo {};
+#ifdef _WIN32
+	if (localtime_s(&tmInfo, &timestamp) != 0)
+		return "Unknown";
+#else
+	if (localtime_r(&timestamp, &tmInfo) == nullptr)
+		return "Unknown";
+#endif
+
+	char timeStr[64];
+	if (strftime(timeStr, sizeof(timeStr), "%m/%d/%Y %I:%M %p", &tmInfo) == 0)
+		return "Unknown";
+
+	return timeStr;
+}
+
+void render_save_state_slots(bool isSaving)
+{
+	const float thumbnailSize = uiScaled(18.0f);
+
+	if (isSaving)
+	{
+		for (int slot = 0; slot < 10; slot++)
+		{
+			const time_t timestamp = dc_getStateCreationDate(slot, false);
+			std::string label;
+			if (timestamp > 0)
+				label = "Save Slot " + std::to_string(slot + 1) + " (" + format_save_state_menu_time(timestamp) + ")";
+			else
+				label = "Save Slot " + std::to_string(slot + 1) + " (Empty)";
+
+			draw_save_state_menu_thumbnail(slot, false, thumbnailSize);
+			ImGui::SameLine(0, uiScaled(6.0f));
+			if (ImGui::MenuItem(label.c_str()))
+			{
+				config::SavestateSlot = slot;
+				gui_saveState();
+			}
+		}
+		return;
+	}
+
+	bool hasMainEntries = false;
+	bool hasBackupEntries = false;
+
+	for (int slot = 0; slot < 10; slot++)
+	{
+		const time_t timestamp = dc_getStateCreationDate(slot, false);
+		if (timestamp <= 0)
+			continue;
+
+		hasMainEntries = true;
+		const std::string label = "Load Slot " + std::to_string(slot + 1)
+								+ " (" + format_save_state_menu_time(timestamp) + ")";
+		draw_save_state_menu_thumbnail(slot, false, thumbnailSize);
+		ImGui::SameLine(0, uiScaled(6.0f));
+		if (ImGui::MenuItem(label.c_str()))
+		{
+			config::SavestateSlot = slot;
+			gui_loadState(false);
+		}
+	}
+
+	for (int slot = 0; slot < 10; slot++)
+	{
+		const time_t timestamp = dc_getStateCreationDate(slot, true);
+		if (timestamp <= 0)
+			continue;
+
+		if (hasMainEntries && !hasBackupEntries)
+			ImGui::Separator();
+
+		hasBackupEntries = true;
+		const std::string label = "Load Backup Slot " + std::to_string(slot + 1)
+								+ " (" + format_save_state_menu_time(timestamp) + ")";
+		draw_save_state_menu_thumbnail(slot, true, thumbnailSize);
+		ImGui::SameLine(0, uiScaled(6.0f));
+		if (ImGui::MenuItem(label.c_str()))
+		{
+			config::SavestateSlot = slot;
+			gui_loadState(true);
+		}
+	}
+
+	if (!hasMainEntries && !hasBackupEntries)
+		ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "No Save States");
 }
 
 #ifdef TARGET_UWP

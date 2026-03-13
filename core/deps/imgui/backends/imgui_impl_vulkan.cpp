@@ -812,7 +812,6 @@ bool ImGui_ImplVulkan_CreateFontsTexture()
 // You probably never need to call this, as it is called by ImGui_ImplVulkan_CreateFontsTexture() and ImGui_ImplVulkan_Shutdown().
 void ImGui_ImplVulkan_DestroyFontsTexture()
 {
-    ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
     ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
 

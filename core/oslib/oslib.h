@@ -55,7 +55,7 @@ namespace hostfs
 	std::string getFlashSavePath(const std::string& prefix, const std::string& name);
 	std::string findNaomiBios(const std::string& name);
 
-	std::string getSavestatePath(int index, bool writable);
+	std::string getSavestatePath(int index, bool writable, bool backup = false);
 
 	std::string getTextureLoadPath(const std::string& gameId);
 	std::string getTextureDumpPath();

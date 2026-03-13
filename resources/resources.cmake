@@ -35,6 +35,8 @@ if(NOT LIBRETRO)
     cmrc_add_resources(flycast-resources
             fonts/Roboto-Medium.ttf.zip
             fonts/Roboto-Regular.ttf.zip
+            fonts/Jura-wght.ttf.zip
+            fonts/EncodeSans-wdth-wght.ttf.zip
             fonts/fa-solid-900.ttf.zip)
     if(ANDROID OR IOS)
         cmrc_add_resources(flycast-resources

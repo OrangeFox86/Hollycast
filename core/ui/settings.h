@@ -24,7 +24,25 @@
 #include <array>
 using namespace i18n;
 
+enum class GuiSettingsTab
+{
+	General,
+	Video,
+	Audio,
+	Controls,
+	Network,
+	Advanced,
+	About,
+};
+
 void gui_display_settings();
+void gui_prepare_settings_tab(GuiSettingsTab tab);
+void gui_reset_settings_view();
+void gui_focus_boxart_settings_section();
+
+// Legacy compatibility wrappers.
+// The active settings UI uses gui_display_settings() + gui_prepare_settings_tab().
+// Keep these symbols for compatibility and upstream merge stability.
 void gui_settings_general();
 void applyCurrentTheme();
 void addContentPath(bool start);

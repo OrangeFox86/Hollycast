@@ -195,7 +195,7 @@ std::string findNaomiBios(const std::string& name)
 	return "";
 }
 
-std::string getSavestatePath(int index, bool writable)
+std::string getSavestatePath(int index, bool writable, bool backup)
 {
 	std::string state_file = get_file_basename(settings.content.fileName);
 
@@ -206,9 +206,11 @@ std::string getSavestatePath(int index, bool writable)
 	state_file = state_file + index_str + ".state";
 	if (index == -1)
 		state_file += ".net";
+	if (backup)
+		state_file += ".backup";
 
-	static std::string lastFile;
-	static std::string lastPath;
+	thread_local static std::string lastFile;
+	thread_local static std::string lastPath;
 
 	// Check user-defined savestate paths first
 	for (const auto& userPath : config::SavestatePath.get())

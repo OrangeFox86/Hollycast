@@ -43,10 +43,42 @@ static std::string select_current_directory = "**home**";
 static std::vector<hostfs::FileInfo> subfolders;
 static std::vector<hostfs::FileInfo> folderFiles;
 bool subfolders_read;
+static std::mutex g_storageCallbackMutex;
+static StringCallback g_storageCallback;
 
 extern int insetLeft, insetRight, insetTop, insetBottom;
 extern ImFont *largeFont;
+extern ImFont *settingsTitleFont;
+extern ImFont *settingsValueFont;
+extern ImFont *settingsRightValueFont;
 void error_popup();
+
+static void storage_popup_callback(bool cancelled, std::string selectedPath)
+{
+	StringCallback callback;
+	{
+		std::lock_guard<std::mutex> lock(g_storageCallbackMutex);
+		callback = g_storageCallback;
+		g_storageCallback = {};
+	}
+	if (callback)
+		callback(cancelled, selectedPath);
+}
+
+static ImFont* SettingsDescriptionFont()
+{
+	return settingsTitleFont != nullptr ? settingsTitleFont : largeFont;
+}
+
+static ImFont* PopupEmphasisFont()
+{
+	return settingsValueFont != nullptr ? settingsValueFont : largeFont;
+}
+
+static ImFont* SettingsRightValueFont()
+{
+	return settingsRightValueFont != nullptr ? settingsRightValueFont : largeFont;
+}
 
 namespace hostfs
 {
@@ -55,7 +87,7 @@ namespace hostfs
 	}
 }
 
-void select_file_popup(const char *prompt, StringCallback callback,
+void select_file_popup(const char *prompt, const StringCallback& callback,
 		bool selectFile, const std::string& selectExtension)
 {
 	fullScreenWindow(true);
@@ -153,7 +185,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 					if (ImGui::Selectable(entry.name.c_str()))
 					{
 						subfolders_read = false;
-						if (callback(false, entry.path))
+						if (callback && callback(false, entry.path))
 							ImGui::CloseCurrentPopup();
 					}
 				}
@@ -170,7 +202,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 		{
 			if (ImGui::Button(T("Select Current Folder"), ScaledVec2(0, 30)))
 			{
-				if (callback(false, select_current_directory))
+				if (callback && callback(false, select_current_directory))
 				{
 					subfolders_read = false;
 					ImGui::CloseCurrentPopup();
@@ -181,12 +213,32 @@ void select_file_popup(const char *prompt, StringCallback callback,
 		if (ImGui::Button(T("Cancel"), ScaledVec2(0, 30)))
 		{
 			subfolders_read = false;
-			callback(true, "");
+			if (callback)
+				callback(true, "");
 			ImGui::CloseCurrentPopup();
 		}
 		error_popup();
 		ImGui::EndPopup();
 	}
+}
+
+bool select_storage_popup(bool isDirectory, bool writeAccess, const std::string& description,
+		const StringCallback& callback, const std::string& mimeType)
+{
+	{
+		std::lock_guard<std::mutex> lock(g_storageCallbackMutex);
+		if (g_storageCallback)
+			return false;
+		g_storageCallback = callback;
+	}
+
+	const bool supported = hostfs::addStorage(isDirectory, writeAccess, description, &storage_popup_callback, mimeType);
+	if (!supported)
+	{
+		std::lock_guard<std::mutex> lock(g_storageCallbackMutex);
+		g_storageCallback = {};
+	}
+	return supported;
 }
 
 // See https://github.com/ocornut/imgui/issues/3379
@@ -621,6 +673,101 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
+bool SettingsRow(const char* label, const char* currentValue, const char* helpText)
+{
+	ImGui::TableNextRow();
+	ImGui::TableSetColumnIndex(0);
+
+	// Create selectable that spans both columns (full row is clickable)
+	std::string selectableId = std::string("##row_") + label;
+	bool clicked = ImGui::Selectable(selectableId.c_str(), false,
+	                                 ImGuiSelectableFlags_SpanAllColumns |
+	                                 ImGuiSelectableFlags_AllowOverlap);
+
+	// Calculate position for label (left column)
+	ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+	float labelX = cursorPos.x + ImGui::GetStyle().CellPadding.x;
+	float labelY = cursorPos.y + ImGui::GetStyle().FramePadding.y;
+
+	// Draw label
+	ImGui::SetCursorScreenPos(ImVec2(labelX, labelY));
+	ImGui::TextUnformatted(label);
+
+	// Calculate position for value (right column)
+	float valueX = cursorPos.x + ImGui::GetColumnWidth(0) + ImGui::GetStyle().CellPadding.x * 2.0f;
+	float valueY = cursorPos.y + ImGui::GetStyle().FramePadding.y;
+
+	// Draw current value
+	ImGui::SetCursorScreenPos(ImVec2(valueX, valueY));
+	ImGui::TextUnformatted(currentValue);
+
+	// Help marker
+	if (helpText != nullptr)
+	{
+		float valueWidth = ImGui::CalcTextSize(currentValue).x;
+		ImGui::SetCursorScreenPos(ImVec2(valueX + valueWidth + ImGui::GetStyle().ItemSpacing.x, valueY));
+		ShowHelpMarker(helpText);
+	}
+
+	return clicked;
+}
+
+int SelectionPopup(const char* popupId, const char* title, const char* options[], int optionCount, int currentSelection)
+{
+	int selectedIndex = -1;
+
+	if (!ImGui::IsPopupOpen(popupId))
+		return -1;
+
+	// Center the popup
+	centerNextWindow();
+
+	// Set popup size (auto width, constrained height)
+	float maxWidth = ImGui::GetIO().DisplaySize.x * 0.8f;
+	float maxHeight = ImGui::GetIO().DisplaySize.y * 0.6f;
+	ImGui::SetNextWindowSize(ImVec2(maxWidth, 0), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSizeConstraints(ImVec2(200, 0), ImVec2(maxWidth, maxHeight));
+
+	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+								   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+
+	if (ImGui::BeginPopupModal(popupId, nullptr, windowFlags))
+	{
+		// Title
+		if (title != nullptr)
+		{
+			ImGui::TextUnformatted(title);
+			ImGui::Separator();
+			ImGui::Spacing();
+		}
+
+		// Options list
+		for (int i = 0; i < optionCount; i++)
+		{
+			bool isSelected = (i == currentSelection);
+			if (ImGui::Selectable(options[i], isSelected, ImGuiSelectableFlags_DontClosePopups))
+			{
+				selectedIndex = i;
+				ImGui::CloseCurrentPopup();
+			}
+			if (isSelected)
+				ImGui::SetItemDefaultFocus();
+		}
+
+		// Close on Escape or click outside
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape)
+			|| (ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+				&& !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+
+	return selectedIndex;
+}
+
 void fullScreenWindow(bool modal)
 {
 	if (!modal)
@@ -657,8 +804,10 @@ void fullScreenWindow(bool modal)
 			ImGui::End();
 		}
 	}
-	ImGui::SetNextWindowPos(ImVec2(insetLeft, insetTop));
-	ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - insetLeft - insetRight, ImGui::GetIO().DisplaySize.y - insetTop - insetBottom));
+	// Position the main window below the menu bar to avoid covering it
+	float menuBarHeight = ImGui::GetFrameHeight();  // Standard menu bar height
+	ImGui::SetNextWindowPos(ImVec2(insetLeft, insetTop + menuBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - insetLeft - insetRight, ImGui::GetIO().DisplaySize.y - insetTop - insetBottom - menuBarHeight));
 }
 
 static void computeScrollSpeed(float &v)
@@ -1107,3 +1256,800 @@ bool InputTextMultiline(const char* label, char* buf, size_t buf_size, const ImV
 #endif
 	return ImGui::InputTextMultiline(label, buf, buf_size, size, flags, callback, user_data);
 }
+
+// ============================================================================
+// Phase 0 Widget Infrastructure Components
+// ============================================================================
+
+void SectionDivider(const char* text)
+{
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	ImGui::Spacing();
+	ImGui::PushStyleColor(ImGuiCol_Separator, style.Colors[ImGuiCol_Border]);
+	ImGui::Separator();
+	ImGui::PopStyleColor();
+
+	if (text != nullptr && text[0] != '\0')
+	{
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_Text]);
+		ImGui::TextUnformatted(text);
+		ImGui::PopStyleColor();
+	}
+
+	ImGui::Spacing();
+}
+
+void SectionHeaderWithIcon(const char* icon, const char* text)
+{
+	ImGui::Spacing();
+
+	// Icon + text with highlighted color
+	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
+	ImGui::Text("%s %s", icon, text);
+	ImGui::PopStyleColor();
+
+	// Separator line
+	ImGui::Separator();
+
+	ImGui::Spacing();
+}
+
+void SettingIcon(const char* icon, const ImVec2& size)
+{
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	ImVec2 iconSize = size;
+	if (iconSize.x <= 0 || iconSize.y <= 0)
+		iconSize = ImVec2(settings.display.uiScale * 16, settings.display.uiScale * 16);
+
+	ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_Text]);
+	ImGui::Text("%s", icon);
+	ImGui::PopStyleColor();
+}
+
+void BeginSettingsRow(const SettingsRowParams& params)
+{
+	ImGui::BeginChild(params.label, ImVec2(0, params.minHeight > 0 ? params.minHeight : settings.display.uiScale * 48), false,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NavFlattened);
+
+	// Draw icon if provided
+	if (params.icon != nullptr)
+	{
+		ImGui::Text("%s", params.icon);
+		ImGui::SameLine(0, settings.display.uiScale * 12);
+	}
+
+	// Draw label (bold)
+	ImGui::TextUnformatted(params.label);
+
+	// Reserve space for control on right
+	ImGui::SameLine(ImGui::GetContentRegionAvail().x - settings.display.uiScale * 100);
+}
+
+void EndSettingsRow()
+{
+	ImGui::EndChild();
+	ImGui::Spacing();
+}
+
+bool ToggleSwitch(const char* label, bool* value, const char* helpText)
+{
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems)
+		return false;
+
+	ImGuiContext& g = *GImGui;
+	const ImGuiID id = window->GetID(label);
+
+	const float height = settings.display.uiScale * 24;
+	const float width = settings.display.uiScale * 48;
+	const float radius = height * 0.5f;
+	const ImVec2 pos = window->DC.CursorPos;
+	const ImVec2 size(width, height);
+
+	const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+	ImGui::ItemSize(size, ImGui::GetStyle().FramePadding.y);
+	if (!ImGui::ItemAdd(bb, id))
+		return false;
+
+	bool hovered, held;
+	bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+
+	if (pressed)
+	{
+		*value = !*value;
+		return true;
+	}
+
+	// Animation
+	float anim = 0;
+	if (g.LastActiveId == id)
+	{
+		float t = ImMin((float)(g.Time - g.LastActiveIdTimer) / 0.15f, 1.0f);
+		anim = *value ? t : (1.0f - t);
+	}
+	else
+	{
+		anim = *value ? 1.0f : 0.0f;
+	}
+
+	// Render
+	ImU32 col_bg;
+	if (*value)
+		col_bg = ImGui::GetColorU32(ImGuiCol_ButtonActive);
+	else
+		col_bg = ImGui::GetColorU32(ImGuiCol_FrameBg);
+
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	draw_list->AddRectFilled(bb.Min, bb.Max, col_bg, radius);
+
+	// Knob - use theme-aware color
+	ImVec2 knob_pos;
+	knob_pos.x = ImLerp(bb.Min.x + radius, bb.Max.x - radius, anim);
+	knob_pos.y = bb.Min.y + radius;
+
+	// Detect light vs dark theme
+	ImGuiStyle& guiStyle = ImGui::GetStyle();
+	float bgLuminance = (guiStyle.Colors[ImGuiCol_WindowBg].x
+	                   + guiStyle.Colors[ImGuiCol_WindowBg].y
+	                   + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
+	bool isLightTheme = bgLuminance > 0.5f;
+
+	ImU32 knobColor = isLightTheme
+		? ImGui::GetColorU32(ImGuiCol_Text)  // Dark text color for light themes
+		: IM_COL32(255, 255, 255, 255);      // White for dark themes
+	draw_list->AddCircleFilled(knob_pos, radius - 1.0f, knobColor);
+
+	return pressed;
+}
+
+template<bool PerGameOption>
+bool SettingsOption(const char* label, config::Option<bool, PerGameOption>& option,
+                   const char* description, const char* icon, const char* helpText)
+{
+	BeginSettingsRow({label, description, icon, nullptr, settings.display.uiScale * 48});
+
+	bool value = option;
+	bool changed = ToggleSwitch(("##" + std::string(label)).c_str(), &value);
+	if (changed)
+		option = value;
+
+	EndSettingsRow();
+
+	if (helpText != nullptr)
+	{
+		ImGui::SameLine();
+		ShowHelpMarker(helpText);
+	}
+
+	return changed;
+}
+
+// Explicit template instantiations for SettingsOption
+template bool SettingsOption<true>(const char* label, config::Option<bool, true>& option,
+                                   const char* description, const char* icon, const char* helpText);
+template bool SettingsOption<false>(const char* label, config::Option<bool, false>& option,
+                                    const char* description, const char* icon, const char* helpText);
+
+namespace SettingsUI {
+
+namespace Detail {
+
+// DuckStation-style layout constants
+namespace Layout {
+    constexpr float SMALL_POPUP_PADDING = 20.0f;
+    constexpr float MENU_BUTTON_PADDING = 8.0f;
+    constexpr float MENU_BUTTON_HEIGHT = 28.0f;
+    constexpr float MENU_BUTTON_SPACING = 8.0f;
+    constexpr float WIDGET_FRAME_ROUNDING = 4.0f;
+    constexpr float POPUP_WIDTH = 600.0f;
+    constexpr float POPUP_MIN_WIDTH = 300.0f;
+    constexpr float POPUP_ROUNDING = 18.0f;
+    constexpr float POPUP_VALUE_RIGHT_PADDING = 28.0f;
+}
+
+// Color helper functions (DuckStation-style)
+static inline ImVec4 ModAlpha(const ImVec4& v, float a)
+{
+    return ImVec4(v.x, v.y, v.z, a);
+}
+
+static inline u32 ModAlpha(u32 col32, float a)
+{
+    return (col32 & ~IM_COL32_A_MASK) | (static_cast<u32>(a * 255.0f) << IM_COL32_A_SHIFT);
+}
+
+static inline ImVec4 DarkerColor(const ImVec4& v, float f = 0.8f)
+{
+    return ImVec4(std::max(v.x, 1.0f / 255.0f) * f,
+                std::max(v.y, 1.0f / 255.0f) * f,
+                std::max(v.z, 1.0f / 255.0f) * f, v.w);
+}
+
+// Helper: Apply DuckStation-style popup styling
+struct PopupStyleScope {
+    PopupStyleScope(float padding = Layout::SMALL_POPUP_PADDING, float rounding = Layout::POPUP_ROUNDING) {
+        // Get the popup background color from current style
+        ImVec4 popupBg = ImGui::GetStyle().Colors[ImGuiCol_PopupBg];
+
+        // DuckStation-style popup background with full opacity
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ModAlpha(popupBg, 1.0f));
+        // Button active state (darker for pressed state)
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ModAlpha(DarkerColor(popupBg, 1.8f), 1.0f));
+        // Button hovered state (medium dark)
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ModAlpha(DarkerColor(popupBg, 1.3f), 1.0f));
+        // Frame background for input widgets
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ModAlpha(DarkerColor(popupBg, 0.8f), 0.5f));
+
+        // DuckStation-style window padding and rounding
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(uiScaled(padding), uiScaled(padding)));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, uiScaled(rounding));
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, uiScaled(rounding));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, uiScaled(Layout::WIDGET_FRAME_ROUNDING));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(Layout::MENU_BUTTON_SPACING), uiScaled(Layout::MENU_BUTTON_SPACING)));
+    }
+
+    ~PopupStyleScope() {
+        ImGui::PopStyleVar(6);
+        ImGui::PopStyleColor(4);
+    }
+};
+
+// Helper: Begin menu button list (DuckStation-style)
+struct BeginMenuButtons {
+    BeginMenuButtons() {
+        // Apply proper spacing for menu buttons
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(Layout::MENU_BUTTON_PADDING), uiScaled(Layout::MENU_BUTTON_PADDING)));
+        // Focus reset for keyboard navigation
+        ImGui::SetNextItemWidth(-1.0f);
+    }
+    ~BeginMenuButtons() {
+        ImGui::PopStyleVar(2);
+    }
+};
+
+// Helper: End menu button list (DuckStation-style)
+struct EndMenuButtons {
+    EndMenuButtons() = default;
+};
+
+// Internal helper to render options popup
+bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
+{
+    // Icon and row label
+    SettingIcon(cfg.icon, ImVec2(uiScaled(cfg.iconSize), uiScaled(cfg.iconSize)));
+    ImGui::SameLine(0, uiScaled(cfg.iconSpacing));
+    const char* rowLabel = cfg.label ? cfg.label : "";
+    ImGui::PushFont(largeFont);
+    ImGui::TextUnformatted(rowLabel);
+    ImGui::PopFont();
+
+    // Get current display string
+    const char* currentStr = "";
+    if (cfg.valueToString) {
+        currentStr = cfg.valueToString(*cfg.currentValue);
+    } else {
+        int idx = (*cfg.currentValue >= 0 && *cfg.currentValue < cfg.optionCount)
+                  ? *cfg.currentValue : 0;
+        currentStr = cfg.options[idx];
+    }
+    if (currentStr == nullptr)
+        currentStr = "";
+
+    std::string displayValue = currentStr;
+    if (cfg.disabled && cfg.disabledPrefix && cfg.disabledPrefix[0] != '\0')
+        displayValue.insert(0, cfg.disabledPrefix);
+
+    const float valueWidth = uiScaled(cfg.valueWidth);
+    const float valueRightPadding = uiScaled(cfg.valueRightPadding);
+    const float rowRightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+    const float slotStartX = rowRightX - valueWidth - valueRightPadding;
+    const float toggleCenterX = rowRightX - uiScaled(28.0f) - uiScaled(50.0f) * 0.5f;
+    const float minRightMargin = uiScaled(16.0f);
+    ImGui::SameLine(slotStartX);
+    if (cfg.valueVerticalOffset != 0.0f) {
+        const ImVec2 pos = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(ImVec2(pos.x, pos.y + cfg.valueVerticalOffset));
+    }
+
+    auto centeredValueX = [&](float textWidth) {
+        const float maxX = rowRightX - minRightMargin - textWidth;
+        if (maxX <= slotStartX)
+            return slotStartX;
+        float x = toggleCenterX - textWidth * 0.5f;
+        if (x < slotStartX)
+            x = slotStartX;
+        if (x > maxX)
+            x = maxX;
+        return x;
+    };
+
+    ImFont* valueFont = SettingsRightValueFont();
+    auto renderValueText = [&](const char* text, bool disabledText) {
+        const char* safeText = text != nullptr ? text : "";
+        const float textWidth = valueFont->CalcTextSizeA(valueFont->LegacySize, FLT_MAX, -1.f, safeText).x;
+        ImGui::SetCursorPosX(centeredValueX(textWidth));
+        ImGui::PushFont(valueFont);
+        if (disabledText)
+            ImGui::TextDisabled("%s", safeText);
+        else
+            ImGui::TextUnformatted(safeText);
+        ImGui::PopFont();
+    };
+
+    if (!cfg.disabled && cfg.valueClickable) {
+        ImGui::PushFont(valueFont);
+        if (ImGui::Selectable(displayValue.c_str(), false, ImGuiSelectableFlags_None, ImVec2(valueWidth, 0.0f)))
+            ImGui::OpenPopup(cfg.popupID);
+        ImGui::PopFont();
+    } else if (cfg.disabled) {
+        renderValueText(displayValue.c_str(), true);
+    } else {
+        renderValueText(displayValue.c_str(), false);
+    }
+
+    // Render popup
+    bool valueChanged = false;
+
+    // Configure popup window BEFORE opening (DuckStation-style)
+    centerNextWindow();
+    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.5f;
+    float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
+
+    // Set fixed width for DuckStation-style choice dialog
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(uiScaled(Layout::POPUP_MIN_WIDTH), 0),
+        ImVec2(maxWidth, maxHeight)
+    );
+    ImGui::SetNextWindowSize(ImVec2(uiScaled(Layout::POPUP_WIDTH), 0), ImGuiCond_FirstUseEver);
+
+    PopupStyleScope style;
+    if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
+        const char* popupTitle = (cfg.title != nullptr && cfg.title[0] != '\0') ? cfg.title : rowLabel;
+        const char* popupDescription = (cfg.description != nullptr && cfg.description[0] != '\0') ? cfg.description : cfg.tooltip;
+        const bool hasHeader = (popupTitle != nullptr && popupTitle[0] != '\0')
+                            || (popupDescription != nullptr && popupDescription[0] != '\0');
+
+        if (popupTitle != nullptr && popupTitle[0] != '\0') {
+            ImGui::PushFont(largeFont);
+            ImGui::TextUnformatted(popupTitle);
+            ImGui::PopFont();
+        }
+        if (popupDescription != nullptr && popupDescription[0] != '\0') {
+            ImGui::PushFont(SettingsDescriptionFont());
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(popupDescription);
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
+        }
+        if (hasHeader && cfg.showHeaderDivider) {
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+        }
+
+        // DuckStation-style menu button layout
+        {
+            BeginMenuButtons menuButtons;
+
+            for (int i = 0; i < cfg.optionCount; i++) {
+                int storageIdx = cfg.storageIndexMap ? cfg.storageIndexMap(i) : i;
+                bool isSelected = (*cfg.currentValue == storageIdx);
+
+                // Render selectable with proper sizing
+                ImVec2 buttonSize(ImGui::GetContentRegionAvail().x, uiScaled(Layout::MENU_BUTTON_HEIGHT));
+                auto onSelected = [&]() {
+                    if (ImGui::Selectable(cfg.options[i], isSelected, ImGuiSelectableFlags_DontClosePopups, buttonSize)) {
+                        *cfg.currentValue = storageIdx;
+                        valueChanged = true;
+
+                        bool shouldClose = true;
+                        if (cfg.onChange) {
+                            shouldClose = cfg.onChange(storageIdx);
+                        }
+                        if (shouldClose) {
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                };
+
+                // Highlight selected item with the active row style.
+                if (isSelected) {
+                    ImguiStyleColor selectColor(ImGuiCol_Header, ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
+                    ImguiStyleColor hoverColor(ImGuiCol_HeaderHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
+                    onSelected();
+                } else {
+                    onSelected();
+                }
+
+                // Set default focus on selected item
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        } // End menu buttons
+
+        ImGui::EndPopup();
+    }
+
+    return valueChanged;
+}
+
+// Internal helper to render slider popup (DuckStation-style)
+bool RenderSliderPopup(PopupSliderConfig& cfg)
+{
+    // Icon and label
+    SettingIcon(cfg.icon, ImVec2(uiScaled(cfg.iconSize), uiScaled(cfg.iconSize)));
+    ImGui::SameLine(0, uiScaled(cfg.iconSpacing));
+    const char* rowLabel = cfg.label ? cfg.label : "";
+    ImGui::PushFont(largeFont);
+    ImGui::TextUnformatted(rowLabel);
+    ImGui::PopFont();
+
+    // Current value display (centered toward toggle column)
+    const float valueWidth = uiScaled(cfg.valueWidth);
+    const float valueRightPadding = uiScaled(Layout::POPUP_VALUE_RIGHT_PADDING);
+    const float rowRightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+    const float slotStartX = rowRightX - valueWidth - valueRightPadding;
+    const float toggleCenterX = rowRightX - uiScaled(28.0f) - uiScaled(50.0f) * 0.5f;
+    const float minRightMargin = uiScaled(16.0f);
+    ImGui::SameLine(slotStartX);
+    if (cfg.valueVerticalOffset != 0.0f) {
+        const ImVec2 pos = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(ImVec2(pos.x, pos.y + cfg.valueVerticalOffset));
+    }
+
+    char currentValue[32];
+    snprintf(currentValue, sizeof(currentValue), cfg.format, *cfg.currentValue);
+
+    // Display current value as centered text (full row handles popup opening)
+    ImFont* valueFont = SettingsRightValueFont();
+    const float currentValueWidth = valueFont->CalcTextSizeA(valueFont->LegacySize, FLT_MAX, -1.f, currentValue).x;
+    const float maxX = rowRightX - minRightMargin - currentValueWidth;
+    float centeredX = toggleCenterX - currentValueWidth * 0.5f;
+    if (maxX <= slotStartX)
+        centeredX = slotStartX;
+    else
+    {
+        if (centeredX < slotStartX)
+            centeredX = slotStartX;
+        if (centeredX > maxX)
+            centeredX = maxX;
+    }
+    ImGui::SetCursorPosX(centeredX);
+    ImGui::PushFont(valueFont);
+    ImGui::TextUnformatted(currentValue);
+    ImGui::PopFont();
+
+    // Render popup
+    bool valueChanged = false;
+
+    // Configure popup window BEFORE opening (DuckStation-style)
+    centerNextWindow();
+    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.5f;
+    float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
+    ImGui::SetNextWindowSizeConstraints(ImVec2(uiScaled(250), 0), ImVec2(maxWidth, maxHeight));
+    ImGui::SetNextWindowSize(ImVec2(uiScaled(500), 0), ImGuiCond_FirstUseEver);
+
+    PopupStyleScope style;
+    if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
+        if (rowLabel[0] != '\0') {
+            ImGui::PushFont(largeFont);
+            ImGui::TextUnformatted(rowLabel);
+            ImGui::PopFont();
+        }
+
+        if (cfg.description) {
+            ImGui::PushFont(SettingsDescriptionFont());
+
+            // Determine if we're on a light or dark theme
+            ImGuiStyle& guiStyle = ImGui::GetStyle();
+            float bgLuminance = (guiStyle.Colors[ImGuiCol_WindowBg].x
+                               + guiStyle.Colors[ImGuiCol_WindowBg].y
+                               + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
+            bool isLightTheme = bgLuminance > 0.5f;
+
+            // For dark themes: use solid white text
+            // For light themes: blend with disabled color for secondary text
+            ImVec4 textColor;
+            if (isLightTheme) {
+                ImVec4 normalColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+                ImVec4 disabledColor = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                textColor.x = (normalColor.x + disabledColor.x) * 0.5f;
+                textColor.y = (normalColor.y + disabledColor.y) * 0.5f;
+                textColor.z = (normalColor.z + disabledColor.z) * 0.5f;
+                textColor.w = 1.0f;
+            } else {
+                // Solid white for dark themes
+                textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(cfg.description);
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Display value range and default value (DuckStation-style)
+        char rangeText[128];
+        snprintf(rangeText, sizeof(rangeText), "Value Range: %d - %d", cfg.minValue, cfg.maxValue);
+        ImGui::PushFont(PopupEmphasisFont());
+        ImGui::TextDisabled("%s", rangeText);
+
+        if (cfg.defaultValue >= cfg.minValue && cfg.defaultValue <= cfg.maxValue) {
+            char defaultText[128];
+            snprintf(defaultText, sizeof(defaultText), "Default Value: %d", cfg.defaultValue);
+            ImGui::SameLine(0, uiScaled(20));
+            ImGui::TextDisabled("%s", defaultText);
+        }
+        ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // DuckStation-style rounded slider with no border
+        const float frameRounding = 20.0f;
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, uiScaled(frameRounding));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, uiScaled(frameRounding));
+
+        float sliderWidth = uiScaled(cfg.sliderWidth);
+        ImVec2 sliderPos = ImGui::GetCursorScreenPos();
+        const ImGuiID popupId = ImGui::GetID(cfg.popupID);
+        static ImGuiID modePopupId = 0;
+        static bool modeTextEntry = false;
+
+        if (ImGui::IsWindowAppearing())
+        {
+            ImGuiContext& g = *GImGui;
+            const bool controllerOpen = (g.NavInputSource == ImGuiInputSource_Gamepad);
+            modePopupId = popupId;
+            // Mouse/keyboard opens use direct text entry.
+            // Controller opens use slider-only interaction.
+            modeTextEntry = cfg.preferTextEntry || !controllerOpen;
+        }
+
+        const bool textEntryMode = (modePopupId == popupId) && modeTextEntry;
+        bool requestFocusApply = false;
+
+        if (textEntryMode)
+        {
+            char sliderValueText[32];
+            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
+            int typedValue = *cfg.currentValue;
+            const float inputWidth = std::max(uiScaled(84.0f), valueTextSize.x + uiScaled(18.0f));
+            ImGui::SetCursorScreenPos(ImVec2(
+                sliderPos.x + (sliderWidth - inputWidth) * 0.5f,
+                sliderPos.y
+            ));
+            ImGui::SetNextItemWidth(inputWidth);
+            ImGui::PushID("SliderTypedValue");
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+            const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool accept = typedChanged || ImGui::IsItemDeactivatedAfterEdit();
+            ImGui::PopID();
+
+            if (accept)
+            {
+                typedValue = std::clamp(typedValue, cfg.minValue, cfg.maxValue);
+                if (typedValue != *cfg.currentValue)
+                {
+                    *cfg.currentValue = typedValue;
+                    valueChanged = true;
+                    if (cfg.showApplyFlag)
+                        *cfg.showApplyFlag = true;
+                    cfg.hasPendingChanges = true;
+                    if (cfg.onValueChange)
+                        cfg.onValueChange();
+                }
+            }
+        }
+        else
+        {
+            ImGui::SetNextItemWidth(sliderWidth);
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+
+            int tempValue = *cfg.currentValue;
+            const bool sliderChanged = ImGui::SliderInt(
+                "##SliderPopup",
+                &tempValue,
+                cfg.minValue,
+                cfg.maxValue,
+                "",
+                ImGuiSliderFlags_NoInput
+            );
+            const bool sliderFocused = ImGui::IsItemFocused();
+            const bool sliderActive = ImGui::IsItemActive();
+
+            if (sliderFocused)
+            {
+                int navDelta = 0;
+                if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, true)
+                    || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadLeft, true)
+                    || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickLeft, true))
+                    navDelta = -1;
+                else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, true)
+                         || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadRight, true)
+                         || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickRight, true))
+                    navDelta = 1;
+
+                if (navDelta != 0)
+                {
+                    tempValue = std::clamp(tempValue + navDelta, cfg.minValue, cfg.maxValue);
+                    if (tempValue != *cfg.currentValue)
+                    {
+                        *cfg.currentValue = tempValue;
+                        valueChanged = true;
+                        if (cfg.showApplyFlag)
+                            *cfg.showApplyFlag = true;
+                        cfg.hasPendingChanges = true;
+                        if (cfg.onValueChange)
+                            cfg.onValueChange();
+                    }
+                }
+
+                const bool navDown = ImGui::IsKeyPressed(ImGuiKey_DownArrow, false)
+                                  || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadDown, false)
+                                  || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickDown, false);
+                const bool navUp = ImGui::IsKeyPressed(ImGuiKey_UpArrow, false)
+                                || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadUp, false)
+                                || ImGui::IsKeyPressed(ImGuiKey_GamepadLStickUp, false);
+                if (sliderActive && (navDown || navUp))
+                {
+                    ImGui::ClearActiveID();
+                    requestFocusApply = navDown;
+                }
+            }
+
+            if (sliderChanged) {
+                *cfg.currentValue = tempValue;
+                valueChanged = true;
+
+                // Update state tracking
+                if (cfg.showApplyFlag) {
+                    *cfg.showApplyFlag = true;
+                }
+                cfg.hasPendingChanges = true;
+
+                if (cfg.onValueChange) {
+                    cfg.onValueChange();
+                }
+            }
+
+            char sliderValueText[32];
+            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
+            const ImVec2 sliderMin = ImGui::GetItemRectMin();
+            const ImVec2 sliderMax = ImGui::GetItemRectMax();
+            const ImVec2 valueTextPos(
+                sliderMin.x + (sliderMax.x - sliderMin.x - valueTextSize.x) * 0.5f,
+                sliderMin.y + (sliderMax.y - sliderMin.y - valueTextSize.y) * 0.5f
+            );
+            ImGui::GetWindowDrawList()->AddText(valueTextPos, ImGui::GetColorU32(ImGuiCol_Text), sliderValueText);
+        }
+
+        ImGui::PopStyleVar(3); // Pop FrameRounding, FrameBorderSize, GrabRounding
+
+        ImGui::Spacing();
+
+        // DuckStation-style button layout (right-aligned)
+        bool shouldShowApply = cfg.hasPendingChanges ||
+                               (cfg.showApplyFlag && *cfg.showApplyFlag);
+
+        if (cfg.onApply && shouldShowApply) {
+            // Begin menu buttons container
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(8), uiScaled(8)));
+
+            const float buttonWidth = uiScaled(120);
+            const float buttonHeight = uiScaled(32);
+
+            // Right-align buttons
+            float availableWidth = ImGui::GetContentRegionAvail().x;
+            ImGui::SetCursorPosX(availableWidth - buttonWidth);
+
+            // Apply button with rounded corners
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(16), uiScaled(8)));
+
+            if (requestFocusApply)
+                ImGui::SetKeyboardFocusHere();
+
+            if (ImGui::Button(cfg.applyButtonText, ImVec2(buttonWidth, buttonHeight))) {
+                cfg.onApply();
+                cfg.hasPendingChanges = false; // Reset state
+                if (cfg.showApplyFlag) {
+                    *cfg.showApplyFlag = false; // Reset external flag
+                }
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::PopStyleVar(3); // Pop ItemSpacing, FrameRounding, FramePadding
+        }
+
+        ImGui::EndPopup();
+    }
+
+    return valueChanged;
+}
+
+} // namespace Detail
+
+// Main entry point
+bool SettingPopup(PopupConfig& config)
+{
+    switch (config.type) {
+        case PopupType::Options:
+            return Detail::RenderOptionsPopup(config.options);
+        case PopupType::Slider:
+            return Detail::RenderSliderPopup(config.slider);
+        default:
+            return false;
+    }
+}
+
+// Convenience overload for options
+bool SettingPopup(
+    const char* label,
+    const char* icon,
+    const char* popupID,
+    const char* const* options,
+    int optionCount,
+    int* currentValue,
+    bool disabled,
+    const char* disabledPrefix)
+{
+    PopupConfig cfg;
+    cfg.type = PopupType::Options;
+    cfg.options.label = label;
+    cfg.options.icon = icon;
+    cfg.options.popupID = popupID;
+    cfg.options.options = options;
+    cfg.options.optionCount = optionCount;
+    cfg.options.currentValue = currentValue;
+    cfg.options.disabled = disabled;
+    cfg.options.disabledPrefix = disabledPrefix;
+    return SettingPopup(cfg);
+}
+
+// Convenience overload for slider
+bool SettingPopup(
+    const char* label,
+    const char* icon,
+    const char* popupID,
+    const char* description,
+    int* currentValue,
+    int minValue,
+    int maxValue,
+    const char* format,
+    std::function<void()> onApply)
+{
+    PopupConfig cfg;
+    cfg.type = PopupType::Slider;
+    cfg.slider.label = label;
+    cfg.slider.icon = icon;
+    cfg.slider.popupID = popupID;
+    cfg.slider.description = description;
+    cfg.slider.currentValue = currentValue;
+    cfg.slider.minValue = minValue;
+    cfg.slider.maxValue = maxValue;
+    cfg.slider.format = format;
+    cfg.slider.onApply = std::move(onApply);
+    return SettingPopup(cfg);
+}
+
+} // namespace SettingsUI

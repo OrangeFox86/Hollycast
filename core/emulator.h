@@ -37,10 +37,9 @@ int flycast_init(int argc, char* argv[]);
 void flycast_term();
 void dc_exit();
 void dc_savestate(int index = 0, const u8 *pngData = nullptr, u32 pngSize = 0);
-void dc_loadstate(int index = 0);
-time_t dc_getStateCreationDate(int index);
-void dc_getStateScreenshot(int index, std::vector<u8>& pngData);
-bool dc_savestateAllowed();
+void dc_loadstate(int index = 0, bool backup = false);
+time_t dc_getStateCreationDate(int index, bool backup = false);
+void dc_getStateScreenshot(int index, std::vector<u8>& pngData, bool backup = false);
 
 enum class Event {
 	Start,
