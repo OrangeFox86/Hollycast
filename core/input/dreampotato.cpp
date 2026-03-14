@@ -63,7 +63,7 @@ static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioCon
 		// Timeout. Cancel the ongoing socket operation and drain the
 		// ioContext queue so that the callback runs while 'buf' is still live
 		sock.cancel();
-		ioContext.run();
+		ioContext.poll();
 		return false;
 	}
 
