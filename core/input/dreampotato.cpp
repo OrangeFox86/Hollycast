@@ -46,8 +46,7 @@ static asio::error_code sendMsg(const MapleMsg& msg, tcp::socket& sock)
 	return ec;
 }
 
-static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioContext,
-	std::chrono::milliseconds timeout = std::chrono::milliseconds(100))
+static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioContext)
 {
 	asio::streambuf buf;
 	asio::error_code read_ec = asio::error::would_block;
@@ -56,6 +55,7 @@ static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioCon
 			read_ec = ec;
 		});
 
+	std::chrono::milliseconds timeout = std::chrono::milliseconds(100);
 	ioContext.restart();
 	ioContext.run_for(timeout);
 	if (read_ec == asio::error::would_block)
@@ -184,7 +184,9 @@ class DreamPotato : public BaseDreamLink
 	asio::io_context ioContext;
 	tcp::socket sock{ioContext};
 
-	bool connected = false;
+	enum class ConnectionStatus { Disconnected, Connecting, Connected };
+
+	ConnectionStatus connectionStatus = ConnectionStatus::Disconnected;
 	static constexpr u16 BASE_PORT = 37393;
 	time_t lastMsg = 0;
 	u32 initedPorts = 0;
@@ -202,7 +204,7 @@ public:
 
 	bool isConnected() override {
 		checkConnection();
-		return connected;
+		return connectionStatus == ConnectionStatus::Connected;
 	}
 	const char* getName() const override {
 		return "DreamPotato";
@@ -276,23 +278,20 @@ public:
 
 		// Check for a refresh message, which indicates we should re-query which expansion slots have VMUs in them
 		constexpr std::string_view refreshMessage = "FF FF FF FF\r\n";
-		constexpr int resetMessageSize = refreshMessage.length();
+		constexpr int refreshMessageSize = refreshMessage.length();
 		asio::error_code ec;
-		if (sock.available(ec) >= resetMessageSize)
+		if (sock.available(ec) >= refreshMessageSize)
 		{
-			std::array<u8, resetMessageSize> data;
-			sock.read_some(asio::buffer(data), ec);
-			if (ec)
-			{
-				WARN_LOG(INPUT, "DreamPotato reset message error: %s", ec.message().c_str());
-				return;
-			}
+			std::array<char, refreshMessageSize> data;
+			int bytesPeeked = recv(sock.native_handle(), data.data(), data.size(), MSG_PEEK);
 
-			// TODO: associated MapleLinks should request a reconnect.
-			// Tricky as multiple links might both call thru checkConnection() and thus need a reconnect.
-			std::string line(data.begin(), data.end());
-			if (line == refreshMessage)
+			MapleMsg message;
+			sscanf(data.data(), "%hhx %hhx %hhx %hhx", &message.command, &message.destAP, &message.originAP, &message.size);
+			if (message.command == 0xff && message.destAP == 0xff && message.originAP == 0xff && message.size == 0xff) {
+				// It is a refresh message, so consume it.
+				receiveMsg(message, sock, ioContext);
 				updateExpansionDevs();
+			}
 		}
 
 		// Detect a graceful TCP disconnect.
@@ -302,7 +301,7 @@ public:
 			return;
 		}
 
-		if (!connected)
+		if (connectionStatus == ConnectionStatus::Disconnected)
 		{
 			time_t now = getTimeMs();
 			if (now - lastMsg < 1000)
@@ -340,9 +339,10 @@ void DreamPotato::init(u32 ports)
 
 void DreamPotato::connect()
 {
-	if (connected)
+	if (connectionStatus != ConnectionStatus::Disconnected)
 		return;
 
+	connectionStatus = ConnectionStatus::Connecting;
 	sock = tcp::socket{ioContext};
 	sock.async_connect(tcp::endpoint(ip::address_v6::loopback(), BASE_PORT + bus),
 		[this](const asio::error_code& ec) { connectComplete(ec); });
@@ -352,22 +352,22 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 {
 	if (ec) {
 		WARN_LOG(INPUT, "DreamPotato[%d] connection failed: %s", bus, ec.message().c_str());
+		connectionStatus = ConnectionStatus::Disconnected;
 		return;
 	}
 
-	connected = true;
+	connectionStatus = ConnectionStatus::Connected;
 	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);
 }
 
 void DreamPotato::disconnect()
 {
-	if (!connected)
+	if (connectionStatus == ConnectionStatus::Disconnected)
 		return;
 
-	connected = false;
+	connectionStatus = ConnectionStatus::Disconnected;
 	dockedPorts = 0;
-	// TODO: accessedBlocks of associated MapleLinks should be cleared.
 
 	asio::error_code ec;
 	sock.close(ec);
@@ -379,14 +379,14 @@ void DreamPotato::disconnect()
 
 bool DreamPotato::send(const MapleMsg& msg)
 {
-	if (!connected)
+	if (connectionStatus != ConnectionStatus::Connected)
 		return false;
 
 	asio::error_code ec = sendMsg(msg, sock);
 	if (ec)
 	{
 		WARN_LOG(INPUT, "DreamPotato[%d] send failed: %s", bus, ec.message().c_str());
-		connected = false;
+		connectionStatus = ConnectionStatus::Disconnected;
 		return false;
 	}
 	lastMsg = getTimeMs();
@@ -400,7 +400,7 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 
 	if (!receiveMsg(rxMsg, sock, ioContext)) {
 		WARN_LOG(INPUT, "DreamPotato[%d] receive failed", bus);
-		connected = false;
+		connectionStatus = ConnectionStatus::Disconnected;
 		return false;
 	}
 	return true;
