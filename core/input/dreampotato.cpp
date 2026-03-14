@@ -176,6 +176,18 @@ struct DreamPotatoVmu : public MapleLinkVmu
 	}
 
 	bool linkStatus() override;
+
+	void requestReconnect() override
+	{
+		if (link.storageEnabled())
+		{
+			accessed_blocks_valid = true;
+			memset(&flash_data[0], 0, sizeof(flash_data));
+			memset(&accessed_blocks[0], 0, sizeof(accessed_blocks));
+		}
+
+		maple_base::requestReconnect();
+	}
 };
 
 class DreamPotato : public BaseDreamLink
@@ -193,6 +205,7 @@ class DreamPotato : public BaseDreamLink
 
 	//! Ports which contain a docked VMU in DreamPotato
 	u32 dockedPorts = 0;
+	u32 needsReconnectPorts = 0;
 
 public:
 	DreamPotato(int bus)
@@ -224,6 +237,14 @@ public:
 		return dockedPorts & port;
 	}
 
+	bool portNeedsReconnect(int port)
+	{
+		int portFlag = 1 << port;
+		bool needsReconnect = portFlag & needsReconnectPorts;
+		needsReconnectPorts &= ~portFlag;
+		return needsReconnect;
+	}
+
 	void updateExpansionDevs()
 	{
 		// Check which expansion slots contain VMUs
@@ -245,6 +266,7 @@ public:
 		}
 
 		dockedPorts = msg.originAP & 0x1f;
+		needsReconnectPorts = (1 << 0) | (1 << 1);
 	}
 
 	bool isSocketDisconnected() {
@@ -316,10 +338,13 @@ public:
 
 bool DreamPotatoVmu::linkStatus()
 {
+	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
+	if (potato->portNeedsReconnect(link.port))
+		requestReconnect();
+
 	if (!MapleLinkVmu::linkStatus() || !link.isConnected())
 		return false;
 
-	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
 	return potato->isPortDocked(link.port + 1);
 
 	// TODO: should disabling physical memory really cause the VMU to report as connected always?
