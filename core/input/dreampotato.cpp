@@ -267,7 +267,7 @@ public:
 		}
 
 		dockedPorts = msg.originAP & 0x1f;
-		needsReconnectPorts = (1 << 0) | (1 << 1);
+		needsReconnectPorts = dockedPorts;
 	}
 
 	bool isSocketDisconnected() {
