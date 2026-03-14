@@ -205,6 +205,7 @@ class DreamPotato : public BaseDreamLink
 
 	//! Ports which contain a docked VMU in DreamPotato
 	u32 dockedPorts = 0;
+	//! Ports whose devices need to be reconnected due to an external state change
 	u32 needsReconnectPorts = 0;
 
 public:
@@ -294,11 +295,9 @@ public:
 		// Possibly complete a pending connection.
 		ioContext.poll();
 
-		// TODO: we should probably poll the attached devices, to both get up-to-date info,
-		// and effectively get a heartbeat for the connection,
-		// instead of needing to both check for reset message and tcp disconnect.
-
 		// Check for a refresh message, which indicates we should re-query which expansion slots have VMUs in them
+		// TODO: We should get rid of this and 'isSocketDisconnected()' and poll 'MDCF_GetCondition' instead.
+		// However, corresponding changes in DreamPotato will also be needed for us to be able to detect when external state has changed.
 		constexpr std::string_view refreshMessage = "FF FF FF FF\r\n";
 		constexpr int refreshMessageSize = refreshMessage.length();
 		asio::error_code ec;
@@ -341,14 +340,13 @@ bool DreamPotatoVmu::linkStatus()
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
 	if (potato->portNeedsReconnect(link.port))
 		requestReconnect();
-
-	if (!MapleLinkVmu::linkStatus() || !link.isConnected())
+	if (!MapleLinkVmu::linkStatus())
 		return false;
 
-	return potato->isPortDocked(link.port + 1);
-
-	// TODO: should disabling physical memory really cause the VMU to report as connected always?
-	// May want to revert that. Using DreamPotato without physical memory is a rare case.
+	if (link.storageEnabled())
+		return link.isConnected() && potato->isPortDocked(link.port + 1);
+	else
+		return true; // local storage means this must always remain "linked"
 }
 
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;

@@ -62,8 +62,8 @@ $ cd hollycast
 $ git submodule update --init --recursive
 
 # Configure the build (make sln file, etc., depending on your platform)
-$ cmake -B ./build
+$ cmake -B build-debug/
 
 # Run the build
-$ cmake --build ./build
+$ cmake --build build-debug/
 ```
