@@ -1,0 +1,32 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "darwin-user-base",
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "{CURRENT_ARCH}"
+            },
+            "hidden": true
+        },
+        {
+            "name": "default",
+            "inherits": ["darwin-user-base", "darwin"]
+        },
+        {
+            "name": "debug",
+            "inherits": ["darwin-user-base", "darwin-debug"]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "inherits": ["darwin"]
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "inherits": ["darwin-debug"]
+        }
+    ]
+}

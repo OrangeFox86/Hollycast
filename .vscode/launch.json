@@ -1,0 +1,76 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(Windows) Debug Flycast",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/Debug/flycast.exe",
+            "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-debug/Debug/",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Build Debug"
+        },
+        {
+            "name": "(Windows) Debug Unit Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-unit-tests-debug/Debug/flycast.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug/",
+            "environment": [],
+            "console": "externalTerminal",
+            "preLaunchTask": "Build Unit Tests (Debug)"
+        },
+
+
+        {
+            "name": "(Linux) Debug Flycast",
+            "type": "cppdbg",
+            "MIMode": "gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/flycast",
+            "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-debug/",
+            "environment": [],
+            "preLaunchTask": "Build Debug",
+            "setupCommands": [
+                {
+                    "description": "Ignore SIGSEGV for Dynarec",
+                    "text": "handle SIGSEGV nostop noprint pass",
+                    "ignoreFailures": false
+                }
+            ]
+        },
+        {
+            "name": "(Linux) Debug Unit Tests",
+            "type": "cppdbg",
+            "MIMode": "gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-unit-tests-debug/flycast",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-unit-tests-debug/",
+            "environment": [],
+            "preLaunchTask": "Build Unit Tests (Debug)"
+        },
+
+
+        {
+            "name": "(macOS) Debug Flycast",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/Debug/Flycast.app/Contents/MacOS/Flycast",
+            "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
+            "cwd": "${workspaceFolder}/build-debug",
+            "preLaunchTask": "Build Debug",
+            "initCommands": [
+                "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
+            ]
+        }
+    ]
+}
