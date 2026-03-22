@@ -42,6 +42,14 @@ public:
 	using Ptr = std::shared_ptr<DreamLink>;
 	using WPtr = std::weak_ptr<DreamLink>;
 
+	//! Only one dreamlink may be used for each port. This enumerates priority.
+	enum class LinkPriority
+	{
+		LOW,
+		HIGH,
+		DEFAULT = HIGH
+	};
+
     //! Constructor (default)
     DreamLink() = default;
     //! Destructor (virtual, default)
@@ -160,7 +168,8 @@ protected:
 	//! deleted.
     //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
     //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
-    void registerLink(int bus, u32 portsMask);
+	//! @param[in] priority The priority of this DreamLink
+    void registerLink(int bus, u32 portsMask, LinkPriority priority = LinkPriority::DEFAULT);
 
     //! Unregisters this DreamLink from all registries
 	//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
@@ -197,9 +206,15 @@ private:
 		static PrioritizedRegistry& Get();
 
 		//! Esablish this link in MapleLinkRegistry
+		//! @param[in] dreamlink The BaseDreamLink device to register
 		//! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
 		//! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
-		void registerLink(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask);
+		//! @param[in] priority The priority of this DreamLink
+		void registerLink(
+			const BaseDreamLink::Ptr& dreamlink,
+			int bus, u32 portsMask,
+			LinkPriority priority = LinkPriority::DEFAULT
+		);
 
 		//! Removes link from reistry without locking on the mutex
 		//! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link
