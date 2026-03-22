@@ -29,6 +29,7 @@
 #include "oslib/i18n.h"
 #include "oslib/oslib.h"
 #include "log/Log.h"
+#include "emulator.h"
 
 #include "DreamPicoPortApi.hpp"
 
@@ -356,16 +357,15 @@ std::mutex ApiDreamPicoPortComms::all_dpp_api_devices_mutex;
 
 class DreamPicoPort : public SDLDreamLink
 {
+	//! Duration to delay before trying to connect again
+	static constexpr std::chrono::milliseconds CONNECT_RETRY_DELAY = std::chrono::milliseconds(1000);
+
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class ApiDreamPicoPortComms> dpp_comms;
-	//! Worker thread for this instance
-	std::unique_ptr<std::thread> connection_worker;
-	//! Se to true while connection was requested
+	//! Set to true while connection was requested
 	bool connect_requested = false;
-	//! Condition variable to wake the worker thread
-	std::condition_variable connection_cv;
-	//! Mutex serializing access to above data
-	std::mutex connection_mutex;
+	//! Set to true when connect retry has been scheduled
+	std::atomic<bool> connect_retry_scheduled = false;
 
 	//! Current timeout in milliseconds
 	std::chrono::milliseconds timeout_ms;
@@ -608,30 +608,20 @@ public:
 	}
 
 	void connect() override {
-		std::lock_guard<std::mutex> lock(connection_mutex);
-
 		connect_requested = true;
 
 		internalConnect();
 
 		if (!isConnected()) {
-			connection_worker = std::make_unique<std::thread>([this]() { connectionWorkerEntrypoint(); });
+			// Retry again later
+			scheduleConnectRetry();
 		}
 	}
 
 	void disconnect() override {
-		std::unique_lock<std::mutex> lock(connection_mutex);
-
 		internalDisconnect();
 
 		connect_requested = false;
-		connection_cv.notify_all();
-
-		if (connection_worker) {
-			lock.unlock();
-			connection_worker->join();
-			connection_worker.reset();
-		}
 	}
 
     void sendPort() {
@@ -709,18 +699,25 @@ private:
 		dpp_comms.reset();
 	}
 
-	void connectionWorkerEntrypoint() {
-		std::unique_lock<std::mutex> lock(connection_mutex);
+	void scheduleConnectRetry() {
+		const bool already_scheduled = connect_retry_scheduled.exchange(true);
+		if (already_scheduled) {
+			return;
+		}
 
-		// Retry connect every 1 second until connect no longer requested or connection established
-		while (
-			!connection_cv.wait_for(
-				lock,
-				std::chrono::milliseconds(1000),
-				[this](){ return !connect_requested || isConnected(); }
-			)
-		) {
+		gui_runOnUiThread(CONNECT_RETRY_DELAY, [this](){connectionCallback();});
+	}
+
+	void connectionCallback() {
+		connect_retry_scheduled = false;
+
+		if (connect_requested && !isConnected()) {
 			internalConnect();
+
+			if (!isConnected()) {
+				// Retry again later
+				scheduleConnectRetry();
+			}
 		}
 	}
 

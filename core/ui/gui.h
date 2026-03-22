@@ -21,6 +21,7 @@
 
 #include <string>
 #include <functional>
+#include <chrono>
 
 void gui_init();
 void gui_initFonts();
@@ -54,6 +55,12 @@ void gui_cycleSaveStateSlot(int step);
 std::string gui_getCurGameBoxartUrl();
 void gui_takeScreenshot();
 void gui_runOnUiThread(std::function<void()> function);
+void gui_runOnUiThread(const std::chrono::steady_clock::time_point& tp, const std::function<void()>& function);
+
+template <typename Rep, typename Period>
+void gui_runOnUiThread(std::chrono::duration<Rep, Period> duration, const std::function<void()>& function) {
+	gui_runOnUiThread(std::chrono::steady_clock::now() + duration, function);
+}
 
 enum class GuiState {
 	Closed,
