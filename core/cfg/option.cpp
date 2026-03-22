@@ -244,7 +244,7 @@ Option<bool> PerGameVmu("PerGameVmu", true, "config");
 #ifdef _WIN32
 Option<bool, false> UseRawInput("RawInput", false, "input");
 #endif
-Option<bool> UsePhysicalVmuMemory("UsePhysicalVmuMemory", false);
+Option<bool> UsePhysicalVmuMemory("UsePhysicalVmuMemory", true);
 
 #ifdef USE_LUA
 Option<std::string, false> LuaFileName("LuaFileName", "flycast.lua");
