@@ -362,6 +362,8 @@ class DreamPicoPort : public SDLDreamLink
 
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class ApiDreamPicoPortComms> dpp_comms;
+	//! Serializes access to dpp_comms
+	mutable std::recursive_mutex dpp_comms_mutex;
 	//! Set to true while connection was requested
 	bool connect_requested = false;
 	//! Set to true when connect retry has been scheduled
@@ -377,6 +379,8 @@ class DreamPicoPort : public SDLDreamLink
 	bool update_required = false;
     //! The queried peripherals; for each function, index 0 is function code and index 1 is the function definition
     std::vector<std::vector<std::array<uint32_t, 2>>> peripherals;
+	//! Serializes access to peripherals (always lock AFTER dpp_comms_mutex)
+	mutable std::recursive_mutex peripherals_mutex;
     //! Dreamcast Controller USB VID:1209 PID:2f07
     static constexpr std::uint16_t VID = 0x1209;
     static constexpr std::uint16_t PID = 0x2f07;
@@ -422,6 +426,8 @@ public:
 	}
 
 	bool send(const MapleMsg& msg) override {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		if (!dpp_comms) {
 			return false;
 		}
@@ -430,6 +436,8 @@ public:
 	}
 
     bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		if (!dpp_comms) {
 			return false;
 		}
@@ -440,6 +448,8 @@ public:
 	//! Sends the current game id to a DreamLink backed expansion device if supported
 	//! @param[in] expansion The expansion port to send to or -1 to send to all storage devices
 	void sendGameId(int expansion = -1) {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		if (!dpp_comms || hw_info.hardware_bus < 0 || !storageEnabled()) {
 			return;
 		}
@@ -506,6 +516,8 @@ public:
 	}
 
     u32 getFunctionCode(int forPort) const {
+		std::lock_guard<std::recursive_mutex> lock(peripherals_mutex);
+
 		forPort = fcPortToDppPort(forPort);
 		u32 mask = 0;
 		if ((int)peripherals.size() > forPort) {
@@ -518,6 +530,8 @@ public:
 	}
 
 	std::array<u32, 3> getFunctionDefinitions(int forPort) const {
+		std::lock_guard<std::recursive_mutex> lock(peripherals_mutex);
+
 		forPort = fcPortToDppPort(forPort);
 		std::array<u32, 3> arr{0, 0, 0};
 		if ((int)peripherals.size() > forPort) {
@@ -544,6 +558,8 @@ public:
 	}
 
 	void changeBus(int newBus) override {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		if (software_bus == newBus)
 			return;
 		software_bus = newBus;
@@ -573,7 +589,6 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(0);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
 			}
 		}
 
@@ -582,12 +597,13 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(1);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
 			}
 		}
 	}
 
 	bool isConnected() override {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		return (dpp_comms && dpp_comms->isConnected());
 	}
 
@@ -625,6 +641,8 @@ public:
 	}
 
     void sendPort() {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		if (dpp_comms) {
 			dpp_comms->sendPort(timeout_ms);
 		}
@@ -644,6 +662,8 @@ public:
 
 private:
 	void internalConnect() {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		// Timeout is 1 second while establishing connection
 		timeout_ms = std::chrono::seconds(1);
 
@@ -696,6 +716,8 @@ private:
 	}
 
 	void internalDisconnect() {
+		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+
 		dpp_comms.reset();
 	}
 
@@ -866,6 +888,8 @@ private:
 
 public:
     bool queryPeripherals(bool clearOnFailure = true) {
+		std::scoped_lock<std::recursive_mutex, std::recursive_mutex> lock(dpp_comms_mutex, peripherals_mutex);
+
 		std::vector<std::vector<std::array<uint32_t, 2>>> prev = peripherals;
 
 		if (clearOnFailure) {
