@@ -358,6 +358,15 @@ class DreamPicoPort : public SDLDreamLink
 {
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class ApiDreamPicoPortComms> dpp_comms;
+	//! Worker thread for this instance
+	std::unique_ptr<std::thread> connection_worker;
+	//! Se to true while connection was requested
+	bool connect_requested = false;
+	//! Condition variable to wake the worker thread
+	std::condition_variable connection_cv;
+	//! Mutex serializing access to above data
+	std::mutex connection_mutex;
+
 	//! Current timeout in milliseconds
 	std::chrono::milliseconds timeout_ms;
 	//! The bus ID dictated by flycast
@@ -599,6 +608,52 @@ public:
 	}
 
 	void connect() override {
+		std::lock_guard<std::mutex> lock(connection_mutex);
+
+		connect_requested = true;
+
+		internalConnect();
+
+		if (!isConnected()) {
+			connection_worker = std::make_unique<std::thread>([this]() { connectionWorkerEntrypoint(); });
+		}
+	}
+
+	void disconnect() override {
+		std::unique_lock<std::mutex> lock(connection_mutex);
+
+		internalDisconnect();
+
+		connect_requested = false;
+		connection_cv.notify_all();
+
+		if (connection_worker) {
+			lock.unlock();
+			connection_worker->join();
+			connection_worker.reset();
+		}
+	}
+
+    void sendPort() {
+		if (dpp_comms) {
+			dpp_comms->sendPort(timeout_ms);
+		}
+	}
+
+	int hardwareBus() const {
+		return hw_info.hardware_bus;
+	}
+
+	bool isHardwareBusImplied() const {
+		return hw_info.is_hardware_bus_implied;
+	}
+
+	bool isSingleDevice() const {
+		return hw_info.is_single_device;
+	}
+
+private:
+	void internalConnect() {
 		// Timeout is 1 second while establishing connection
 		timeout_ms = std::chrono::seconds(1);
 
@@ -626,12 +681,12 @@ public:
 		if (isConnected()) {
 			sendPort();
 		} else {
-			disconnect();
+			internalDisconnect();
 			return;
 		}
 
 		if (!queryPeripherals()) {
-			disconnect();
+			internalDisconnect();
 			return;
 		}
 
@@ -650,29 +705,25 @@ public:
 		);
 	}
 
-	void disconnect() override {
+	void internalDisconnect() {
 		dpp_comms.reset();
 	}
 
-    void sendPort() {
-		if (dpp_comms) {
-			dpp_comms->sendPort(timeout_ms);
+	void connectionWorkerEntrypoint() {
+		std::unique_lock<std::mutex> lock(connection_mutex);
+
+		// Retry connect every 1 second until connect no longer requested or connection established
+		while (
+			!connection_cv.wait_for(
+				lock,
+				std::chrono::milliseconds(1000),
+				[this](){ return !connect_requested || isConnected(); }
+			)
+		) {
+			internalConnect();
 		}
 	}
 
-	int hardwareBus() const {
-		return hw_info.hardware_bus;
-	}
-
-	bool isHardwareBusImplied() const {
-		return hw_info.is_hardware_bus_implied;
-	}
-
-	bool isSingleDevice() const {
-		return hw_info.is_single_device;
-	}
-
-private:
 	//! Only to be called during instantiation to determine hardware information
 	//! @param[in] joystick_idx SDL joystick index
 	//! @param[in] sdl_joystick SDL joystick object
