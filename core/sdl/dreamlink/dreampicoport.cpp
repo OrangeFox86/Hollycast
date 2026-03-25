@@ -360,14 +360,14 @@ class DreamPicoPort : public SDLDreamLink
 	//! Duration to delay before trying to connect again
 	static constexpr std::chrono::milliseconds CONNECT_RETRY_DELAY = std::chrono::milliseconds(1000);
 
+	//! Serializes the externally-executed interfaces of this class
+	mutable std::recursive_mutex mutex;
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class ApiDreamPicoPortComms> dpp_comms;
-	//! Serializes access to dpp_comms
-	mutable std::recursive_mutex dpp_comms_mutex;
 	//! Set to true while connection was requested
 	bool connect_requested = false;
 	//! Set to true when connect retry has been scheduled
-	std::atomic<bool> connect_retry_scheduled = false;
+	bool connect_retry_scheduled = false;
 
 	//! Current timeout in milliseconds
 	std::chrono::milliseconds timeout_ms;
@@ -379,8 +379,6 @@ class DreamPicoPort : public SDLDreamLink
 	bool update_required = false;
     //! The queried peripherals; for each function, index 0 is function code and index 1 is the function definition
     std::vector<std::vector<std::array<uint32_t, 2>>> peripherals;
-	//! Serializes access to peripherals (always lock AFTER dpp_comms_mutex)
-	mutable std::recursive_mutex peripherals_mutex;
     //! Dreamcast Controller USB VID:1209 PID:2f07
     static constexpr std::uint16_t VID = 0x1209;
     static constexpr std::uint16_t PID = 0x2f07;
@@ -426,7 +424,7 @@ public:
 	}
 
 	bool send(const MapleMsg& msg) override {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (!dpp_comms) {
 			return false;
@@ -436,7 +434,7 @@ public:
 	}
 
     bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (!dpp_comms) {
 			return false;
@@ -448,7 +446,7 @@ public:
 	//! Sends the current game id to a DreamLink backed expansion device if supported
 	//! @param[in] expansion The expansion port to send to or -1 to send to all storage devices
 	void sendGameId(int expansion = -1) {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (!dpp_comms || hw_info.hardware_bus < 0 || !storageEnabled()) {
 			return;
@@ -516,7 +514,7 @@ public:
 	}
 
     u32 getFunctionCode(int forPort) const {
-		std::lock_guard<std::recursive_mutex> lock(peripherals_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		forPort = fcPortToDppPort(forPort);
 		u32 mask = 0;
@@ -530,7 +528,7 @@ public:
 	}
 
 	std::array<u32, 3> getFunctionDefinitions(int forPort) const {
-		std::lock_guard<std::recursive_mutex> lock(peripherals_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		forPort = fcPortToDppPort(forPort);
 		std::array<u32, 3> arr{0, 0, 0};
@@ -558,7 +556,7 @@ public:
 	}
 
 	void changeBus(int newBus) override {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (software_bus == newBus)
 			return;
@@ -602,7 +600,7 @@ public:
 	}
 
 	bool isConnected() override {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		return (dpp_comms && dpp_comms->isConnected());
 	}
@@ -624,6 +622,8 @@ public:
 	}
 
 	void connect() override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		connect_requested = true;
 
 		internalConnect();
@@ -635,13 +635,15 @@ public:
 	}
 
 	void disconnect() override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		internalDisconnect();
 
 		connect_requested = false;
 	}
 
     void sendPort() {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (dpp_comms) {
 			dpp_comms->sendPort(timeout_ms);
@@ -662,8 +664,6 @@ public:
 
 private:
 	void internalConnect() {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
-
 		// Timeout is 1 second while establishing connection
 		timeout_ms = std::chrono::seconds(1);
 
@@ -716,21 +716,23 @@ private:
 	}
 
 	void internalDisconnect() {
-		std::lock_guard<std::recursive_mutex> lock(dpp_comms_mutex);
-
 		dpp_comms.reset();
 	}
 
 	void scheduleConnectRetry() {
-		const bool already_scheduled = connect_retry_scheduled.exchange(true);
-		if (already_scheduled) {
+		if (connect_retry_scheduled) {
+			// Already scheduled
 			return;
 		}
+
+		connect_retry_scheduled = true;
 
 		gui_runOnUiThread(CONNECT_RETRY_DELAY, [this](){connectionCallback();});
 	}
 
 	void connectionCallback() {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		connect_retry_scheduled = false;
 
 		if (connect_requested && !isConnected()) {
@@ -888,7 +890,7 @@ private:
 
 public:
     bool queryPeripherals(bool clearOnFailure = true) {
-		std::scoped_lock<std::recursive_mutex, std::recursive_mutex> lock(dpp_comms_mutex, peripherals_mutex);
+		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		std::vector<std::vector<std::array<uint32_t, 2>>> prev = peripherals;
 
