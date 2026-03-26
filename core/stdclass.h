@@ -298,11 +298,11 @@ public:
 		// Execute all scheduled tasks
 		while (!scheduledTasks.empty() && scheduledTasks.begin()->first <= tp)
 		{
-			// Execute
-			const std::function<void()>& func = scheduledTasks.begin()->second;
-			func();
 			// Pop
+			std::function<void()> func = std::move(scheduledTasks.begin()->second);
 			scheduledTasks.erase(scheduledTasks.begin());
+			// Execute
+			func();
 		}
 	}
 
