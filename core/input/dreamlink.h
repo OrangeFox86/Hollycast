@@ -42,6 +42,14 @@ public:
 	using Ptr = std::shared_ptr<DreamLink>;
 	using WPtr = std::weak_ptr<DreamLink>;
 
+	//! Only one dreamlink may be used for each port. This enumerates priority.
+	enum class LinkPriority
+	{
+		LOW,
+		HIGH,
+		DEFAULT = HIGH
+	};
+
     //! Constructor (default)
     DreamLink() = default;
     //! Destructor (virtual, default)
@@ -137,8 +145,6 @@ protected:
 	BaseDreamLink(bool storageSupported);
 
 public:
-    //! Destructor (virtual)
-	virtual ~BaseDreamLink();
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
 	//! @return true iff a game has been started
@@ -162,7 +168,8 @@ protected:
 	//! deleted.
     //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
     //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
-    void registerLink(int bus, u32 portsMask);
+	//! @param[in] priority The priority of this DreamLink
+    void registerLink(int bus, u32 portsMask, LinkPriority priority = LinkPriority::DEFAULT);
 
     //! Unregisters this DreamLink from all registries
 	//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
@@ -171,22 +178,6 @@ protected:
 	//! Overridden from DreamLink
 	//! This is the default implementation which may be overridden by child
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override;
-
-	//! May be called by the child to attempt to reestablish connection after it is lost
-	void asyncRetryConnect();
-
-private:
-	//! Type of pending connection work
-	enum class ConnectionWorkType { Connect, Disconnect };
-
-	//! Do an asynchronous connect or disconnect
-	void asyncConnection(const ConnectionWorkType& type, bool getLock = true);
-
-	//! Worker thread function for processing connection/disconnection operations
-	void connectionWorkerThread();
-
-	//! Stops the connection worker thread
-	void stopConnectionWorkerThread();
 
 protected:
     //! Determines whether or not storage is supported by this DreamLink
@@ -199,19 +190,6 @@ private:
     u32 linkedPortsMask = 0;
     //! All currently connected ports
     u32 connectedPortsMask = 0;
-
-	//! Flag to signal worker thread shutdown
-	bool connectionWorkerShutdown = false;
-	//! Mutex protecting connection work queue and worker thread
-	std::mutex connectionMutex;
-	//! Last submitted connection request type
-	ConnectionWorkType lastConnectRequest = ConnectionWorkType::Disconnect;
-	//! Queue of pending connection operations
-	std::list<ConnectionWorkType> connectionWorkQueue;
-	//! Condition variable to wake the worker thread
-	std::condition_variable connectionCondVar;
-	//! Worker thread for this instance
-	std::unique_ptr<std::thread> connectionWorker;
 
 	//! Singleton class which is a prioritized Registry of BaseDreamLink devices.
 	//! This registry keeps track of which devices are connected by priority and handles game events for all devices.
@@ -228,9 +206,15 @@ private:
 		static PrioritizedRegistry& Get();
 
 		//! Esablish this link in MapleLinkRegistry
+		//! @param[in] dreamlink The BaseDreamLink device to register
 		//! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
 		//! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
-		void registerLink(const BaseDreamLink::Ptr& dreamlink, int bus, u32 portsMask);
+		//! @param[in] priority The priority of this DreamLink
+		void registerLink(
+			const BaseDreamLink::Ptr& dreamlink,
+			int bus, u32 portsMask,
+			LinkPriority priority = LinkPriority::DEFAULT
+		);
 
 		//! Removes link from reistry without locking on the mutex
 		//! @param[in] newBus When non-negative, this is the new bus that will be subsequently set for this link

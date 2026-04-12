@@ -38,4 +38,16 @@ public:
 
 	//! Called once the gamepad is registered - the dreamlink should register itself
 	virtual void registered() = 0;
+
+	//! Registers this link into registries.
+    //! The registry in DreamLink ensures only 1 DreamLink per bus is active. The global registry links logical
+	//! bus/ports to this DreamLink. If this DreamLink was already registered, the previous registration will first be
+	//! deleted.
+    //! @param[in] bus The bus that this DreamLink belongs to (a DreamLink may only belong to a single bus)
+    //! @param[in] portsMask The port mask representing the ports on the bus that this DreamLink supports
+    inline void registerLink(int bus, u32 portsMask)
+	{
+		// All SDL hardware DreamLink devices take lower priority over software DreamLink devices
+		BaseDreamLink::registerLink(bus, portsMask, LinkPriority::LOW);
+	}
 };

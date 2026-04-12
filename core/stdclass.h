@@ -11,6 +11,7 @@
 #include <vector>
 #include <functional>
 #include <cassert>
+#include <map>
 #include <time.h>
 
 #if defined(__ANDROID__)
@@ -274,4 +275,42 @@ private:
 	std::thread::id threadId;
 	std::vector<std::function<void()>> tasks;
 	std::mutex mutex;
+};
+
+template <typename TimePointType>
+class ScheduledThreadRunner : protected ThreadRunner
+{
+public:
+	using ThreadRunner::init;
+	using ThreadRunner::term;
+	using ThreadRunner::runOnThread;
+
+	void runOnThread(const TimePointType& tp, const std::function<void()>& func)
+	{
+		scheduledTasks.insert({tp, func});
+	}
+
+	void execTasks(const TimePointType& tp)
+	{
+		// Execute all base tasks
+		ThreadRunner::execTasks();
+
+		// Execute all scheduled tasks
+		while (!scheduledTasks.empty() && scheduledTasks.begin()->first <= tp)
+		{
+			// Pop
+			std::function<void()> func = std::move(scheduledTasks.begin()->second);
+			scheduledTasks.erase(scheduledTasks.begin());
+			// Execute
+			func();
+		}
+	}
+
+private:
+	// execTasks must publicly be given a time point (see overload above)
+	using ThreadRunner::execTasks;
+
+private:
+	// This is being used as the schedule since a multimap will automatically sort by key
+	std::multimap<TimePointType, std::function<void()>> scheduledTasks;
 };

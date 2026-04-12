@@ -98,7 +98,7 @@ ImFont *settingsTitleFont;
 ImFont *settingsValueFont;
 ImFont *settingsRightValueFont;
 static Toast toast;
-static ThreadRunner uiThreadRunner;
+static ScheduledThreadRunner<std::chrono::steady_clock::time_point> uiThreadRunner;
 
 static void emuEventCallback(Event event, void *)
 {
@@ -1482,7 +1482,7 @@ static void gui_display_loadscreen()
 				else
 					label = T("Loading...");
 			}
-			
+
 			const bool customTexPreloading = custom_texture.isPreloading();
 
 			if (gameLoader.ready() && !customTexPreloading)
@@ -1504,11 +1504,11 @@ static void gui_display_loadscreen()
 				int texTotal = 0;
 				size_t loaded_size_b = 0;
 				custom_texture.getPreloadProgress(texLoaded, texTotal, loaded_size_b);
-				
+
 				ImGui::Text("%s", label);
 				float progress = 0;
 				char overlay[64] = "";
-				
+
 				if (!gameLoader.ready())
 				{
 					progress = gameLoader.getProgress().progress;
@@ -1526,7 +1526,7 @@ static void gui_display_loadscreen()
 						snprintf(overlay, sizeof(overlay), "%d / %d (%.1f MB)", texLoaded, texTotal, loaded_size_mb);
 					}
 				}
-				
+
 				ImguiStyleColor _(ImGuiCol_PlotHistogram, ImVec4(0.557f, 0.268f, 0.965f, 1.f));
 				ImGui::ProgressBar(progress, ImVec2(-1, uiScaled(20.f)), overlay);
 
@@ -1638,7 +1638,7 @@ void gui_display_ui()
 
     ImGui::Render();
 	gui_endFrame(gui_open);
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 	ImguiFileTexture::resetLoadCount();
 
 	if (gui_state == GuiState::Closed)
@@ -1717,7 +1717,7 @@ void gui_draw_osd()
 	render_exit_save_dialog();
 
 	ImGui::Render();
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 }
 
 void gui_display_osd() {
@@ -1899,6 +1899,10 @@ void gui_refresh_custom_boxart(bool force)
 
 void gui_runOnUiThread(std::function<void()> function) {
 	uiThreadRunner.runOnThread(function);
+}
+
+void gui_runOnUiThread(const std::chrono::steady_clock::time_point& tp, const std::function<void()>& function) {
+	uiThreadRunner.runOnThread(tp, function);
 }
 
 void gui_takeScreenshot()

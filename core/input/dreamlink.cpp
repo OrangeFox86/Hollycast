@@ -33,11 +33,6 @@ BaseDreamLink::BaseDreamLink(bool storageSupported) :
 {
 }
 
-BaseDreamLink::~BaseDreamLink()
-{
-	stopConnectionWorkerThread();
-}
-
 bool BaseDreamLink::storageEnabled()
 {
 	return storageSupported && config::UsePhysicalVmuMemory;
@@ -56,7 +51,6 @@ const char* BaseDreamLink::getIssueDescription() const
 void BaseDreamLink::term()
 {
 	unregisterLink(true);
-	stopConnectionWorkerThread();
 
 	// Invalidate internal data
     linkedBus = -1;
@@ -68,9 +62,9 @@ void BaseDreamLink::onGameStarted()
 {
 }
 
-void BaseDreamLink::registerLink(int bus, u32 portsMask)
+void BaseDreamLink::registerLink(int bus, u32 portsMask, LinkPriority priority)
 {
-	PrioritizedRegistry::Get().registerLink(shared_from_this(), bus, portsMask);
+	PrioritizedRegistry::Get().registerLink(shared_from_this(), bus, portsMask, priority);
 }
 
 void BaseDreamLink::unregisterLink(bool isTerminal)
@@ -87,129 +81,6 @@ std::shared_ptr<maple_device> BaseDreamLink::createMapleDevice(int bus, int port
 		case 1: return std::make_shared<MapleLinkPuruPuru>(MapleLink(shared_from_this(), bus, port));
 		case 5: return maple_Create(MapleDeviceType::MDT_SegaController);
 		default: return std::make_shared<MapleLinkStub>();
-	}
-}
-
-void BaseDreamLink::asyncRetryConnect()
-{
-	std::lock_guard<std::mutex> lock(connectionMutex);
-
-	// Only allow the request if Connect was last executed internally
-	if (lastConnectRequest == ConnectionWorkType::Connect)
-	{
-		asyncConnection(ConnectionWorkType::Connect, false);
-	}
-}
-
-void BaseDreamLink::asyncConnection(const ConnectionWorkType& type, bool getLock)
-{
-	std::unique_lock<std::mutex> lock(connectionMutex, std::defer_lock);
-
-	if (getLock)
-	{
-		lock.lock();
-	}
-
-	if (connectionWorkerShutdown)
-	{
-		return;
-	}
-
-	// Lazily initialize the worker thread on first use
-	if (!connectionWorker)
-	{
-		connectionWorker = std::make_unique<std::thread>([this]() { connectionWorkerThread(); });
-	}
-
-	lastConnectRequest = type;
-	connectionWorkQueue.push_back(type);
-	connectionCondVar.notify_one();
-}
-
-void BaseDreamLink::connectionWorkerThread()
-{
-	// The predicate which returns true if item is available to pop or thread shutdown is requested
-	auto pred = [this](){ return !connectionWorkQueue.empty() || connectionWorkerShutdown; };
-
-	while (true)
-	{
-		ConnectionWorkType work;
-
-		{
-			std::unique_lock<std::mutex> lock(connectionMutex);
-
-			// Wait for work or shutdown signal
-			connectionCondVar.wait(lock, pred);
-
-			if (connectionWorkerShutdown)
-			{
-				return;  // Shutdown, exit thread
-			}
-
-			// Only the back item will ever take precedence
-			work = connectionWorkQueue.back();
-			connectionWorkQueue.clear();
-		}
-
-		// Execute the connection work without holding the lock
-		switch (work)
-		{
-		case ConnectionWorkType::Connect:
-			while (true)
-			{
-				if (connectionWorkerShutdown)
-				{
-					return;  // Shutdown, exit thread
-				}
-
-				connect();
-				if (isConnected())
-				{
-					break;
-				}
-				else
-				{
-					const char* issueDesc = getIssueDescription();
-					if (issueDesc != nullptr)
-					{
-						NOTICE_LOG(INPUT, "DreamLink connection failed: %s", issueDesc);
-						break;
-					}
-				}
-
-				NOTICE_LOG(INPUT, "DreamLink connection failed; retrying connection in 1 second");
-
-				// Wait for 1 second while checking for new events or shutdown
-				{
-					std::unique_lock<std::mutex> lock(connectionMutex);
-					if (connectionCondVar.wait_for(lock, std::chrono::seconds(1), pred))
-					{
-						break; // New event
-					}
-				}
-			}
-			break;
-		case ConnectionWorkType::Disconnect:
-			disconnect();
-			break;
-		}
-	}
-}
-
-void BaseDreamLink::stopConnectionWorkerThread()
-{
-	std::unique_ptr<std::thread> workerThread;
-
-	{
-		std::lock_guard<std::mutex> lock(connectionMutex);
-		connectionWorkerShutdown = true;
-		connectionCondVar.notify_all();
-		workerThread = std::move(connectionWorker);
-	}
-
-	if (workerThread)
-	{
-		workerThread->join();
 	}
 }
 
@@ -232,55 +103,79 @@ BaseDreamLink::PrioritizedRegistry& BaseDreamLink::PrioritizedRegistry::Get()
 }
 
 void BaseDreamLink::PrioritizedRegistry::registerLink(
-	const BaseDreamLink::Ptr& dreamlink,
+	const BaseDreamLink::Ptr& newDreamlink,
 	int bus,
-	u32 portsMask
+	u32 portsMask,
+	LinkPriority priority
 )
 {
-	if (dreamlink->linkedBus == bus && dreamlink->connectedPortsMask == portsMask)
+	if (newDreamlink->linkedBus == bus && newDreamlink->connectedPortsMask == portsMask)
 		return;
 
 	std::lock_guard<std::recursive_mutex> lock(mMutex);
 
 	// Ensure this link is not currently established
-	removeLinkFromRegistry(dreamlink.get(), bus);
+	removeLinkFromRegistry(newDreamlink.get(), bus);
 
 	if (isValidBus(bus))
 	{
-		dreamlink->linkedBus = bus;
-		dreamlink->linkedPortsMask = portsMask;
-		dreamlink->connectedPortsMask = portsMask;
+		newDreamlink->linkedBus = bus;
+		newDreamlink->linkedPortsMask = portsMask;
+		newDreamlink->connectedPortsMask = portsMask;
 
 		std::list<BaseDreamLink::Ptr>& priorities = mRegistry[bus];
 
-		if (!priorities.empty())
+		// Establish local registry link
+		// Since there is only high/low priorities, either put in front or back
+		if (priority == LinkPriority::HIGH)
 		{
-			// Remove connected port flags since this link now takes precedence
-			for (BaseDreamLink::Ptr& link : priorities)
+			if (!priorities.empty())
 			{
-				const u32 prev = link->connectedPortsMask;
-				link->connectedPortsMask = link->connectedPortsMask & ~portsMask;
-				if (link->connectedPortsMask == 0)
+				// Remove connected port flags since this link now takes precedence
+				for (BaseDreamLink::Ptr& existingLink : priorities)
 				{
-					if (prev != link->connectedPortsMask)
+					const u32 prev = existingLink->connectedPortsMask;
+					existingLink->connectedPortsMask = existingLink->connectedPortsMask & ~portsMask;
+					if (existingLink->connectedPortsMask == 0)
 					{
-						// No longer connected to anything
-						link->asyncConnection(ConnectionWorkType::Disconnect);
+						if (prev != existingLink->connectedPortsMask)
+						{
+							// No longer connected to anything
+							existingLink->disconnect();
+						}
 					}
 				}
 			}
+
+			priorities.push_front(newDreamlink);
+		}
+		else
+		{
+			if (!priorities.empty())
+			{
+				// Remove connected port flags from this link since existing items take precedence
+				for (BaseDreamLink::Ptr& existingLink : priorities)
+				{
+					newDreamlink->connectedPortsMask = newDreamlink->connectedPortsMask & ~existingLink->connectedPortsMask;
+					if (newDreamlink->connectedPortsMask == 0)
+					{
+						// No longer connected to anything
+						newDreamlink->disconnect();
+						break;
+					}
+				}
+			}
+
+			priorities.push_back(newDreamlink);
 		}
 
-		// Establish local registry link
-		priorities.push_front(dreamlink);
-
-		establishInMapleLinkRegistry(dreamlink, bus, portsMask);
+		establishInMapleLinkRegistry(newDreamlink, bus, newDreamlink->connectedPortsMask);
 	}
 	else
 	{
 		// Not a valid bus, so this should not be connected
-		dreamlink->linkedBus = -1;
-		dreamlink->asyncConnection(ConnectionWorkType::Disconnect);
+		newDreamlink->linkedBus = -1;
+		newDreamlink->disconnect();
 	}
 
 	MapleLinkRegistry::Get().commitChanges();
@@ -297,7 +192,7 @@ void BaseDreamLink::PrioritizedRegistry::unregisterLink(BaseDreamLink* dreamlink
 
 	if (!isTerminal)
 	{
-		dreamlink->asyncConnection(ConnectionWorkType::Disconnect);
+		dreamlink->disconnect();
 	}
 
 	// Remove everything previously established for this controller
@@ -357,7 +252,7 @@ void BaseDreamLink::PrioritizedRegistry::establishInMapleLinkRegistry(const Base
 {
 	if (MapleLinkRegistry::Get().registerLinks(dreamlink, bus, portsMask) > 0)
 	{
-		dreamlink->asyncConnection(ConnectionWorkType::Connect);
+		dreamlink->connect();
 	}
 }
 

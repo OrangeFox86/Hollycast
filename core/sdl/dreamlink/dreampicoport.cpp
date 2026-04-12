@@ -29,6 +29,7 @@
 #include "oslib/i18n.h"
 #include "oslib/oslib.h"
 #include "log/Log.h"
+#include "emulator.h"
 
 #include "DreamPicoPortApi.hpp"
 
@@ -356,8 +357,18 @@ std::mutex ApiDreamPicoPortComms::all_dpp_api_devices_mutex;
 
 class DreamPicoPort : public SDLDreamLink
 {
+	//! Duration to delay before trying to connect again
+	static constexpr std::chrono::milliseconds CONNECT_RETRY_DELAY = std::chrono::milliseconds(1000);
+
+	//! Serializes the externally-executed interfaces of this class
+	mutable std::recursive_mutex mutex;
 	//! Implements communication interface to DreamPicoPort
 	std::unique_ptr<class ApiDreamPicoPortComms> dpp_comms;
+	//! Set to true while connection was requested
+	bool connect_requested = false;
+	//! Set to true when connect retry has been scheduled
+	bool connect_retry_scheduled = false;
+
 	//! Current timeout in milliseconds
 	std::chrono::milliseconds timeout_ms;
 	//! The bus ID dictated by flycast
@@ -413,6 +424,8 @@ public:
 	}
 
 	bool send(const MapleMsg& msg) override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		if (!dpp_comms) {
 			return false;
 		}
@@ -421,6 +434,8 @@ public:
 	}
 
     bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		if (!dpp_comms) {
 			return false;
 		}
@@ -431,6 +446,8 @@ public:
 	//! Sends the current game id to a DreamLink backed expansion device if supported
 	//! @param[in] expansion The expansion port to send to or -1 to send to all storage devices
 	void sendGameId(int expansion = -1) {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		if (!dpp_comms || hw_info.hardware_bus < 0 || !storageEnabled()) {
 			return;
 		}
@@ -497,6 +514,8 @@ public:
 	}
 
     u32 getFunctionCode(int forPort) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		forPort = fcPortToDppPort(forPort);
 		u32 mask = 0;
 		if ((int)peripherals.size() > forPort) {
@@ -509,6 +528,8 @@ public:
 	}
 
 	std::array<u32, 3> getFunctionDefinitions(int forPort) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		forPort = fcPortToDppPort(forPort);
 		std::array<u32, 3> arr{0, 0, 0};
 		if ((int)peripherals.size() > forPort) {
@@ -535,6 +556,8 @@ public:
 	}
 
 	void changeBus(int newBus) override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		if (software_bus == newBus)
 			return;
 		software_bus = newBus;
@@ -564,7 +587,6 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(0);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 0); });
 			}
 		}
 
@@ -573,12 +595,13 @@ public:
 			if (storageEnabled() && isGameRunning())
 			{
 				sendGameId(1);
-				emu.run([bus=this->software_bus]() { maple_ReconnectDevice(bus, 1); });
 			}
 		}
 	}
 
 	bool isConnected() override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		return (dpp_comms && dpp_comms->isConnected());
 	}
 
@@ -599,6 +622,48 @@ public:
 	}
 
 	void connect() override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		connect_requested = true;
+
+		internalConnect();
+
+		if (!isConnected()) {
+			// Retry again later
+			scheduleConnectRetry();
+		}
+	}
+
+	void disconnect() override {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		internalDisconnect();
+
+		connect_requested = false;
+	}
+
+    void sendPort() {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		if (dpp_comms) {
+			dpp_comms->sendPort(timeout_ms);
+		}
+	}
+
+	int hardwareBus() const {
+		return hw_info.hardware_bus;
+	}
+
+	bool isHardwareBusImplied() const {
+		return hw_info.is_hardware_bus_implied;
+	}
+
+	bool isSingleDevice() const {
+		return hw_info.is_single_device;
+	}
+
+private:
+	void internalConnect() {
 		// Timeout is 1 second while establishing connection
 		timeout_ms = std::chrono::seconds(1);
 
@@ -626,12 +691,12 @@ public:
 		if (isConnected()) {
 			sendPort();
 		} else {
-			disconnect();
+			internalDisconnect();
 			return;
 		}
 
 		if (!queryPeripherals()) {
-			disconnect();
+			internalDisconnect();
 			return;
 		}
 
@@ -650,29 +715,36 @@ public:
 		);
 	}
 
-	void disconnect() override {
+	void internalDisconnect() {
 		dpp_comms.reset();
 	}
 
-    void sendPort() {
-		if (dpp_comms) {
-			dpp_comms->sendPort(timeout_ms);
+	void scheduleConnectRetry() {
+		if (connect_retry_scheduled) {
+			// Already scheduled
+			return;
+		}
+
+		connect_retry_scheduled = true;
+
+		gui_runOnUiThread(CONNECT_RETRY_DELAY, [this](){connectionCallback();});
+	}
+
+	void connectionCallback() {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		connect_retry_scheduled = false;
+
+		if (connect_requested && !isConnected()) {
+			internalConnect();
+
+			if (!isConnected()) {
+				// Retry again later
+				scheduleConnectRetry();
+			}
 		}
 	}
 
-	int hardwareBus() const {
-		return hw_info.hardware_bus;
-	}
-
-	bool isHardwareBusImplied() const {
-		return hw_info.is_hardware_bus_implied;
-	}
-
-	bool isSingleDevice() const {
-		return hw_info.is_single_device;
-	}
-
-private:
 	//! Only to be called during instantiation to determine hardware information
 	//! @param[in] joystick_idx SDL joystick index
 	//! @param[in] sdl_joystick SDL joystick object
@@ -818,6 +890,8 @@ private:
 
 public:
     bool queryPeripherals(bool clearOnFailure = true) {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
 		std::vector<std::vector<std::array<uint32_t, 2>>> prev = peripherals;
 
 		if (clearOnFailure) {
