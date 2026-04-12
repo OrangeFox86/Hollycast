@@ -413,6 +413,9 @@ struct PopupOptionsConfig {
 
     // Optional: Callback when value changes
     std::function<bool(int)> onChange = nullptr;
+    // Optional: Called when an option is hovered/focused/selected in the popup.
+    // Params: storage index, option label text.
+    std::function<void(int, const char*)> onOptionHighlight = nullptr;
 
     // Optional: Disabled state
     bool disabled = false;

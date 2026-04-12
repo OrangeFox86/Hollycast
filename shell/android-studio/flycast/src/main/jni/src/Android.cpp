@@ -495,6 +495,8 @@ extern "C" void abort_message(const char* format, ...)
 
 std::string getNativeLibraryPath()
 {
+	if (g_activity == nullptr)
+		return "";
 	JNIEnv *env = jni::env();
 	jmethodID getNativeLibDir = env->GetMethodID(env->GetObjectClass(g_activity), "getNativeLibDir", "()Ljava/lang/String;");
 	jni::String nativeLibDir(jni::env()->CallObjectMethod(g_activity, getNativeLibDir));
@@ -503,6 +505,8 @@ std::string getNativeLibraryPath()
 
 std::string getFilesPath()
 {
+	if (g_activity == nullptr)
+		return "";
 	JNIEnv *env = jni::env();
 	jmethodID getInternalFilesDir = env->GetMethodID(env->GetObjectClass(g_activity), "getInternalFilesDir", "()Ljava/lang/String;");
 	jni::String filesDir(jni::env()->CallObjectMethod(g_activity, getInternalFilesDir));

@@ -1,12 +1,13 @@
 #pragma once
 #include "cfg/option.h"
+#include <cstdint>
 #include <string>
 #include <variant>
 
 namespace SettingsNew {
 
 // Type-erased value wrapper to handle different setting types
-using PresetValue = std::variant<int, bool, float>;
+using PresetValue = std::variant<int, int64_t, bool, float>;
 
 // Individual setting entry within a preset
 struct PresetSetting {
