@@ -156,7 +156,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 
 		ImGui::Text("%s", title.c_str());
 		ImGui::BeginChild(ImGui::GetID("dir_list"), ImVec2(0, - uiScaled(30) - ImGui::GetStyle().ItemSpacing.y),
-				ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling | ImGuiChildFlags_NavFlattened);
+				ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 		{
 			ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 20));
 
@@ -1311,8 +1311,8 @@ void SettingIcon(const char* icon, const ImVec2& size)
 
 void BeginSettingsRow(const SettingsRowParams& params)
 {
-	ImGui::BeginChild(params.label, ImVec2(0, params.minHeight > 0 ? params.minHeight : settings.display.uiScale * 48), false,
-		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NavFlattened);
+	ImGui::BeginChild(params.label, ImVec2(0, params.minHeight > 0 ? params.minHeight : settings.display.uiScale * 48),
+		ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar);
 
 	// Draw icon if provided
 	if (params.icon != nullptr)

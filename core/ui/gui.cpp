@@ -268,6 +268,9 @@ void gui_initFonts()
 	ImFont* baseFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, fontSize, nullptr, ranges);
     ImFontConfig font_cfg;
     font_cfg.MergeMode = true;
+	ImFontConfig fontConfig = font_cfg;
+	ImFontConfig largeFontConfig = font_cfg;
+	const float largeFontSize = uiScaled(21.f);
 #ifdef _WIN32
     u32 cp = GetACP();
     std::string fontDir = std::string(nowide::getenv("SYSTEMROOT")) + "\\Fonts\\";
@@ -377,7 +380,6 @@ void gui_initFonts()
     // Large font without Asian glyphs
 	data = resource::load("fonts/Roboto-Regular.ttf", dataSize);
 	verify(data != nullptr);
-	const float largeFontSize = uiScaled(21.f);
 	largeFont = io.Fonts->AddFontFromMemoryTTF(data.release(), dataSize, largeFontSize, nullptr, ranges);
 
 	data = resource::load("fonts/Jura-wght.ttf", dataSize);
@@ -721,11 +723,16 @@ static void render_exit_save_dialog()
 		// Button styling (consistent with existing dialogs)
 		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
 		ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
+		const float buttonWidth = std::max({
+			ImGui::CalcTextSize("Save & Exit").x,
+			ImGui::CalcTextSize("Exit Without Saving").x,
+			ImGui::CalcTextSize("Cancel").x
+		}) + ImGui::GetStyle().FramePadding.x * 2 + uiScaled(24.f);
 
 		// Check if save is allowed
-		bool canSave = savestateAllowed();
+		bool canSave = dc_savestateAllowed();
 
-		if (ImGui::Button("Save & Exit", ImVec2(120, 0)))
+		if (ImGui::Button("Save & Exit", ImVec2(buttonWidth, 0)))
 		{
 			if (canSave)
 			{
@@ -741,14 +748,14 @@ static void render_exit_save_dialog()
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Exit Without Saving", ImVec2(140, 0)))
+		if (ImGui::Button("Exit Without Saving", ImVec2(buttonWidth, 0)))
 		{
 			ImGui::CloseCurrentPopup();
 			showExitSaveDialog = false;
 			gui_stop_game();
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Cancel", ImVec2(80, 0)))
+		if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0)))
 		{
 			ImGui::CloseCurrentPopup();
 			showExitSaveDialog = false;
@@ -916,14 +923,14 @@ static void gui_display_commands()
 
 			// Slot #
 			if (ImGui::ArrowButton("##prev-slot", ImGuiDir_Left))
-				cycleSaveStateSlot(-1);
+				gui_cycleSaveStateSlot(-1);
 			std::string slot = strprintf(T("Slot %d"), (int)config::SavestateSlot + 1);
 			float spacingW = (uiScaled(buttonWidth) - ImGui::GetFrameHeight() * 2 - ImGui::CalcTextSize(slot.c_str()).x) / 2;
 			ImGui::SameLine(0, spacingW);
 			ImGui::Text("%s", slot.c_str());
 			ImGui::SameLine(0, spacingW);
 			if (ImGui::ArrowButton("##next-slot", ImGuiDir_Right))
-				cycleSaveStateSlot(1);
+				gui_cycleSaveStateSlot(1);
 			{
 				ImVec4 gray(0.75f, 0.75f, 0.75f, 1.f);
 				if (savestateDate == 0)
@@ -1146,7 +1153,7 @@ static void gui_display_content()
 #else
 		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width());
 #endif
-			if (iconButton(ICON_FA_GEAR, "Settings"))
+			if (settingsBtn.realize())
 			{
 				gui_setState(GuiState::Settings);
 			}
@@ -1819,7 +1826,7 @@ void gui_loadState(bool backup)
 	// Fix: Close GUI if open (menu selection scenario)
 	bool needToCloseGui = (gui_state != GuiState::Closed);
 
-	if (savestateAllowed())
+	if (dc_savestateAllowed())
 	{
 		try {
 			// Close UI if it's open (menu selection scenario)
@@ -1866,7 +1873,7 @@ void gui_saveState(bool stopRestart)
 
 void gui_cycleSaveStateSlot(int step)
 {
-	cycleSaveStateSlot(step);
+	config::SavestateSlot = (config::SavestateSlot + step + 10) % 10;
 	os_notify(strprintf(T("Save state slot %d"), config::SavestateSlot + 1).c_str(), 2000);
 }
 

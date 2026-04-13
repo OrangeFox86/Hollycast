@@ -36,7 +36,7 @@
 #include "hw/maple/maple_cfg.h"
 #include "hw/maple/maple_if.h"
 #ifdef USE_DREAMLINK_DEVICES
-#include "sdl/dreamlink.h"
+#include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
 #include "log/LogManager.h"
 #include "hw/mem/addrspace.h"
@@ -50,6 +50,7 @@
 #include "achievements/achievements.h"
 #include "vgamepad.h"
 #include <cstring>
+#include <cfloat>
 #ifdef __ANDROID__
 #if HOST_CPU == CPU_ARM64 && USE_VULKAN
 #include "rend/vulkan/adreno.h"
@@ -61,6 +62,49 @@ extern ImFont *settingsTitleFont;
 extern ImFont *settingsRightValueFont;
 
 namespace SettingsNew {
+
+static std::string cfgLoadStr(const std::string& section, const std::string& key, const std::string& def)
+{
+	return config::loadStr(section, key, def);
+}
+
+static void cfgSaveStr(const std::string& section, const std::string& key, const std::string& value)
+{
+	config::saveStr(section, key, value);
+}
+
+static bool cfgLoadBool(const std::string& section, const std::string& key, bool def)
+{
+	return config::loadBool(section, key, def);
+}
+
+static void cfgSaveBool(const std::string& section, const std::string& key, bool value)
+{
+	config::saveBool(section, key, value);
+}
+
+static void cfgSaveInt(const std::string& section, const std::string& key, int value)
+{
+	config::saveInt(section, key, value);
+}
+
+static int getResourceMonitorMode()
+{
+	return config::loadInt("rend", "ResourceMonitorMode", 0);
+}
+
+static void setResourceMonitorMode(int mode)
+{
+	config::saveInt("rend", "ResourceMonitorMode", mode);
+}
+
+#if defined(USE_DREAMLINK_DEVICES)
+static void reconnectDreamLinks()
+{
+	// DreamLink devices are tied into maple reconnect flow; keep this hook so
+	// settings exit can request DreamLink-specific reconnection behavior later.
+}
+#endif
 
 // Static state for gamepad settings popup
 static std::shared_ptr<GamepadDevice> g_currentGamepadForSettings;
@@ -230,8 +274,9 @@ static void RenderSettingsFooterBar()
 	const float padY = compactLayout ? uiScaled(1.0f) : uiScaled(2.0f);
 	ImFont* titleFont = settingsRightValueFont != nullptr ? settingsRightValueFont : largeFont;
 	ImFont* bodyFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
-	const float titleFontSize = titleFont->LegacySize * (compactLayout ? 0.93f : 0.97f);
-	const float bodyFontSize = bodyFont->LegacySize * (compactLayout ? 0.89f : 0.93f);
+	const float footerTextScale = 1.25f;
+	const float titleFontSize = titleFont->LegacySize * (compactLayout ? 0.93f : 0.97f) * footerTextScale;
+	const float bodyFontSize = bodyFont->LegacySize * (compactLayout ? 0.89f : 0.93f) * footerTextScale;
 	const float textPadX = compactLayout ? uiScaled(10.0f) : uiScaled(12.0f);
 	const float textPadY = compactLayout ? uiScaled(8.0f) : uiScaled(10.0f);
 	const ImVec2 textBoxMin(footerMin.x + padX, footerMin.y + padY);
@@ -343,9 +388,9 @@ static void RenderSettingsFooterBar()
 	{
 		float totalHeight = 0.0f;
 		if (!displayTitle.empty())
-			totalHeight += ImGui::CalcTextSizeA(titleFont, titleFontSize, wrapWidth, displayTitle.c_str()).y + titleSpacing;
+			totalHeight += titleFont->CalcTextSizeA(titleFontSize, FLT_MAX, wrapWidth, displayTitle.c_str()).y + titleSpacing;
 		if (!bodyText.empty())
-			totalHeight += ImGui::CalcTextSizeA(bodyFont, bodyFontSize, wrapWidth, bodyText.c_str()).y;
+			totalHeight += bodyFont->CalcTextSizeA(bodyFontSize, FLT_MAX, wrapWidth, bodyText.c_str()).y;
 		if (totalHeight > availableHeight)
 		{
 			const float scale = std::clamp(availableHeight / totalHeight, 0.78f, 1.0f);
@@ -431,7 +476,7 @@ static ImVec2 BeginTwoLineSettingRowContent()
 
 static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = nullptr, bool disabled = false)
 {
-	ImGuiSelectableFlags rowFlags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+	ImGuiSelectableFlags rowFlags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap;
 	if (disabled)
 		rowFlags |= ImGuiSelectableFlags_Disabled;
 
@@ -1357,8 +1402,8 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 	}
 
 	char key_id[32];
-	ImGui::BeginChild(ImGui::GetID("buttons"), ImVec2(0, 0), ImGuiChildFlags_FrameStyle,
-		ImGuiWindowFlags_DragScrolling | ImGuiWindowFlags_NavFlattened);
+	ImGui::BeginChild(ImGui::GetID("buttons"), ImVec2(0, 0),
+		ImGuiChildFlags_FrameStyle | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 	for (; systemMapping->name != nullptr; systemMapping++)
 	{
 		if (systemMapping->key == EMU_BTN_NONE)
@@ -1698,7 +1743,7 @@ const char* getTabName(SettingsTab tab)
 
 // Render left navigation rail with tab buttons (225px wide)
 // This creates the vertical strip on the left side with navigation items
-static void renderNavigationRail()
+static void renderNavigationRail(const std::function<void()>& exitSettings, const char* exitLabel)
 {
 	const float navWidth = SettingsNavigationWidth();
 	const float footerGap = SettingsFooterGap();
@@ -1707,6 +1752,13 @@ static void renderNavigationRail()
 	// Left navigation rail: 225px wide child window
 	// Match the main content column height so the shared footer sits flush below both panels.
 	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)), true);
+
+	IconButton backButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0));
+	if (backButton.realize())
+		exitSettings();
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
 
 	// Iterate through all tabs and create navigation buttons
 	// Using ImGui::Selectable() which provides proper hover and selection states
@@ -3768,7 +3820,7 @@ void renderAudioTab()
 
 	// Get current backend name for display
 	AudioBackend *currentBackend = AudioBackend::getBackend(config::AudioBackend.get());
-	std::string currentBackendName = currentBackend ? currentBackend->name : "Unknown";
+	std::string currentBackendName = currentBackend ? currentBackend->getName() : "Unknown";
 
 	// Build dynamic options list
 	std::vector<const char*> backendOptions;
@@ -3776,7 +3828,7 @@ void renderAudioTab()
 	for (u32 i = 0; i < AudioBackend::getCount(); i++)
 	{
 		const AudioBackend* backend = AudioBackend::getBackend(i);
-		backendLabels.push_back(backend->slug + " - " + backend->name);
+		backendLabels.push_back(backend->slug + " - " + backend->getName());
 		backendOptions.push_back(backendLabels.back().c_str());
 	}
 
@@ -4340,7 +4392,7 @@ void renderControlsTab()
 				float rowHeight = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
 				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
 				bool rowClicked = ImGui::Selectable("##crosshair_row", false,
-					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap,
+					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
 					ImVec2(0, rowHeight));
 				ImGui::PopStyleVar();
 
@@ -4508,8 +4560,12 @@ void renderControlsTab()
 					ICON_FA_NETWORK_WIRED,
 					rowLabel,
 					"Connect to expansion devices such as VMUs over local TCP",
-					static_cast<bool>(config::UseNetworkExpansionDevices[bus]),
-					[bus](bool enabled) { config::UseNetworkExpansionDevices[bus].set(enabled); },
+					static_cast<bool>(config::NetworkExpansionDevices[bus][0].get() || config::NetworkExpansionDevices[bus][1].get()),
+					[bus](bool enabled) {
+						const int netEnabled = enabled ? 1 : 0;
+						config::NetworkExpansionDevices[bus][0].set(netEnabled);
+						config::NetworkExpansionDevices[bus][1].set(netEnabled);
+					},
 					"Network Expansion Devices\n"
 					"Connects to expansion devices such as VMUs over local TCP.\n"
 					"Use this only if you have a compatible expansion-device bridge configured on your network.");
@@ -5384,7 +5440,7 @@ void renderAdvancedTab()
 
 				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
 				bool rowClicked = ImGui::Selectable(("##" + shortName + "_row").c_str(), false,
-					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap,
+					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
 					ImVec2(0, rowHeight));
 				ImGui::PopStyleVar();
 
@@ -5546,7 +5602,7 @@ void renderAdvancedTab()
 			"Minimal",
 			"Full"
 		};
-		int monitorModeSelection = config::ResourceMonitorMode.get();
+		int monitorModeSelection = getResourceMonitorMode();
 		if (monitorModeSelection < 0 || monitorModeSelection >= static_cast<int>(monitorModeLabels.size()))
 			monitorModeSelection = 0;
 
@@ -5562,7 +5618,7 @@ void renderAdvancedTab()
 		monitorModeCfg.options.onChange = [&](int selectedIndex) {
 			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(monitorModeLabels.size()))
 				return false;
-			config::ResourceMonitorMode.set(selectedIndex);
+			setResourceMonitorMode(selectedIndex);
 			return true;
 		};
 
@@ -5810,7 +5866,8 @@ void renderSettingsNew()
 
 	// Main settings window
 	if (ImGui::Begin("Settings", NULL, ImGuiWindowFlags_NoResize
-			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse))
+			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
+			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 	{
 		auto exitSettings = []()
 		{
@@ -5835,27 +5892,12 @@ void renderSettingsNew()
 				gui_setState(GuiState::Main);
 		};
 
-		// Precompute Exit button placement in the title/header row.
-		const ImVec2 contentStart = ImGui::GetCursorPos();
-		const float exitButtonWidth = uiScaled(88.0f);
-		const float exitButtonHeight = uiScaled(22.0f);
-		const float titleBarHeight = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f;
-		const float titleBarY = std::max(uiScaled(1.0f), (titleBarHeight - exitButtonHeight) * 0.5f);
-		const float exitButtonX = ImGui::GetWindowContentRegionMax().x - exitButtonWidth - uiScaled(10.0f);
+		const char* backLabel = game_started ? T("Back to Game") : T("Back to Library");
 
 		// Split into left navigation rail and right content area
-		renderNavigationRail();
+		renderNavigationRail(exitSettings, backLabel);
 		ImGui::SameLine();
 		renderContentArea();
-
-		// Draw Exit last so it stays on top of the header bar.
-		ImGui::SetCursorPos(ImVec2(exitButtonX, titleBarY));
-		ImGui::SetItemAllowOverlap();
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(10.0f, 4.0f));
-		if (ImGui::Button("Exit", ImVec2(exitButtonWidth, exitButtonHeight)))
-			exitSettings();
-		ImGui::PopStyleVar();
-		ImGui::SetCursorPos(contentStart);
 	}
 	ImGui::End();
 }
