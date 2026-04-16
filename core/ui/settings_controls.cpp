@@ -23,6 +23,7 @@
 #include "input/keyboard_device.h"
 #include "input/mouse.h"
 #include "hw/maple/maple_devs.h"
+#include "hw/maple/maple_if.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
 
@@ -30,6 +31,15 @@
 #if defined(USE_DREAMLINK_DEVICES)
 #include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
+
+#include "nowide/cstdio.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 static float calcComboWidth(const char *labels[], size_t size)
 {
@@ -168,6 +178,425 @@ static const char *maple_expansion_device_name(MapleDeviceType type)
 }
 
 static const char *maple_ports[] = { Tnop("None"), "A", "B", "C", "D", Tnop("All") };
+
+namespace {
+
+constexpr std::uintmax_t kVmuBytes = 131072;
+
+static bool iequals_ascii(const std::string& a, const std::string& b)
+{
+	if (a.size() != b.size())
+		return false;
+	for (size_t i = 0; i < a.size(); i++)
+	{
+		if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i]))
+			return false;
+	}
+	return true;
+}
+
+static bool ends_with_iequals_ascii(const std::string& s, const std::string& suffix)
+{
+	if (suffix.size() > s.size())
+		return false;
+	return iequals_ascii(s.substr(s.size() - suffix.size()), suffix);
+}
+
+static bool isVmuBinFileName(const std::string& name)
+{
+	if (!ends_with_iequals_ascii(name, ".bin"))
+		return false;
+	// Every install has it, and it happens to be VMU-sized.
+	if (iequals_ascii(name, "dc_nvmem.bin"))
+		return false;
+	return true;
+}
+
+static bool isDefaultSlotVmuName(const std::string& name, std::string& outSlotLabel)
+{
+	// vmu_save_A1.bin
+	if (name.size() != sizeof("vmu_save_A1.bin") - 1)
+		return false;
+	if (!iequals_ascii(name.substr(0, 9), "vmu_save_"))
+		return false;
+	char bus = name[9];
+	char slot = name[10];
+	if (bus < 'A' || bus > 'D')
+		return false;
+	if (slot != '1' && slot != '2')
+		return false;
+	if (!iequals_ascii(name.substr(11), ".bin"))
+		return false;
+	outSlotLabel.clear();
+	outSlotLabel.push_back(bus);
+	outSlotLabel.push_back(slot);
+	return true;
+}
+
+struct VmuFileRow {
+	std::string name;
+	std::string slotLabel;
+};
+
+static std::filesystem::path vmuDataDir()
+{
+	return std::filesystem::path(get_writable_data_path(""));
+}
+
+static std::filesystem::path vmuPathForName(const std::string& name)
+{
+	return vmuDataDir() / std::filesystem::path(name);
+}
+
+static std::filesystem::path vmuPathForSlot(const std::string& slotLabel)
+{
+	// slotLabel like "A1"
+	std::string filename = "vmu_save_";
+	filename += slotLabel;
+	filename += ".bin";
+	return vmuPathForName(filename);
+}
+
+static bool createBlankVmuFile(const std::filesystem::path& path, std::string& outError)
+{
+	FILE* file = nowide::fopen(path.string().c_str(), "wb");
+	if (file == nullptr)
+	{
+		outError = "Failed to create file";
+		return false;
+	}
+	std::array<std::uint8_t, 4096> zeros {};
+	std::uintmax_t remaining = kVmuBytes;
+	while (remaining != 0)
+	{
+		size_t toWrite = (size_t)std::min<std::uintmax_t>(remaining, zeros.size());
+		if (std::fwrite(zeros.data(), 1, toWrite, file) != toWrite)
+		{
+			std::fclose(file);
+			outError = "Failed to write VMU data";
+			return false;
+		}
+		remaining -= toWrite;
+	}
+	std::fclose(file);
+	return true;
+}
+
+static bool swapPathsByRename(const std::filesystem::path& a, const std::filesystem::path& b, std::string& outError)
+{
+	auto dir = a.parent_path();
+	std::filesystem::path tmp;
+	for (int i = 0; i < 50; i++)
+	{
+		tmp = dir / (".vmu_swap_tmp_" + std::to_string(i) + ".bin");
+		std::error_code ec;
+		if (!std::filesystem::exists(tmp, ec))
+			break;
+	}
+
+	std::error_code ec;
+	std::filesystem::rename(a, tmp, ec);
+	if (ec)
+	{
+		outError = "Failed to move first file";
+		return false;
+	}
+	std::filesystem::rename(b, a, ec);
+	if (ec)
+	{
+		std::filesystem::rename(tmp, a);
+		outError = "Failed to move second file";
+		return false;
+	}
+	std::filesystem::rename(tmp, b, ec);
+	if (ec)
+	{
+		// Roll back best-effort
+		std::filesystem::rename(a, b);
+		std::filesystem::rename(tmp, a);
+		outError = "Failed to finalize swap";
+		return false;
+	}
+	return true;
+}
+
+static std::vector<VmuFileRow> scanVmuFiles()
+{
+	std::vector<VmuFileRow> out;
+	std::error_code ec;
+	auto dir = vmuDataDir();
+	for (auto it = std::filesystem::directory_iterator(dir, ec); !ec && it != std::filesystem::directory_iterator(); ++it)
+	{
+		const auto& entry = *it;
+		if (!entry.is_regular_file(ec))
+			continue;
+		auto p = entry.path();
+		std::string name = p.filename().string();
+		if (!isVmuBinFileName(name))
+			continue;
+		std::uintmax_t size = entry.file_size(ec);
+		if (ec || size != kVmuBytes)
+			continue;
+
+		VmuFileRow row;
+		row.name = std::move(name);
+		(void)isDefaultSlotVmuName(row.name, row.slotLabel);
+		out.emplace_back(std::move(row));
+	}
+	std::sort(out.begin(), out.end(), [](const VmuFileRow& a, const VmuFileRow& b) { return a.name < b.name; });
+	return out;
+}
+
+static std::vector<std::string> getAvailableVmuSlots()
+{
+	std::vector<std::string> slots;
+	for (int bus = 0; bus < 4; bus++)
+	{
+		if (config::MapleMainDevices[bus] == MDT_None)
+			continue;
+		for (int port = 0; port < 2; port++)
+		{
+			if (config::MapleExpansionDevices[bus][port] != MDT_SegaVMU)
+				continue;
+			std::string label;
+			label.push_back((char)('A' + bus));
+			label.push_back((char)('1' + port));
+			slots.emplace_back(std::move(label));
+		}
+	}
+	return slots;
+}
+
+static void vmuManagerUi(bool game_started)
+{
+	static std::vector<VmuFileRow> rows;
+	static int selected = -1;
+	static bool didInit = false;
+
+	static char createNameBuf[128] = {};
+	static char renameBuf[128] = {};
+	static std::string lastError;
+
+	auto refresh = [&]() {
+		rows = scanVmuFiles();
+		if (rows.empty())
+			selected = -1;
+		else if (selected < 0 || selected >= (int)rows.size())
+			selected = 0;
+	};
+
+	if (!didInit)
+	{
+		refresh();
+		didInit = true;
+	}
+
+	ImGui::Separator();
+	ImGui::TextUnformatted(T("Memory Cards"));
+	ImGui::SameLine();
+	if (ImGui::Button(T("Refresh")))
+		refresh();
+
+	const float buttonHeight = uiScaled(30.f);
+
+	if (ImGui::BeginTable("vmu_manager", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+	{
+		ImGui::TableSetupColumn(T("Cards"), ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn(T("Actions"), ImGuiTableColumnFlags_WidthFixed, uiScaled(220.f));
+		ImGui::TableNextRow();
+
+		ImGui::TableSetColumnIndex(0);
+		if (ImGui::BeginTable("vmu_list", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ScaledVec2(0, 220)))
+		{
+			ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn(T("Slot"), ImGuiTableColumnFlags_WidthFixed, uiScaled(60.f));
+			ImGui::TableHeadersRow();
+
+			for (int i = 0; i < (int)rows.size(); i++)
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				bool isSelected = (i == selected);
+				if (ImGui::Selectable(rows[i].name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns))
+					selected = i;
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(rows[i].slotLabel.empty() ? "" : rows[i].slotLabel.c_str());
+			}
+			ImGui::EndTable();
+		}
+
+		ImGui::TableSetColumnIndex(1);
+		{
+			bool hasSelection = selected >= 0 && selected < (int)rows.size();
+			if (ImGui::Button(T("Create New Card"), ScaledVec2(-1, buttonHeight)))
+			{
+				createNameBuf[0] = 0;
+				lastError.clear();
+				ImGui::OpenPopup("##create_vmu");
+			}
+
+			DisabledScope noSel(!hasSelection);
+			if (ImGui::Button(T("Rename"), ScaledVec2(-1, buttonHeight)))
+			{
+				lastError.clear();
+				std::snprintf(renameBuf, sizeof(renameBuf), "%s", hasSelection ? rows[selected].name.c_str() : "");
+				ImGui::OpenPopup("##rename_vmu");
+			}
+
+			if (ImGui::Button(T("Insert"), ScaledVec2(-1, buttonHeight)))
+			{
+				lastError.clear();
+				ImGui::OpenPopup("##insert_vmu");
+			}
+		}
+
+		ImGui::EndTable();
+	}
+
+	if (ImGui::BeginPopupModal("##create_vmu", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::TextUnformatted(T("Create a new blank VMU card in the data folder."));
+		ImGui::InputText(T("File name"), createNameBuf, sizeof(createNameBuf));
+		if (!lastError.empty())
+			ImGui::TextColored(ImVec4(1, 0.25f, 0.25f, 1), "%s", lastError.c_str());
+
+		if (ImGui::Button(T("Create"), ScaledVec2(uiScaled(120.f), buttonHeight)))
+		{
+			std::string name(createNameBuf);
+			if (!ends_with_iequals_ascii(name, ".bin"))
+				name += ".bin";
+			if (!isVmuBinFileName(name))
+				lastError = "Invalid VMU file name";
+			else
+			{
+				std::string err;
+				auto path = vmuPathForName(name);
+				if (std::filesystem::exists(path))
+					lastError = "File already exists";
+				else if (!createBlankVmuFile(path, err))
+					lastError = err;
+				else
+				{
+					if (game_started)
+						maple_ReconnectDevices();
+					reset_vmus();
+					refresh();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel"), ScaledVec2(uiScaled(120.f), buttonHeight)))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopupModal("##rename_vmu", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.2f, 1.0f), "%s  %s", ICON_FA_TRIANGLE_EXCLAMATION,
+				T("Renaming a Per Game VMU can prevent it from auto-loading when Per Game VMUs is enabled."));
+		ImGui::TextUnformatted(T("To make Flycast auto-pick it again later, rename the file back to its original name."));
+		ImGui::Separator();
+
+		ImGui::InputText(T("New file name"), renameBuf, sizeof(renameBuf));
+		if (!lastError.empty())
+			ImGui::TextColored(ImVec4(1, 0.25f, 0.25f, 1), "%s", lastError.c_str());
+
+		if (ImGui::Button(T("Rename"), ScaledVec2(uiScaled(120.f), buttonHeight)))
+		{
+			if (selected < 0 || selected >= (int)rows.size())
+				lastError = "No selection";
+			else
+			{
+				std::string newName(renameBuf);
+				if (!ends_with_iequals_ascii(newName, ".bin"))
+					newName += ".bin";
+				if (!isVmuBinFileName(newName))
+					lastError = "Invalid VMU file name";
+				else
+				{
+					auto oldPath = vmuPathForName(rows[selected].name);
+					auto newPath = vmuPathForName(newName);
+					if (std::filesystem::exists(newPath))
+						lastError = "Target file already exists";
+					else
+					{
+						if (game_started)
+							maple_ReconnectDevices();
+						std::error_code ec;
+						std::filesystem::rename(oldPath, newPath, ec);
+						if (ec)
+							lastError = "Rename failed";
+						else
+						{
+							reset_vmus();
+							refresh();
+							ImGui::CloseCurrentPopup();
+						}
+					}
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel"), ScaledVec2(uiScaled(120.f), buttonHeight)))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopup("##insert_vmu"))
+	{
+		if (selected < 0 || selected >= (int)rows.size())
+		{
+			ImGui::TextUnformatted(T("Select a card first."));
+		}
+		else
+		{
+			auto slots = getAvailableVmuSlots();
+			if (slots.empty())
+			{
+				ImGui::TextUnformatted(T("No VMU slots are enabled in the controller setup."));
+			}
+			else
+			{
+				ImGui::TextUnformatted(T("Insert into slot:"));
+				for (const auto& slotLabel : slots)
+				{
+					if (ImGui::Selectable(slotLabel.c_str()))
+					{
+						lastError.clear();
+						auto selectedPath = vmuPathForName(rows[selected].name);
+						auto slotPath = vmuPathForSlot(slotLabel);
+
+						// Ensure the slot file exists so swap can succeed.
+						if (!std::filesystem::exists(slotPath))
+						{
+							std::string err;
+							(void)createBlankVmuFile(slotPath, err);
+						}
+
+						if (game_started)
+							maple_ReconnectDevices();
+
+						std::string err;
+						if (!swapPathsByRename(selectedPath, slotPath, err))
+							lastError = err;
+						else
+							reset_vmus();
+
+						refresh();
+						ImGui::CloseCurrentPopup();
+					}
+				}
+			}
+		}
+		if (!lastError.empty())
+			ImGui::TextColored(ImVec4(1, 0.25f, 0.25f, 1), "%s", lastError.c_str());
+		ImGui::EndPopup();
+	}
+}
+
+} // namespace
 
 struct Mapping {
 	DreamcastKey key;
@@ -1251,5 +1680,6 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 			DisabledScope scope(!is_there_any_xhair);
 			OptionSlider(T("Crosshair Size"), config::CrosshairSize, 10, 100);
 		}
+		vmuManagerUi(game_started);
     }
 }
