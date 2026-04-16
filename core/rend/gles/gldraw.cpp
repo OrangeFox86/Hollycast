@@ -1,12 +1,12 @@
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
+#include "postprocess.h"
 #include "rend/tileclip.h"
 #include "rend/osd.h"
 #include "naomi2.h"
 #include "rend/transform_matrix.h"
 #ifdef LIBRETRO
-#include "postprocess.h"
 #include "vmu_xhair.h"
 #endif
 
@@ -783,6 +783,17 @@ bool OpenGLRenderer::renderLastFrame()
 	int dy = 0;
 	glcache.Disable(GL_SCISSOR_TEST);
 	getWindowboxDimensions(settings.display.width, settings.display.height, gl.ofbo.aspectRatio, dx, dy, config::Rotate90);
+
+#ifndef LIBRETRO
+	// Optional final-frame PostFX shader chain. Fail-open to the normal blit path.
+	glViewport(0, 0, settings.display.width, settings.display.height);
+	glBindFramebuffer(GL_FRAMEBUFFER, gl.ofbo.origFbo);
+	glcache.ClearColor(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	if (postfx_gl::render(framebuffer->getTexture(), framebuffer->getWidth(), framebuffer->getHeight(), gl.ofbo.origFbo,
+			dx, dy, settings.display.width - dx * 2, settings.display.height - dy * 2, config::Rotate90, config::LinearInterpolation))
+		return true;
+#endif
 
 	if (gl.bogusBlitFramebuffer || config::Rotate90)
 	{

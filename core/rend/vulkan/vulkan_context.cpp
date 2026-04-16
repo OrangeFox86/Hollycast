@@ -28,11 +28,13 @@
 #include <SDL_vulkan.h>
 #endif
 #include "compiler.h"
+#include "postfx.h"
 #include "utils.h"
 #include "emulator.h"
 #include "oslib/oslib.h"
 #include "vulkan_driver.h"
 #include "rend/transform_matrix.h"
+#include "rend/postfx/postfx.h"
 #if defined(__ANDROID__) && HOST_CPU == CPU_ARM64
 #include "adreno.h"
 #endif
@@ -817,6 +819,8 @@ void VulkanContext::CreateSwapChain()
 	    overlay->Init(quadPipelineWithAlpha.get());
 
 	    InitImgui();
+	    if (postFx)
+	    	postFx->OnSwapchainRecreated(presentFormat, width, height, (u32)imageViews.size(), *renderPass);
 
 	    currentImage = GetSwapChainSize() - 1;
 	    ReInitOSD();
@@ -1078,7 +1082,7 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 			NewFrame();
 			auto overlayCmdBuffer = PrepareOverlay(config::FloatVMUs, true);
 			gui_draw_osd();
-			if (GetVendorID() == VulkanContext::VENDOR_NVIDIA && image)
+			if (image)
 			{
 				vk::ImageMemoryBarrier barrier(
 						vk::AccessFlagBits::eColorAttachmentWrite,
@@ -1097,10 +1101,30 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 						barrier
 				);
 			}
+			int dx = 0;
+			int dy = 0;
+			getWindowboxDimensions(width, height, aspectRatio, dx, dy, config::Rotate90);
+			const int viewportW = width - dx * 2;
+			const int viewportH = height - dy * 2;
+			bool usePostFx = false;
+			if (postFx && imageView)
+				usePostFx = postFx->Prepare(GetCurrentCommandBuffer(), imageView, extent, viewportW, viewportH);
+			if (!usePostFx)
+			{
+				postfx::Tick();
+				if (postfx::IsEnabled() && postfx::GetActivePreset() != nullptr && postfx::GetLastError().empty())
+					postfx::SetRuntimeError("Vulkan PostFX could not prepare this frame and fell back to raw output.");
+			}
+
 			BeginRenderPass();
 
 			if (lastFrameView) // Might have been nullified if swap chain recreated
-				DrawFrame(imageView, extent, aspectRatio);
+			{
+				if (usePostFx)
+					postFx->DrawFinalPass(GetCurrentCommandBuffer(), dx, dy, viewportW, viewportH, config::Rotate90, !config::LinearInterpolation);
+				else
+					DrawFrame(imageView, extent, aspectRatio);
+			}
 
 			DrawOverlay(settings.display.uiScale, config::FloatVMUs, true);
 			imguiDriver->renderDrawData(ImGui::GetDrawData(), false);
@@ -1153,6 +1177,9 @@ void VulkanContext::term()
 		}
 	}
 	overlay.reset();
+	if (postFx)
+		postFx->Term();
+	postFx.reset();
 	ShaderCompiler::Term();
 	swapChain.reset();
 	imageViews.clear();
@@ -1358,6 +1385,7 @@ VulkanContext::VulkanContext()
 {
 	verify(contextInstance == nullptr);
 	contextInstance = this;
+	postFx = std::make_unique<VulkanPostFx>();
 }
 
 VulkanContext::~VulkanContext()

@@ -27,6 +27,8 @@ public:
 	static void Init();
 	static void Term();
 	static vk::UniqueShaderModule Compile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText);
+	static vk::UniqueShaderModule TryCompile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText);
+	static const std::string& GetLastError();
 private:
 	static int initCount;
 };

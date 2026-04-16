@@ -42,3 +42,13 @@ private:
 };
 
 extern PostProcessor postProcessor;
+
+#ifndef LIBRETRO
+namespace postfx_gl
+{
+	// Returns true if PostFX handled the final blit/present.
+	bool render(GLuint inputTex, int inputW, int inputH, GLuint outputFbo,
+			int outX, int outY, int outW, int outH, bool rotate90, bool linearInterpolation);
+	void term();
+}
+#endif

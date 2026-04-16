@@ -1093,6 +1093,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 		core/rend/tileclip.h
 		core/rend/TexCache.cpp
 		core/rend/TexCache.h
+		core/rend/postfx/postfx.cpp
+		core/rend/postfx/postfx.h
+		core/rend/postfx/postfx_preset.cpp
+		core/rend/postfx/postfx_preset.h
 		core/rend/texconv.cpp
 		core/rend/texconv.h
 		core/rend/norend/norend.cpp)
@@ -1155,6 +1159,8 @@ if(USE_VULKAN)
 			core/rend/vulkan/vmallocator.h
 			core/rend/vulkan/overlay.cpp
 			core/rend/vulkan/overlay.h
+			core/rend/vulkan/postfx.cpp
+			core/rend/vulkan/postfx.h
 			core/rend/vulkan/vulkan_context.h
 			core/rend/vulkan/vulkan.h
 			core/rend/vulkan/vulkan_renderer.cpp)

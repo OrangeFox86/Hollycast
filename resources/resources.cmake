@@ -58,3 +58,12 @@ cmrc_add_resources(flycast-resources
 	resources/i18n/zh_CN.po
 	resources/i18n/zh_HK.po
 	resources/i18n/zh_TW.po)
+
+cmrc_add_resources(flycast-resources
+	WHENCE resources
+	resources/shaders/postfx/scanlines.glsl
+	resources/shaders/postfx/sharpen.glsl
+	resources/shaders/postfx/vibrance.glsl
+	resources/shaders/postfx/presets/scanlines.ini
+	resources/shaders/postfx/presets/sharpen_scanlines.ini
+	resources/shaders/postfx/presets/vibrance.ini)

@@ -26,6 +26,7 @@
 #include <glslang/SPIRV/GlslangToSpv.h>
 
 int ShaderCompiler::initCount;
+static thread_local std::string s_lastShaderError;
 
 void ShaderCompiler::Init()
 {
@@ -66,7 +67,8 @@ static EShLanguage translateShaderStage(vk::ShaderStageFlagBits stage)
 	}
 }
 
-static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string const& glslShader, std::vector<unsigned int> &spvShader)
+static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string const& glslShader,
+		std::vector<unsigned int> &spvShader, std::string *errorOut = nullptr)
 {
 	EShLanguage stage = translateShaderStage(shaderType);
 
@@ -81,8 +83,20 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 
 	if (!shader.parse(GetDefaultResources(), 100, false, messages))
 	{
-		ERROR_LOG(RENDERER, "%s", shader.getInfoLog());
-		ERROR_LOG(RENDERER, "%s", shader.getInfoDebugLog());
+		const std::string infoLog = shader.getInfoLog() ? shader.getInfoLog() : "";
+		const std::string debugLog = shader.getInfoDebugLog() ? shader.getInfoDebugLog() : "";
+		ERROR_LOG(RENDERER, "%s", infoLog.c_str());
+		ERROR_LOG(RENDERER, "%s", debugLog.c_str());
+		if (errorOut != nullptr)
+		{
+			*errorOut = infoLog;
+			if (!debugLog.empty())
+			{
+				if (!errorOut->empty())
+					*errorOut += "\n";
+				*errorOut += debugLog;
+			}
+		}
         return false;  // something didn't work
 	}
 
@@ -95,8 +109,20 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 
 	if (!program.link(messages))
 	{
-		ERROR_LOG(RENDERER, "%s", shader.getInfoLog());
-		ERROR_LOG(RENDERER, "%s", shader.getInfoDebugLog());
+		const std::string infoLog = shader.getInfoLog() ? shader.getInfoLog() : "";
+		const std::string debugLog = shader.getInfoDebugLog() ? shader.getInfoDebugLog() : "";
+		ERROR_LOG(RENDERER, "%s", infoLog.c_str());
+		ERROR_LOG(RENDERER, "%s", debugLog.c_str());
+		if (errorOut != nullptr)
+		{
+			*errorOut = infoLog;
+			if (!debugLog.empty())
+			{
+				if (!errorOut->empty())
+					*errorOut += "\n";
+				*errorOut += debugLog;
+			}
+		}
 		return false;
 	}
 
@@ -107,9 +133,26 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 vk::UniqueShaderModule ShaderCompiler::Compile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText)
 {
 	std::vector<unsigned int> shaderSPV;
-	bool ok = GLSLtoSPV(shaderStage, shaderText, shaderSPV);
+	s_lastShaderError.clear();
+	bool ok = GLSLtoSPV(shaderStage, shaderText, shaderSPV, &s_lastShaderError);
 	verify(ok);
 
 	return VulkanContext::Instance()->GetDevice().createShaderModuleUnique
 			(vk::ShaderModuleCreateInfo(vk::ShaderModuleCreateFlags(), shaderSPV));
+}
+
+vk::UniqueShaderModule ShaderCompiler::TryCompile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText)
+{
+	std::vector<unsigned int> shaderSPV;
+	s_lastShaderError.clear();
+	if (!GLSLtoSPV(shaderStage, shaderText, shaderSPV, &s_lastShaderError))
+		return {};
+
+	return VulkanContext::Instance()->GetDevice().createShaderModuleUnique
+			(vk::ShaderModuleCreateInfo(vk::ShaderModuleCreateFlags(), shaderSPV));
+}
+
+const std::string& ShaderCompiler::GetLastError()
+{
+	return s_lastShaderError;
 }

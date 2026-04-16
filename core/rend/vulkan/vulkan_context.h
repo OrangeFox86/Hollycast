@@ -93,6 +93,7 @@ public:
 #include <vector>
 
 struct ImDrawData;
+class VulkanPostFx;
 
 class VulkanContext : public GraphicsContext, public FlightManager
 {
@@ -274,6 +275,7 @@ private:
 	float lastFrameAR = 0.f;
 
 	std::unique_ptr<VulkanOverlay> overlay;
+	std::unique_ptr<VulkanPostFx> postFx;
 	std::vector<std::vector<std::unique_ptr<Deletable>>> inFlightObjects;
 
 	std::string driverName;

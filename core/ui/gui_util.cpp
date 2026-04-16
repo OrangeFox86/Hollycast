@@ -1285,10 +1285,14 @@ void SectionHeaderWithIcon(const char* icon, const char* text)
 {
 	ImGui::Spacing();
 
-	// Icon + text with highlighted color
-	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
+	// Icon + text with emphasized size and color
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	const float previousFontScale = window != nullptr ? window->FontWindowScale : 1.0f;
+	ImGui::SetWindowFontScale(previousFontScale * 1.5f);
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.29f, 0.62f, 1.00f, 1.00f));
 	ImGui::Text("%s %s", icon, text);
 	ImGui::PopStyleColor();
+	ImGui::SetWindowFontScale(previousFontScale);
 
 	// Separator line
 	ImGui::Separator();

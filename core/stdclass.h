@@ -78,6 +78,7 @@ std::string get_readonly_config_path(const std::string& filename);
 std::string get_readonly_data_path(const std::string& filename);
 bool file_exists(const std::string& filename);
 bool make_directory(const std::string& path);
+bool make_directory_tree(const std::string& path);
 
 // returns a prefix for a game save file, for example: ~/.local/share/flycast/mvsc2.zip
 std::string get_game_save_prefix();

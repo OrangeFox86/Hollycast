@@ -23,6 +23,7 @@
 #include "audio/audiostream.h"
 #include "cfg/cfg.h"
 #include "cfg/option.h"
+#include "rend/postfx/postfx.h"
 #include "video_preset.h"
 #include "network/ice.h"
 #include "network/ggpo.h"
@@ -44,6 +45,7 @@
 #include "gui.h"
 #include "boxart/boxart.h"
 #include "IconsFontAwesome6.h"
+#include <SDL.h>
 #include "mainui.h"
 #include "oslib/storage.h"
 #include "stdclass.h"
@@ -116,6 +118,12 @@ static bool g_mapleDevicesChangedInSettings = false;
 static bool g_scrollToBoxArtSection = false;
 static std::string g_settingsFooterText;
 static constexpr float kSettingsFooterHeightPx = 152.0f;
+
+static int getXbrThreadCap()
+{
+	const int cpuCount = SDL_GetCPUCount();
+	return cpuCount > 1 ? cpuCount - 1 : 1;
+}
 
 static bool UseCompactSettingsLayout()
 {
@@ -3529,6 +3537,123 @@ void renderVideoTab()
 			"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer.");
 	}
 
+	// Upscaling
+	SectionHeaderWithIcon(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Upscaling");
+	{
+		const std::array<int, 6> xbrValues{ 1, 2, 3, 4, 5, 6 };
+		const std::array<const char*, 6> xbrLabels{ "Disabled", "x2", "x3", "x4", "x5", "x6" };
+		int xbrSelection = 0;
+		for (size_t i = 0; i < xbrValues.size(); i++)
+		{
+			if (xbrValues[i] == config::TextureUpscale.get())
+			{
+				xbrSelection = static_cast<int>(i);
+				break;
+			}
+		}
+
+		SettingsUI::PopupConfig xbrCfg {};
+		xbrCfg.type = SettingsUI::PopupType::Options;
+		xbrCfg.options.label = "xBR Multiplier";
+		xbrCfg.options.icon = ICON_FA_FILTER;
+		xbrCfg.options.popupID = "TextureUpscalePopup";
+		xbrCfg.options.options = xbrLabels.data();
+		xbrCfg.options.optionCount = static_cast<int>(xbrLabels.size());
+		xbrCfg.options.currentValue = &xbrSelection;
+		xbrCfg.options.valueWidth = 220.0f;
+		xbrCfg.options.onChange = [&](int selectedIndex) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(xbrValues.size()))
+				return false;
+			config::TextureUpscale.set(xbrValues[selectedIndex]);
+			return true;
+		};
+
+		RenderGeneralPopupSettingRow(
+			"TextureUpscaleSetting",
+			"Multiplier used by the xBR upscaler.",
+			xbrCfg,
+			"xBR Multiplier\n"
+			"Controls how many passes xBRZ applies to eligible textures.\n"
+			"Dreamcast textures are usually laid out in power-of-two steps like 4x4, 8x8, 16x16, 32x32, 64x64, 128x128, 256x256, 512x512, and up to 1024x1024, with some rectangular variants such as 128x64 or 128x32.\n"
+			"That makes this filter best suited to small source textures, not large ones.\n\n"
+			"Lower multipliers are usually the safer starting point. Higher values cost more CPU/GPU time and memory, and can make the image look over-processed if pushed too far.\n\n"
+			"Practical examples:\n"
+			"16x16 -> x4\n"
+			"32x32 -> x3\n"
+			"64x64 -> x2\n\n"
+			"This feature is meant for pixel-art or small UI textures, not for large textures.\n"
+			"Keep the max texture size modest when you want the best result.");
+
+		static int xbrThreads = config::MaxThreads.get();
+		if (!ImGui::IsPopupOpen("XbrThreadsPopup"))
+			xbrThreads = config::MaxThreads.get();
+
+		SettingsUI::PopupSliderConfig xbrThreadsCfg {};
+		xbrThreadsCfg.label = "xBR Worker Threads";
+		xbrThreadsCfg.icon = ICON_FA_MICROCHIP;
+		xbrThreadsCfg.popupID = "XbrThreadsPopup";
+		xbrThreadsCfg.description = "Number of CPU threads used by xBR upscaling.";
+		xbrThreadsCfg.currentValue = &xbrThreads;
+		xbrThreadsCfg.minValue = 1;
+		xbrThreadsCfg.maxValue = getXbrThreadCap();
+		xbrThreadsCfg.format = "%d";
+		xbrThreadsCfg.valueWidth = 220.0f;
+		xbrThreadsCfg.sliderWidth = 320.0f;
+		xbrThreadsCfg.onValueChange = [&]() {
+			config::MaxThreads.set(xbrThreads);
+		};
+
+		SettingsUI::PopupConfig xbrThreadsPopupCfg {};
+		xbrThreadsPopupCfg.type = SettingsUI::PopupType::Slider;
+		xbrThreadsPopupCfg.slider = xbrThreadsCfg;
+
+		RenderGeneralPopupSettingRow(
+			"XbrThreadsSetting",
+			"CPU threads used by xBR.",
+			xbrThreadsPopupCfg,
+			"xBR Worker Threads\n"
+			"Sets how many CPU threads xBR can use while processing textures.\n"
+			"A good starting point is total logical cores minus one.\n"
+			"More threads can help on some systems, but this is still a fairly heavy feature and can raise CPU usage.");
+
+		static int xbrMaxTextureSize = config::MaxFilteredTextureSize.get();
+		if (!ImGui::IsPopupOpen("XbrTextureSizePopup"))
+			xbrMaxTextureSize = config::MaxFilteredTextureSize.get();
+
+		SettingsUI::PopupSliderConfig xbrSizeCfg {};
+		xbrSizeCfg.label = "Max Texture Size";
+		xbrSizeCfg.icon = ICON_FA_EXPAND;
+		xbrSizeCfg.popupID = "XbrTextureSizePopup";
+		xbrSizeCfg.description = "Only textures up to this size (WxH) are xBR-upscaled.";
+		xbrSizeCfg.currentValue = &xbrMaxTextureSize;
+		xbrSizeCfg.minValue = 4;
+		xbrSizeCfg.maxValue = 1024;
+		xbrSizeCfg.format = "%d";
+		xbrSizeCfg.valueWidth = 220.0f;
+		xbrSizeCfg.sliderWidth = 320.0f;
+		xbrSizeCfg.onValueChange = [&]() {
+			config::MaxFilteredTextureSize.set(xbrMaxTextureSize);
+		};
+
+		SettingsUI::PopupConfig xbrSizePopupCfg {};
+		xbrSizePopupCfg.type = SettingsUI::PopupType::Slider;
+		xbrSizePopupCfg.slider = xbrSizeCfg;
+
+		RenderGeneralPopupSettingRow(
+			"XbrTextureSizeSetting",
+			"Limit which textures are eligible for xBR.",
+			xbrSizePopupCfg,
+			"Max Texture Size\n"
+			"xBR only applies to textures at or below this width and height.\n"
+			"Example: 32 means 32x32 and smaller textures can be processed.\n\n"
+			"Recommended ranges are usually small:\n"
+			"16 or 32 for very small textures\n"
+			"64 for a broader but still conservative range\n"
+			"128 only if you really want to expand coverage\n\n"
+			"Do not expect this to improve every texture on screen. It is designed for small textures, and the performance cost increases as you raise the limit.\n"
+			"Think of this as a small-texture enhancement tool, not a full-screen image enhancer.");
+	}
+
 		// Show FPS Counter
 		RenderGeneralToggleSettingRow(
 			"ShowFPS",
@@ -3552,6 +3677,7 @@ void renderVideoTab()
 #endif
 
 #ifdef _WIN32
+	{
 	DisabledScope routingScope(!((renderApi == 0) || (renderApi == 3)));
 #endif
 
@@ -3657,7 +3783,100 @@ void renderVideoTab()
 				ImGui::PopID();
 				ImGui::Spacing();
 			}
-	#endif
+#endif
+#ifdef _WIN32
+	}
+#endif
+
+	// PostFX shader chain section
+	SectionHeaderWithIcon(ICON_FA_PAINTBRUSH, "PostFX Shaders");
+	{
+		bool enabled = (bool)config::PostFxEnabled;
+		RenderGeneralToggleSettingRow(
+			"PostFxEnabled",
+			ICON_FA_PAINTBRUSH,
+			"Enable PostFX Shaders",
+			"Screen-space post-processing applied to the final frame.\n"
+			"Fail-open: if a shader fails to compile, output falls back to raw rendering.",
+			enabled,
+			[](bool v) { config::PostFxEnabled = v; });
+
+		postfx::Tick();
+
+		const auto presets = postfx::ListAvailablePresets();
+		if (!presets.empty())
+		{
+			const std::string current = (std::string)config::PostFxPreset;
+			int currentIndex = 0;
+			std::vector<std::string> labels;
+			labels.reserve(presets.size());
+			for (size_t i = 0; i < presets.size(); i++)
+			{
+				const auto& p = presets[i];
+				const size_t slash = p.find_last_of("/\\");
+				labels.push_back(slash == std::string::npos ? p : p.substr(slash + 1));
+				if (p == current)
+					currentIndex = (int)i;
+			}
+			std::vector<const char*> labelPtrs;
+			labelPtrs.reserve(labels.size());
+			for (const auto& s : labels)
+				labelPtrs.push_back(s.c_str());
+
+			SettingsUI::PopupConfig presetCfg {};
+			presetCfg.type = SettingsUI::PopupType::Options;
+			presetCfg.options.label = "Preset";
+			presetCfg.options.icon = ICON_FA_PAINTBRUSH;
+			presetCfg.options.popupID = "PostFxPresetPopup";
+			presetCfg.options.options = labelPtrs.data();
+			presetCfg.options.optionCount = (int)labelPtrs.size();
+			presetCfg.options.currentValue = &currentIndex;
+			presetCfg.options.valueWidth = 260.0f;
+			presetCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= (int)presets.size())
+					return false;
+				config::PostFxPreset = presets[(size_t)selectedIndex];
+				return true;
+			};
+			RenderGeneralPopupSettingRow(
+				"PostFxPresetSetting",
+				"Shader Preset\n"
+				"Select a post-processing preset (built-in or discovered from the external shader folder).",
+				presetCfg);
+		}
+
+		const postfx::Preset* active = postfx::GetActivePreset();
+		if (active)
+		{
+			for (const auto& p : active->params)
+			{
+				float v = p.defaultValue;
+				(void)postfx::GetParamValue(p.id, v);
+				ImGui::PushID(p.id.c_str());
+				ImGui::TextUnformatted(p.label.empty() ? p.id.c_str() : p.label.c_str());
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+				if (p.integer)
+				{
+					int iv = (int)std::lround(v);
+					if (ImGui::SliderInt("##v", &iv, (int)std::lround(p.minValue), (int)std::lround(p.maxValue)))
+						postfx::SetParamValue(p.id, (float)iv);
+				}
+				else
+				{
+					if (ImGui::SliderFloat("##v", &v, p.minValue, p.maxValue, "%.3f"))
+						postfx::SetParamValue(p.id, v);
+				}
+				ImGui::PopID();
+			}
+		}
+
+		const std::string& err = postfx::GetLastError();
+		if (!err.empty())
+		{
+			ImGui::TextColored(ImVec4(1.f, 0.35f, 0.35f, 1.f), "PostFX Error: %s", err.c_str());
+		}
+	}
 
 	// Update renderer type based on selections
 	switch (renderApi)
@@ -4077,22 +4296,22 @@ void renderControlsTab()
 #endif
 
 			ImGui::TableSetColumnIndex(5);
-			char port_name[32];
-			snprintf(port_name, sizeof(port_name), "##mapleport%d", i);
-				ImguiID _(port_name);
-				ImGui::SetNextItemWidth(portComboWidth);
+				char port_name[32];
+				snprintf(port_name, sizeof(port_name), "##mapleport%d", i);
+					ImguiID _(port_name);
+					ImGui::SetNextItemWidth(portComboWidth);
 
-				// Port selection combo (None, A, B, C, D, All)
-				const char* current_port = kMaplePorts[gamepad->maple_port() + 1];
-				if (ImGui::BeginCombo(port_name, current_port))
-				{
-					for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
+					// Port selection combo (None, A, B, C, D, All)
+					const char* current_port = kMaplePorts[gamepad->maple_port() + 1];
+					if (ImGui::BeginCombo(port_name, current_port))
 					{
-						bool is_selected = gamepad->maple_port() == j;
-						if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
+						for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
 						{
-							gamepad->set_maple_port(j);
-							g_mapleDevicesChangedInSettings = true;
+							bool is_selected = gamepad->maple_port() == j;
+							if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
+							{
+								gamepad->set_maple_port(j);
+								g_mapleDevicesChangedInSettings = true;
 						}
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();

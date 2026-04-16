@@ -7,6 +7,7 @@
 #include "oslib/i18n.h"
 
 #include <chrono>
+#include <cerrno>
 #include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -51,6 +52,7 @@ void set_user_data_dir(const std::string& dir)
 {
 	user_data_dir = dir;
 	appendPathSep(user_data_dir);
+	make_directory_tree(get_writable_data_path("shaders"));
 }
 
 void add_system_config_dir(const std::string& dir)
@@ -145,6 +147,60 @@ std::string get_game_save_prefix()
 bool make_directory(const std::string& path)
 {
 	return flycast::mkdir(path.c_str(), 0755) == 0;
+}
+
+bool make_directory_tree(const std::string& path)
+{
+	if (path.empty())
+		return false;
+
+	bool success = true;
+	std::string current;
+	size_t pos = 0;
+#ifdef _WIN32
+	if (path.size() >= 2 && std::isalpha(static_cast<u8>(path[0])) && path[1] == ':')
+	{
+		current = path.substr(0, 2);
+		pos = 2;
+	}
+	if (pos < path.size() && (path[pos] == '/' || path[pos] == '\\'))
+	{
+		current.push_back(path[pos]);
+		pos++;
+	}
+#else
+	if (path[0] == '/')
+	{
+		current = "/";
+		pos = 1;
+	}
+#endif
+
+	auto createCurrent = [&]() {
+		if (current.empty())
+			return;
+		if (make_directory(current))
+			return;
+		if (errno == EEXIST)
+			return;
+		success = false;
+	};
+
+	while (pos < path.size())
+	{
+		const char c = path[pos++];
+		if (c == '/' || c == '\\')
+		{
+			createCurrent();
+			// Preserve path separators between components (required for correct recursion).
+			if (!current.empty() && current.back() != '/' && current.back() != '\\')
+				current.push_back(c);
+			continue;
+		}
+		current.push_back(c);
+	}
+	createCurrent();
+	return success;
 }
 
 void cThread::Start()
@@ -263,4 +319,3 @@ std::string timeToISO8601(time_t time)
 std::string timeToShortDateTimeString(time_t time) {
 	return i18n::formatShortDateTime(time);
 }
-

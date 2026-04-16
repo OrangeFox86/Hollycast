@@ -4,6 +4,7 @@
 #include "hw/pvr/ta.h"
 #ifndef LIBRETRO
 #include "ui/gui.h"
+#include "postprocess.h"
 #else
 #include "rend/gles/postprocess.h"
 #include "vmu_xhair.h"
@@ -55,6 +56,7 @@ out highp vec4 FragColor;
 #define gl_FragColor FragColor				
 #define FOG_CHANNEL r						
 #else										
+#define FragColor gl_FragColor				
 #define texture texture2D					
 #define FOG_CHANNEL a						
 #endif										
@@ -1363,6 +1365,7 @@ void OpenGLRenderer::initVideoRoutingFrameBuffer()
 void OpenGLRenderer::Term()
 {
 	TexCache.Clear();
+	postfx_gl::term();
 	gles_term();
 }
 

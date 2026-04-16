@@ -469,6 +469,8 @@ extern Option<bool> VSync;
 extern Option<int64_t> PixelBufferSize;
 extern Option<int> AnisotropicFiltering;
 extern Option<int> TextureFiltering; // 0: default, 1: force nearest, 2: force linear
+extern Option<bool> PostFxEnabled;
+extern Option<std::string> PostFxPreset;
 extern Option<bool> ThreadedRendering;
 extern Option<bool> DupeFrames;
 extern Option<bool> NativeDepthInterpolation;
