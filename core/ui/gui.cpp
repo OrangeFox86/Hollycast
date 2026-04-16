@@ -896,7 +896,12 @@ static void gui_display_commands()
 
 		// Exit
 		if (IconButton(ICON_FA_POWER_OFF, commandLineStart ?  T("Exit") : T("Close Game"), ScaledVec2(buttonWidth, 50)).realize())
-			gui_stop_game();
+		{
+			if (game_started && config::ExitSaveStateReminder)
+				showExitSaveDialog = true;
+			else
+				gui_stop_game();
+		}
 
 		ImGui::NextColumn();
 		{

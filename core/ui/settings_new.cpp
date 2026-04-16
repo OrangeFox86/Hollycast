@@ -2395,16 +2395,27 @@ void renderGeneralTab()
 			"Automatically loads the last saved state when starting a game.\n"
 			"Convenient, but can hide boot-time issues or break games that don't like savestates.");
 
-		RenderGeneralToggleSettingRow(
-			"AutoSaveState",
-			ICON_FA_FLOPPY_DISK,
-			"Auto-Save on Exit",
-			"Save the state of the game when stopping",
+	RenderGeneralToggleSettingRow(
+		"AutoSaveState",
+		ICON_FA_FLOPPY_DISK,
+		"Auto-Save on Exit",
+		"Save the state of the game when stopping",
 			static_cast<bool>(config::AutoSaveState),
 			[](bool enabled) { config::AutoSaveState = enabled; },
 			"Auto-Save on Exit\n"
-			"Automatically saves a state when you stop a game.\n"
-			"Good for quick resume workflows. Disable if you prefer manual state management.");
+		"Automatically saves a state when you stop a game.\n"
+		"Good for quick resume workflows. Disable if you prefer manual state management.");
+
+	RenderGeneralToggleSettingRow(
+		"ExitSaveStateReminder",
+		ICON_FA_CIRCLE_QUESTION,
+		"Exit Save Reminder",
+		"Ask to save state before closing a game",
+		static_cast<bool>(config::ExitSaveStateReminder),
+		[](bool enabled) { config::ExitSaveStateReminder = enabled; },
+		"Exit Save Reminder\n"
+		"Shows a confirmation dialog when closing a game, offering to save a state before exiting.\n"
+		"Useful if you rely on manual save states and want a safety net.");
 
 		RenderGeneralToggleSettingRow(
 			"NaomiFreePlay",
