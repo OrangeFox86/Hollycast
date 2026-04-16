@@ -107,22 +107,18 @@ void renderFileMenu()
 
 		ImGui::Separator();
 
-		// Save State
-		if (ImGui::MenuItem("Save State", nullptr, false, ::game_started))
+		// Save State with submenu
+		if (ImGui::BeginMenu("Save State", ::game_started))
 		{
-			if (::game_started)
-			{
-				gui_saveState();
-			}
+			::render_save_state_slots(true);
+			ImGui::EndMenu();
 		}
 
-		// Load State
-		if (ImGui::MenuItem("Load State", nullptr, false, ::game_started))
+		// Load State with submenu
+		if (ImGui::BeginMenu("Load State", ::game_started))
 		{
-			if (::game_started)
-			{
-				gui_loadState();
-			}
+			::render_save_state_slots(false);
+			ImGui::EndMenu();
 		}
 
 		ImGui::Separator();
