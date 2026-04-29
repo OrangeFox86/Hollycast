@@ -4,7 +4,7 @@ Hollycast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emu
 Our mission is simple: **follow upstream** core emulation code while delivering a **modern UI**, **more front-end features**, and **power-user controls**.
 
 ## 🚀 Mission & Philosophy
-Hollycast tracks the **Flycast** core while providing a home for the features and experiments that fall outside the upstream scope. We operate on a simple principle: **Fun is the filter.** When developers follow their passion, the community wins.
+Hollycast tracks the **Flycast** core while providing a home for the features and experiments that fall outside the upstream scope. The main reasons for this fork are to:
 
 * **Unlock Functionality:** We integrate community-requested features and experimental changes that Flycast chooses not to merge.
 * **Developer Freedom:** We provide a stable sandbox for "passion features" and modernizations that keep the emulator evolving.
