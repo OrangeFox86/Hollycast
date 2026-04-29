@@ -6,9 +6,21 @@
 #include "input/gamepad.h"
 #include "serialize.h"
 #include "hw/hwreg.h"
+#include "hw/sh4/sh4_sched.h"
 
 #include <memory>
 #include <vector>
+
+//! Number of ports (aka buses) on a Dreamcast
+static constexpr const int MAPLE_PORTS = 4;
+//! Maximum number of logical devices that may exist on a single bus (main plus maximum of 5 sub-peripherals)
+static constexpr const int MAPLE_DEVS_PER_PORT = 6;
+//! The index of the main device (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_MAIN_DEV_IDX = 5;
+//! First expansion device index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_FIRST_EXT_DEV_IDX = 0;
+//! Last expansion device index (under MAPLE_DEVS_PER_PORT)
+static constexpr const int MAPLE_LAST_EXT_DEV_IDX = 4;
 
 enum MapleFunctionID
 {
@@ -47,7 +59,7 @@ enum MapleDeviceCommand
 
 	MDC_JVSUploadFirmware = 0x80, // JVS bridge firmware
 	MDC_JVSGetId		 = 0x82,
-	MDC_JVSSelfTest		 = 0x84, // JVS Self Test
+	MDC_JVSSelfTest		 = 0x84,
 	MDC_JVSCommand		 = 0x86, // JVS I/O
 };
 
@@ -66,8 +78,9 @@ enum MapleDeviceRV
 	MDRE_FileError       = 0xFB, //1 word, bitfield
 	MDRE_LCDError        = 0xFA, //1 word, bitfield
 	MDRE_ARGunError      = 0xF9, //1 word, bitfield
-	MDRS_JVSSelfTestReply= 0x85, // JVS I/O SelfTest
 
+	MDRS_JVSGetIdReply   = 0x83,
+	MDRS_JVSSelfTestReply= 0x85,
 	MDRS_JVSReply		 = 0x87, // JVS I/O
 };
 
@@ -164,10 +177,15 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	u8 bus_id;              //0 .. 3
 	u8 player_num;			// for Atomiswave
 	char logical_port[3];  //A0, etc
+	// When true, initiate reconnect on next linkStatus
+	bool reconnect_requested;
+	// When >0, currently shown as disconnected, and the time will be when to reconnect
+	u64 reconnect_time;
+
 	MapleConfigMap* config;
 
 	//fill in the info
-	void Setup(u32 bus, u32 port = 5, int playerNum = -1);
+	void Setup(u32 bus, u32 port = MAPLE_MAIN_DEV_IDX, int playerNum = -1, bool install = true);
 
 	virtual void OnSetup() {};
 	virtual ~maple_device();
@@ -184,12 +202,35 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	virtual MapleDeviceType get_device_type() = 0;
 	virtual bool get_lightgun_pos() { return false; }
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
-	virtual bool linkStatus() { return true; }
+	virtual bool linkStatus()
+	{
+		if (reconnect_requested) {
+			// Reconnect in 100 ms
+			reconnect_time = sh4_sched_now64() + (SH4_MAIN_CLOCK / 10);
+			reconnect_requested = false;
+			return false;
+		} else if (reconnect_time == 0) {
+			return true;
+		}
+		else
+		{
+			u64 now = sh4_sched_now64();
+			if (reconnect_time <= now)
+			{
+				reconnect_time = 0;
+				return true;
+			}
+		}
+
+		return false;
+	}
+	virtual void requestReconnect()
+	{
+		reconnect_requested = true;
+	}
 };
 
 std::shared_ptr<maple_device> maple_Create(MapleDeviceType type);
-
-#define MAPLE_PORTS 4
 
 template<int Magnitude>
 void limit_joystick_magnitude(s8& joyx, s8& joyy)
@@ -292,57 +333,234 @@ struct maple_base: maple_device
 
 		return outlen + 4;
 	}
-
-	bool relayMapleLink();
 };
 
-void createMapleLinkVmu(int bus, int port);
-
-class jvs_io_board;
-
-struct maple_naomi_jamma : maple_base, SerialPort
+struct BaseMIE : public maple_base
 {
-	static constexpr u8 ALL_NODES = 0xff;
-
-	std::vector<std::unique_ptr<jvs_io_board>> io_boards;
-	bool crazy_mode = false;
-	bool hotd2p = false;
-
-	u8 jvs_repeat_request[32][256];
-	u8 jvs_receive_buffer[32][258];
-	u32 jvs_receive_length[32] = { 0 };
-	u8 eeprom[128];
-
-	maple_naomi_jamma();
-	~maple_naomi_jamma() override;
-
-	MapleDeviceType get_device_type() override
-	{
-		return MDT_NaomiJamma;
-	}
-
-	u8 sense_line(u32 node_id)
-	{
-		bool last_node = node_id == io_boards.size();
-		return last_node ? 0x8E : 0x8F;
-	}
-
-	void send_jvs_message(u32 node_id, u32 channel, u32 length, const u8 *data);
-	void send_jvs_messages(u32 node_id, u32 channel, bool use_repeat, u32 length, const u8 *data, bool repeat_first);
-	bool receive_jvs_messages(u32 channel);
-
-	void handle_86_subcommand();
-
 	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out) override;
-	u32 dma(u32 cmd) override { return 0; }
+	u32 dma(u32 cmd) override;
+	void reply(u8 code, u8 sizew = 0);
 
+	virtual void handle_86_subcommand();
+	virtual void firmwareLoaded(u32 hash) {}
+};
+
+struct MIE : public BaseMIE, public SerialPort
+{
+	static std::shared_ptr<maple_device> Create();
+};
+
+struct RFIDReaderWriter : public BaseMIE
+{
+	static std::shared_ptr<maple_device> Create();
+};
+
+//
+// Specific Devices
+//
+
+struct maple_sega_controller: maple_base
+{
+	virtual u32 get_capabilities();
+	virtual u16 getButtonState(const PlainJoystickState &pjs);
+	virtual u32 getAnalogAxis(int index, const PlainJoystickState &pjs);
+	MapleDeviceType get_device_type() override;
+	virtual const char *get_device_name();
+	virtual const char *get_device_brand();
+	virtual u32 get_device_current(int get_max_current);
+	u32 dma(u32 cmd) override;
+};
+
+struct maple_atomiswave_controller: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+};
+
+struct maple_sega_twinstick: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_ascii_stick: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_sega_vmu: maple_base
+{
+	//! Pointer to the file-backed memory of this VMU
+	FILE *file = nullptr;
+	//! The flash memory of the VMU
+	u8 flash_data[128_KB];
+	//! The VMU display
+	u8 lcd_data[192];
+	//! Magic value used to validate accessed_blocks in save state
+	static constexpr u8 serialize_magic[4] = {0x04, 0x3d, 0x8b, 0xde};
+	//! When false, the loaded state does not contain accessed_blocks
+	bool accessed_blocks_valid;
+	//! For each block, determines whether the block has been accessed (read/written) by the game (1 == accessed)
+	u8 accessed_blocks[256];
+	//! The last clock tick memory was written
+	u64 last_write_tick;
+	//! After deserialize, this is set to number of microseconds since last write (or u64 max for no write or not valid)
+	u64 loaded_us_since_write;
+	//! Number of bytes to pad out the serialized save-state data (for backwards compatibility reasons)
+	static constexpr std::size_t ser_pad_size =
+		((48*32) - sizeof(serialize_magic) - sizeof(accessed_blocks) - sizeof(loaded_us_since_write));
+	//! When true, the entire flash_data must be written to file on next operation
+	bool fullSaveNeeded = false;
+
+	MapleDeviceType get_device_type() override;
 	void serialize(Serializer& ser) const override;
 	void deserialize(Deserializer& deser) override;
+	virtual bool fullSave();
+	void initializeVmu();
+	void OnSetup() override;
+	~maple_sega_vmu() override;
+	u32 dma(u32 cmd) override;
+	const void *getData(size_t& size) const override;
+	void setLcd();
+};
 
-	void setPipe(Pipe *pipe) override {
-		serialPipe = pipe;
-	}
-	void updateStatus() override {}
+struct maple_microphone: maple_base
+{
+	u32 gain;
+	bool sampling;
+	bool eight_khz;
 
-	Pipe *serialPipe = nullptr;
+	~maple_microphone() override;
+	MapleDeviceType get_device_type() override;
+	void serialize(Serializer& ser) const override;
+	void deserialize(Deserializer& deser) override;
+	void OnSetup() override;
+	u32 dma(u32 cmd) override;
+};
+
+struct maple_sega_purupuru : maple_base
+{
+	u16 AST = 19;
+	u16 AST_ms = 5000;
+	u32 VIBSET;
+
+	MapleDeviceType get_device_type() override;
+	void serialize(Serializer& ser) const override;
+	void deserialize(Deserializer& deser) override;
+	u32 dma(u32 cmd) override;
+};
+
+struct maple_keyboard : maple_base
+{
+	MapleDeviceType get_device_type() override;
+	u32 dma(u32 cmd) override;
+};
+
+struct maple_mouse : maple_base
+{
+	MapleDeviceType get_device_type() override;
+	static u16 mo_cvt(int delta);
+	u32 dma(u32 cmd) override;
+};
+
+struct maple_lightgun : maple_base
+{
+	virtual u32 transform_kcode(u32 kcode);
+	MapleDeviceType get_device_type() override;
+	u32 dma(u32 cmd) override;
+	bool get_lightgun_pos() override;
+};
+
+struct atomiswave_lightgun : maple_lightgun
+{
+	u32 transform_kcode(u32 kcode) override;
+};
+
+struct maple_maracas_controller: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_fishing_controller: maple_sega_controller
+{
+	u32 analogToDPad = ~0;
+
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_popnmusic_controller: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_racing_controller: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct maple_densha_controller: maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	MapleDeviceType get_device_type() override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	u32 get_device_current(int get_max_current) override;
+};
+
+struct FullController : maple_sega_controller
+{
+	u32 get_capabilities() override;
+	u16 getButtonState(const PlainJoystickState &pjs) override;
+	u32 getAnalogAxis(int index, const PlainJoystickState &pjs) override;
+	const char *get_device_name() override;
+	MapleDeviceType get_device_type() override;
+};
+
+struct maple_dreamparapara_controller : maple_device
+{
+	static constexpr u16 START    = 1 << 0;
+	static constexpr u16 LEFT     = 1 << 1;
+	static constexpr u16 SELECT   = 1 << 2;
+	static constexpr u16 RIGHT    = 1 << 3;
+	static constexpr u16 ARROW_UL = 1 << 9;
+	static constexpr u16 ARROW_U  = 1 << 10;
+	static constexpr u16 ARROW_L  = 1 << 11;
+	static constexpr u16 ARROW_UR = 1 << 12;
+	static constexpr u16 ARROW_R  = 1 << 15;
+
+	static u16 unshift(u32 value);
+	MapleDeviceType get_device_type() override;
+	u16 get_state();
+	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out) override;
 };

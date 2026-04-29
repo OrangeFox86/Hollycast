@@ -28,6 +28,7 @@
 #include <mutex>
 #include <utility>
 #include <vector>
+#include <chrono>
 #include <time.h>
 
 void loadGameSpecificSettings();
@@ -191,6 +192,37 @@ public:
 		runner.runOnThread(func);
 	}
 
+	/**
+	 * Run a function after the given duration of time has passed
+	 * @param[in] sh4Duration Time duration as sh4 clock ticks
+	 * @param[in] func The function to execute after the given duration has passed
+	 */
+	void runIn(u64 sh4Duration, const std::function<void()>& func);
+
+	/**
+	 * Run a function after a specified duration.
+	 * @tparam Rep The representation type (int, double, etc.)
+	 * @tparam Period The ratio representing the tick period (seconds, milli, etc.)
+	 * @param[in] duration The duration to wait before execution
+	 * @param[in] func The function to execute after the given duration has passed
+	 */
+	template <typename Rep, typename Period>
+	void runIn(std::chrono::duration<Rep, Period> duration, const std::function<void()>& func)
+	{
+		using Sh4Duration = std::chrono::duration<u64, std::ratio<1, SH4_MAIN_CLOCK>>;
+
+		u64 ticks = std::chrono::duration_cast<Sh4Duration>(duration).count();
+
+		runIn(ticks, func);
+	}
+
+	/**
+	 * Run a function at the given time point
+	 * @param[in] sh4TimePoint Time point as sh4 clock
+	 * @param[in] func The function to execute at the given time point
+	 */
+	void runAt(u64 sh4TimePoint, const std::function<void()>& func);
+
 	void dc_reset(bool hard); // for tests only
 
 private:
@@ -218,7 +250,7 @@ private:
 	std::mutex mutex;
 	Sh4Executor *interpreter = nullptr;
 	Sh4Executor *recompiler = nullptr;
-	ThreadRunner runner;
+	ScheduledThreadRunner<u64> runner;
 };
 extern Emulator emu;
 

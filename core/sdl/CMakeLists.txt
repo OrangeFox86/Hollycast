@@ -8,11 +8,6 @@ target_sources(${PROJECT_NAME} PRIVATE
         sdl_mappingparser.h)
 
 if (USE_DREAMLINK_DEVICES)
-target_sources(${PROJECT_NAME} PRIVATE
-        dreamlink.cpp
-        dreamlink.h
-        dreampicoport.cpp
-        dreampicoport.h
-        dreamconn.cpp
-        dreamconn.h)
+    file(GLOB DREAMLINK_SRC "${CMAKE_CURRENT_SOURCE_DIR}/dreamlink/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/dreamlink/*.h")
+    target_sources(${PROJECT_NAME} PRIVATE ${DREAMLINK_SRC})
 endif()

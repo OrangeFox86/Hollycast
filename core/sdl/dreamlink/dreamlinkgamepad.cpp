@@ -16,7 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "dreamlink.h"
+#include "dreamlinkgamepad.h"
 
 #include "dreamconn.h"
 #include "dreampicoport.h"
@@ -62,7 +62,7 @@ bool DreamLinkGamepad::isDreamcastController(int deviceIndex)
 	return false;
 }
 
-DreamLinkGamepad::DreamLinkGamepad(std::shared_ptr<DreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
+DreamLinkGamepad::DreamLinkGamepad(std::shared_ptr<SDLDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
 	: SDLGamepad(maple_port, joystick_idx, sdl_joystick), dreamlink(dreamlink)
 {
 	verify(dreamlink != nullptr);
@@ -72,7 +72,7 @@ void DreamLinkGamepad::close()
 {
 	if (dreamlink != nullptr)
 	{
-		dreamlink->disconnect();
+		dreamlink->term();
 		dreamlink.reset();
 		// Make sure settings are open in case disconnection happened mid-game
 		if (!gui_is_open())
@@ -83,8 +83,18 @@ void DreamLinkGamepad::close()
 
 const char* DreamLinkGamepad::dreamLinkStatus()
 {
-	using namespace i18n;
-	return (dreamlink->isConnected() && dreamlink->activeLinkCount(maple_port()) > 0) ? T("Connected") : T("Disconnected");
+	if (dreamlink->isConnected())
+	{
+		return i18n::T("Connected");
+	}
+
+	const char* issueDesc = dreamlink->getIssueDescription();
+	if (issueDesc)
+	{
+		return issueDesc;
+	}
+
+	return i18n::T("Disconnected");
 }
 
 void DreamLinkGamepad::set_maple_port(int port)
@@ -101,7 +111,7 @@ void DreamLinkGamepad::set_maple_port(int port)
 void DreamLinkGamepad::registered()
 {
 	SDLGamepad::registered();
-	dreamlink->connect();
+	dreamlink->registered();
 }
 
 void DreamLinkGamepad::resetMappingToDefault(bool arcade, bool gamepad) {

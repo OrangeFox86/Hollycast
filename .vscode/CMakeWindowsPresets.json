@@ -1,0 +1,34 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "inherits": ["windows"]
+        },
+        {
+            "name": "debug",
+            "inherits": ["windows-debug"]
+        },
+        {
+            "name": "unit-tests-debug",
+            "inherits": ["windows-unit-tests-debug"]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "inherits": ["windows"]
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "inherits": ["windows-debug"]
+        },
+        {
+            "name": "unit-tests-debug",
+            "configurePreset": "unit-tests-debug",
+            "inherits": ["windows-unit-tests-debug"]
+        }
+    ]
+}

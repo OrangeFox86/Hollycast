@@ -30,12 +30,39 @@
 
 #ifdef USE_DREAMCONN
 
-asio::error_code sendMsg(const MapleMsg& msg, asio::ip::tcp::iostream& stream);
-bool receiveMsg(MapleMsg& msg, std::istream& stream);
+// TODO: drop use of iostream, use async connection like DreamPotato
+static asio::error_code sendMsg(const MapleMsg& msg, asio::ip::tcp::iostream& stream)
+{
+	static char buffer[1024 * 3 + 2];
+	char *p = buffer;
+	p += sprintf(p, "%02X %02X %02X %02X", msg.command, msg.destAP, msg.originAP, msg.size);
+	const u32 sz = msg.getDataSize();
+	for (u32 i = 0; i < sz; i++)
+		p += sprintf(p, " %02X", msg.data[i]);
+	strcpy(p, "\r\n");
+	p += 2;
+	asio::ip::tcp::socket& sock = static_cast<asio::ip::tcp::socket&>(stream.socket());
+	asio::error_code ec;
+	asio::write(sock, asio::buffer(buffer, p - buffer), ec);
+	return ec;
+}
+
+static bool receiveMsg(MapleMsg& msg, std::istream& stream)
+{
+	std::string response;
+	if (!std::getline(stream, response))
+		return false;
+	sscanf(response.c_str(), "%hhx %hhx %hhx %hhx", &msg.command, &msg.destAP, &msg.originAP, &msg.size);
+	if ((msg.getDataSize() - 1) * 3 + 13 >= response.length())
+		return false;
+	for (unsigned i = 0; i < msg.getDataSize(); i++)
+		sscanf(&response[i * 3 + 12], "%hhx", &msg.data[i]);
+	return !stream.fail();
+}
 
 //! DreamConn implementation class
 //! This is here mainly so asio.hpp can be included in this source file instead of the header.
-class DreamConn : public DreamLink
+class DreamConn : public SDLDreamLink
 {
 	int bus = -1;
 	bool maple_io_connected = false;
@@ -46,8 +73,9 @@ class DreamConn : public DreamLink
 
 public:
 	DreamConn(int bus)
-		: DreamLink(false), bus(bus)
-	{}
+		: SDLDreamLink(false), bus(bus)
+	{
+	}
 
 	bool storageEnabled() override {
 		// DreamConn controllers don't support physical VMU memory access
@@ -62,7 +90,8 @@ public:
 		auto ec = sendMsg(msg, iostream);
 		if (ec) {
 			WARN_LOG(INPUT, "DreamConn[%d] send failed: %s", bus, ec.message().c_str());
-			disconnect();
+			maple_io_connected = false;
+			// TODO: reconnect automatically
 			return false;
 		}
 		return true;
@@ -75,7 +104,8 @@ public:
 
 		if (!receiveMsg(rxMsg, iostream)) {
 			WARN_LOG(INPUT, "DreamConn[%d] receive failed", bus);
-			disconnect();
+			maple_io_connected = false;
+			// TODO: reconnect automatically
 			return false;
 		}
 		return true;
@@ -84,11 +114,19 @@ public:
 	void changeBus(int newBus) override
 	{
 		if (newBus != bus) {
-			// A different TCP port is used depending on the bus. We'll need to disconnect from the current port.
-			// The caller will call connect() again if appropriate.
-			disconnect();
 			bus = newBus;
+			registerLink(bus, ALL_PORTS_MASK); // will automatically unregister from previous bus
+			if (isConnected())
+			{
+				// A different TCP port is used depending on the bus - need to reconnect
+				maple_io_connected = false;
+				// TODO: reconnect automatically
+			}
 		}
+	}
+
+	void registered() override {
+		registerLink(bus, ALL_PORTS_MASK);
 	}
 
 	bool isConnected() override {
@@ -98,7 +136,7 @@ public:
 	void connect() override
 	{
 		maple_io_connected = false;
-		if (!DreamLink::isValidPort(bus))
+		if (!DreamLink::isValidBus(bus))
 			return;
 
 		iostream = asio::ip::tcp::iostream("localhost", std::to_string(BASE_PORT + bus));
@@ -122,13 +160,6 @@ public:
 			return;
 		iostream.expires_from_now(std::chrono::duration<u32>::max());	// don't use a 64-bit based duration to avoid overflow
 
-		config::MapleExpansionDevices[bus][0] = expansionDevs[0] = rxMsg.originAP & 1 ? MDT_SegaVMU : MDT_None;
-		config::MapleExpansionDevices[bus][1] = expansionDevs[1] = rxMsg.originAP & 2 ? MDT_PurupuruPack : MDT_None;
-		if (expansionDevs[0] == MDT_SegaVMU)
-			registerLink(bus, 0);
-		if (expansionDevs[1] == MDT_PurupuruPack)
-			registerLink(bus, 1);
-
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,
 				deviceDescription(expansionDevs[0]), deviceDescription(expansionDevs[1]));
 	}
@@ -149,8 +180,6 @@ public:
 			return;
 		maple_io_connected = false;
 
-		unregisterLink(bus, 0);
-		unregisterLink(bus, 1);
 		if (iostream)
 			iostream.close();
 
@@ -159,6 +188,10 @@ public:
 		char buf[128];
 		snprintf(buf, sizeof(buf), i18n::T("WARNING: DreamConn disconnected from port %c"), 'A' + bus);
 		os_notify(buf, 6000);
+	}
+
+	const char* getName() const override {
+		return "DreamConn";
 	}
 };
 

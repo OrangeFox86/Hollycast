@@ -77,6 +77,7 @@ public:
 	void GetMouseInput(u8& buttons, int& x, int& y, int& wheel);
 	void GetKeyboardInput(u8& shift, u8 keys[6]);
 	void SetImage(u8 *img);
+	void ResetImage();
 
 	static void (*UpdateVibration)(u32 port, float power, float inclination, u32 duration_ms);
 	bool invertMouseY = false;
@@ -118,6 +119,21 @@ void mcfg_DestroyDevices(bool full = true);
 void mcfg_SerializeDevices(Serializer& ser);
 void mcfg_DeserializeDevices(Deserializer& deser);
 
+//! Serialize a default device state to the Serializer without installing the device
+//! @param[out] ser The serializer to write to
+//! @param[in] forType The device type to serialize
+//! @param[in] bus The bus to serialize
+//! @param[in] port The port to serialize
+//! @param[in] playerNum The player number to serialize
+void mcfg_SerializeDefaultDevice(Serializer& ser, MapleDeviceType forType, u32 bus, u32 port, int playerNum = -1);
+//! Deserialize and discard a device from the stream
+//! @param[in,out] deser The deserializer to increment the pointer of
+//! @param[in] forType The device type to discard
+//! @param[in] bus The bus to deserialize
+//! @param[in] port The port to deserialize
+//! @param[in] playerNum The player number to deserialize
+void mcfg_DeserializeDiscardDevice(Deserializer& deser, MapleDeviceType forType, u32 bus, u32 port, int playerNum = -1);
+
 constexpr int maple_getPortCount(MapleDeviceType type)
 {
 	switch (type)
@@ -137,9 +153,10 @@ constexpr int maple_getPortCount(MapleDeviceType type)
 
 bool maple_atomiswave_coin_chute(int slot);
 void push_vmu_screen(int bus_id, int bus_port, u8* buffer);
+void reset_vmu_screen(int bus_id, int bus_port);
 void insertRfidCard(int playerNum);
 const u8 *getRfidCardData(int playerNum);
 void setRfidCardData(int playerNum, u8 *data);
 
-struct maple_naomi_jamma;
-std::shared_ptr<maple_naomi_jamma> getMieDevice();
+struct MIE;
+std::shared_ptr<MIE> getMieDevice();

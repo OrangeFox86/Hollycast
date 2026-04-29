@@ -20,23 +20,22 @@
 
 #ifdef USE_DREAMLINK_DEVICES
 
-#include "dreamlink.h"
+#if defined(_WIN32) && !defined(TARGET_UWP)
+#define USE_DREAMCONN 1
 
-#include <memory>
+#include "dreamlinkgamepad.h"
 
-//! See: https://github.com/OrangeFox86/DreamPicoPort
-
-class DreamPicoPortGamepad : public DreamLinkGamepad
+class DreamConnGamepad : public DreamLinkGamepad
 {
 public:
-	DreamPicoPortGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
-	const char *get_button_name(u32 code) override;
+	DreamConnGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
+
 	static bool identify(int deviceIndex);
 
-protected:
-	void setCustomMapping(const std::shared_ptr<InputMapping>& mapping) override;
-
-    //! Dreamcast Controller USB VID:1209 PID:2f07
-    static constexpr const char* VID_PID_GUID = "09120000072f0000";
+private:
+	//! DreamConn VID:4457 PID:4443
+	static constexpr const char* VID_PID_GUID = "5744000043440000";
 };
+
+#endif // WIN32 && !UWP
 #endif // USE_DREAMLINK_DEVICES

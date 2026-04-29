@@ -25,44 +25,12 @@
 
 #include "types.h"
 #include "emulator.h"
-#include "sdl_gamepad.h"
-#include "input/maplelink.h"
+#include "../sdl_gamepad.h"
+#include "sdldreamlink.h"
 
 #include <functional>
 #include <memory>
 #include <array>
-
-// Abstract base class for communication with physical controllers
-class DreamLink : public BaseMapleLink
-{
-public:
-	//! Number of physical dreamcast ports
-	static constexpr int NUM_PORTS = 4;
-
-	//! Check if a given port is valid
-	//! @param[in] port The dreamcast port index to test
-	//! @return true iff port is a valid physical port
-	static bool isValidPort(int port) {
-		return (port >= 0 && port < NUM_PORTS);
-	}
-
-	//! Changes the selected maple port is changed by the user
-	virtual void changeBus(int newBus) = 0;
-
-	//! Returns true if connected to the hardware controller (TODO: "hardware controller or remote device" throughout?)
-	virtual bool isConnected() = 0;
-
-	//! Attempt connection to the hardware controller
-	virtual void connect() = 0;
-
-	//! Disconnect from the hardware controller
-	virtual void disconnect() = 0;
-
-protected:
-	DreamLink(bool storageSupported = true)
-		: BaseMapleLink(storageSupported)
-	{}
-};
 
 class DreamLinkGamepad : public SDLGamepad
 {
@@ -75,12 +43,12 @@ public:
 	void close() override;
 
 protected:
-	DreamLinkGamepad(std::shared_ptr<DreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
+	DreamLinkGamepad(std::shared_ptr<SDLDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
 	std::shared_ptr<InputMapping> getDefaultMapping() override;
 	void setBaseDefaultMapping(const std::shared_ptr<InputMapping>& mapping) const;
 	virtual void setCustomMapping(const std::shared_ptr<InputMapping>& mapping) {}
 
-	std::shared_ptr<DreamLink> dreamlink;
+	std::shared_ptr<SDLDreamLink> dreamlink;
 	std::string device_guid;
 };
 

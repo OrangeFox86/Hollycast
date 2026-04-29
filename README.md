@@ -28,9 +28,16 @@ Hollycast aims to support every platform and release offered by Flycast. If Flyc
 
 ### Build instructions:
 ```
+# Clone repo
 $ git clone --recursive https://github.com/OrangeFox86/hollycast.git
-$ cd flycast
-$ mkdir build && cd build
-$ cmake ..
-$ make
+$ cd hollycast
+
+# Update submodules (this needs to be manually performed when submodule versions are updated)
+$ git submodule update --init --recursive
+
+# Configure the build (make sln file, etc., depending on your platform)
+$ cmake -B build-debug/
+
+# Run the build
+$ cmake --build build-debug/
 ```

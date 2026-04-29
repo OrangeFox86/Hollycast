@@ -167,6 +167,19 @@ std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices{{
 	{{Option<int>("", 0),
 	Option<int>("", 0)}},
 }};
+std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect{{
+	{{Option<bool>("", true),
+	Option<bool>("", true)}},
+
+	{{Option<bool>("", true),
+	Option<bool>("", true)}},
+
+	{{Option<bool>("", true),
+	Option<bool>("", true)}},
+
+	{{Option<bool>("", true),
+	Option<bool>("", true)}},
+}};
 Option<bool> UsePhysicalVmuMemory(CORE_OPTION_NAME "_linked_vmu_storage", false);
 
 } // namespace config

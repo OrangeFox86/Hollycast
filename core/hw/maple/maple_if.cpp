@@ -19,7 +19,7 @@ enum MaplePattern
 	MP_NOP = 7
 };
 
-std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
+std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][MAPLE_DEVS_PER_PORT];
 
 int maple_schid;
 
@@ -226,7 +226,7 @@ static void maple_DoDma()
 					pDevice = MapleDevices[bus][port];
 			}
 
-			if (pDevice != nullptr)
+			if (pDevice != nullptr && pDevice->linkStatus())
 			{
 				if (swap_msb)
 				{

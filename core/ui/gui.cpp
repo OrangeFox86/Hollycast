@@ -94,7 +94,7 @@ using LockGuard = std::lock_guard<std::recursive_mutex>;
 
 ImFont *largeFont;
 static Toast toast;
-static ThreadRunner uiThreadRunner;
+static ScheduledThreadRunner<std::chrono::steady_clock::time_point> uiThreadRunner;
 
 static void emuEventCallback(Event event, void *)
 {
@@ -720,6 +720,12 @@ static void savestate()
 	savestatePic.invalidate();
 }
 
+void cycleSaveStateSlot(int step)
+{
+	config::SavestateSlot = (config::SavestateSlot + 10 + step) % 10;
+	SaveSettings();
+}
+
 static void gui_display_commands()
 {
 	fullScreenWindow(false);
@@ -859,26 +865,14 @@ static void gui_display_commands()
 
 			// Slot #
 			if (ImGui::ArrowButton("##prev-slot", ImGuiDir_Left))
-			{
-				if (config::SavestateSlot == 0)
-					config::SavestateSlot = 9;
-				else
-					config::SavestateSlot--;
-				SaveSettings();
-			}
+				cycleSaveStateSlot(-1);
 			std::string slot = strprintf(T("Slot %d"), (int)config::SavestateSlot + 1);
 			float spacingW = (uiScaled(buttonWidth) - ImGui::GetFrameHeight() * 2 - ImGui::CalcTextSize(slot.c_str()).x) / 2;
 			ImGui::SameLine(0, spacingW);
 			ImGui::Text("%s", slot.c_str());
 			ImGui::SameLine(0, spacingW);
 			if (ImGui::ArrowButton("##next-slot", ImGuiDir_Right))
-			{
-				if (config::SavestateSlot == 9)
-					config::SavestateSlot = 0;
-				else
-					config::SavestateSlot++;
-				SaveSettings();
-			}
+				cycleSaveStateSlot(1);
 			{
 				ImVec4 gray(0.75f, 0.75f, 0.75f, 1.f);
 				if (savestateDate == 0)
@@ -1433,7 +1427,7 @@ static void gui_display_loadscreen()
 				else
 					label = T("Loading...");
 			}
-			
+
 			const bool customTexPreloading = custom_texture.isPreloading();
 
 			if (gameLoader.ready() && !customTexPreloading)
@@ -1455,11 +1449,11 @@ static void gui_display_loadscreen()
 				int texTotal = 0;
 				size_t loaded_size_b = 0;
 				custom_texture.getPreloadProgress(texLoaded, texTotal, loaded_size_b);
-				
+
 				ImGui::Text("%s", label);
 				float progress = 0;
 				char overlay[64] = "";
-				
+
 				if (!gameLoader.ready())
 				{
 					progress = gameLoader.getProgress().progress;
@@ -1477,7 +1471,7 @@ static void gui_display_loadscreen()
 						snprintf(overlay, sizeof(overlay), "%d / %d (%.1f MB)", texLoaded, texTotal, loaded_size_mb);
 					}
 				}
-				
+
 				ImguiStyleColor _(ImGuiCol_PlotHistogram, ImVec4(0.557f, 0.268f, 0.965f, 1.f));
 				ImGui::ProgressBar(progress, ImVec2(-1, uiScaled(20.f)), overlay);
 
@@ -1575,7 +1569,7 @@ void gui_display_ui()
 	error_popup();
     ImGui::Render();
 	gui_endFrame(gui_open);
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 	ImguiFileTexture::resetLoadCount();
 
 	if (gui_state == GuiState::Closed)
@@ -1647,7 +1641,7 @@ void gui_draw_osd()
 		lua::overlay();
 	vgamepad::draw();
     ImGui::Render();
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 }
 
 void gui_display_osd() {
@@ -1777,6 +1771,12 @@ void gui_saveState(bool stopRestart)
 	}
 }
 
+void gui_cycleSaveStateSlot(int step)
+{
+	cycleSaveStateSlot(step);
+	os_notify(strprintf(T("Save state slot %d"), config::SavestateSlot + 1).c_str(), 2000);
+}
+
 void gui_setState(GuiState newState)
 {
 	gui_state = newState;
@@ -1801,6 +1801,10 @@ std::string gui_getCurGameBoxartUrl()
 
 void gui_runOnUiThread(std::function<void()> function) {
 	uiThreadRunner.runOnThread(function);
+}
+
+void gui_runOnUiThread(const std::chrono::steady_clock::time_point& tp, const std::function<void()>& function) {
+	uiThreadRunner.runOnThread(tp, function);
 }
 
 void gui_takeScreenshot()

@@ -524,6 +524,16 @@ Sh4Executor *Emulator::getSh4Executor()
 		return interpreter;
 }
 
+void Emulator::runIn(u64 sh4Duration, const std::function<void()>& func)
+{
+	runner.runOnThread(sh4_sched_now64() + sh4Duration, func);
+}
+
+void Emulator::runAt(u64 sh4TimePoint, const std::function<void()>& func)
+{
+	runner.runOnThread(sh4TimePoint, func);
+}
+
 int getGamePlatform(const std::string& filename)
 {
 	if (settings.naomi.slave)
@@ -1077,7 +1087,7 @@ bool Emulator::render()
 void Emulator::vblank()
 {
 	EventManager::event(Event::VBlank);
-	runner.execTasks();
+	runner.execTasks(sh4_sched_now64());
 	// Time out if a frame hasn't been rendered for 50 ms
 	if (sh4_sched_now64() - startTime <= 10000000)
 		return;

@@ -552,6 +552,8 @@ extern Option<int> VirtualGamepadTransparency;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;
+// When true, automatically change the peripheral setting to DreamLink when a DreamLink controller attaches
+extern std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect;
 extern Option<bool> PerGameVmu;
 #ifdef _WIN32
 extern Option<bool, false> UseRawInput;
