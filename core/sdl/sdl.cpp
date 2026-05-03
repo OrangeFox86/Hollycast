@@ -674,32 +674,27 @@ bool sdl_recreate_window(u32 flags)
 		get_window_state();
 
 	// Ensure the title bar is at least visible, preventing window from opening on a screen no longer plugged in
-	const int minTitlePx = 25;
-	int titlePxVisible = 0;
+	bool validPosition = false;
+	const int titleBottom = windowPos.y - 1; // the title bar sits "above" the window
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
-		for (int i = 0; i < numDisplays && titlePxVisible < minTitlePx; i++) {
+		for (int i = 0; i < numDisplays; i++) {
 			SDL_Rect bounds;
 			if (SDL_GetDisplayBounds(i, &bounds) == 0) {
 				// Check if the window position is inside this display
 				if ((windowPos.x + windowPos.w) > bounds.x && windowPos.x < (bounds.x + bounds.w)) {
 					// Title is contained between left/right bounds of this display
-					// Check for how many pixels are visible in the title
-					int titleTop = windowPos.y - minTitlePx; // Title bar sits "above" the window
-					int titleBottom = windowPos.y;
-
-					int interY1 = std::max(titleTop, bounds.y);
-					int interY2 = std::min(titleBottom, bounds.y + bounds.h);
-
-					if (interY1 < interY2) {
-						titlePxVisible += (interY2 - interY1);
+					// Check if this display contains any part of the title bar
+					if (bounds.y <= titleBottom && (bounds.y + bounds.h) > titleBottom) {
+						validPosition = true;
+						break;
 					}
 				}
 			}
 		}
 
 		// If position is invalid, reset to defaults
-		if (titlePxVisible < minTitlePx) {
+		if (!validPosition) {
 			NOTICE_LOG(COMMON, "Saved window position is not on any connected display, resetting to primary display");
 			windowPos.x = SDL_WINDOWPOS_UNDEFINED;
 			windowPos.y = SDL_WINDOWPOS_UNDEFINED;
