@@ -673,27 +673,38 @@ bool sdl_recreate_window(u32 flags)
 	if (window != nullptr)
 		get_window_state();
 
-	// Check if the saved window position is on a valid display, preventing Flycast from opening on a screen no longer pluged in
-	bool validPosition = false;
+	// Ensure the title bar is at least visible, preventing window from opening on a screen no longer plugged in
+	const int minTitlePx = 25;
+	int titlePxVisible = 0;
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
-		for (int i = 0; i < numDisplays; i++) {
+		for (int i = 0; i < numDisplays && titlePxVisible < minTitlePx; i++) {
 			SDL_Rect bounds;
 			if (SDL_GetDisplayBounds(i, &bounds) == 0) {
 				// Check if the window position is inside this display
-				if (windowPos.x >= bounds.x && windowPos.x < bounds.x + bounds.w &&
-					windowPos.y >= bounds.y && windowPos.y < bounds.y + bounds.h) {
-					validPosition = true;
-					break;
+				if ((windowPos.x + windowPos.w) > bounds.x && windowPos.x < (bounds.x + bounds.w)) {
+					// Title is contained between left/right bounds of this display
+					// Check for how many pixels are visible in the title
+					int titleTop = windowPos.y - minTitlePx; // Title bar sits "above" the window
+					int titleBottom = windowPos.y;
+
+					int interY1 = std::max(titleTop, bounds.y);
+					int interY2 = std::min(titleBottom, bounds.y + bounds.h);
+
+					if (interY1 < interY2) {
+						titlePxVisible += (interY2 - interY1);
+					}
 				}
 			}
 		}
 
-		// If position is invalid, reset to primary display, avoiding Flycast from opening in a missing window and not being seen when windowed
-		if (!validPosition) {
+		// If position is invalid, reset to defaults
+		if (titlePxVisible < minTitlePx) {
 			NOTICE_LOG(COMMON, "Saved window position is not on any connected display, resetting to primary display");
 			windowPos.x = SDL_WINDOWPOS_UNDEFINED;
 			windowPos.y = SDL_WINDOWPOS_UNDEFINED;
+			windowPos.w = WINDOW_WIDTH;
+			windowPos.h = WINDOW_HEIGHT;
 		}
 	}
 #endif
