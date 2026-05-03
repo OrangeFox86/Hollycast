@@ -12,15 +12,15 @@
 #include <vector>
 
 //! Number of ports (aka buses) on a Dreamcast
-static constexpr const int MAPLE_PORTS = 4;
+inline constexpr int MAPLE_PORTS = 4;
 //! Maximum number of logical devices that may exist on a single bus (main plus maximum of 5 sub-peripherals)
-static constexpr const int MAPLE_DEVS_PER_PORT = 6;
+inline constexpr int MAPLE_DEVS_PER_PORT = 6;
 //! The index of the main device (under MAPLE_DEVS_PER_PORT)
-static constexpr const int MAPLE_MAIN_DEV_IDX = 5;
+inline constexpr int MAPLE_MAIN_DEV_IDX = 5;
 //! First expansion device index (under MAPLE_DEVS_PER_PORT)
-static constexpr const int MAPLE_FIRST_EXT_DEV_IDX = 0;
+inline constexpr int MAPLE_FIRST_EXT_DEV_IDX = 0;
 //! Last expansion device index (under MAPLE_DEVS_PER_PORT)
-static constexpr const int MAPLE_LAST_EXT_DEV_IDX = 4;
+inline constexpr int MAPLE_LAST_EXT_DEV_IDX = 4;
 
 enum MapleFunctionID
 {
