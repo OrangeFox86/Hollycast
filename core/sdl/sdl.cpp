@@ -675,6 +675,7 @@ bool sdl_recreate_window(u32 flags)
 
 	// Ensure the title bar is at least visible, preventing window from opening on a screen no longer plugged in
 	bool validPosition = false;
+	const int minVisibleTitlebarWidth = 100; // minimum horizontal pixels of title bar to be visible
 	const int titleBottom = windowPos.y - 1; // the title bar sits "above" the window
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
@@ -686,8 +687,14 @@ bool sdl_recreate_window(u32 flags)
 					// Title is contained between left/right bounds of this display
 					// Check if this display contains any part of the title bar
 					if (bounds.y <= titleBottom && (bounds.y + bounds.h) > titleBottom) {
-						validPosition = true;
-						break;
+						// Ensure at least minVisibleTitlebarWidth pixels of the title bar are visible
+						int visibleLeft = std::max(windowPos.x, bounds.x);
+						int visibleRight = std::min(windowPos.x + windowPos.w, bounds.x + bounds.w);
+						int visibleWidth = visibleRight - visibleLeft;
+						if (visibleWidth >= minVisibleTitlebarWidth) {
+							validPosition = true;
+							break;
+						}
 					}
 				}
 			}
