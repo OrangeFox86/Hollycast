@@ -678,11 +678,9 @@ bool sdl_recreate_window(u32 flags)
 	if (window != nullptr)
 		get_window_state();
 
-	// Ensure all 4 corners of the window will be visible (spanning multiple monitors allowed)
+	// Ensure the top 2 corners of the window will be visible (spanning multiple monitors allowed)
 	bool topLeftVisible = false;
 	bool topRightVisible = false;
-	bool bottomLeftVisible = false;
-	bool bottomRightVisible = false;
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
 		for (int i = 0; i < numDisplays; i++) {
@@ -698,15 +696,7 @@ bool sdl_recreate_window(u32 flags)
 					topRightVisible = true;
 				}
 
-				if (is_point_in_rect(windowPos.x, windowPos.y + windowPos.h, bounds)) {
-					bottomLeftVisible = true;
-				}
-
-				if (is_point_in_rect(windowPos.x + windowPos.w, windowPos.y + windowPos.h, bounds)) {
-					bottomRightVisible = true;
-				}
-
-				if (topLeftVisible && topRightVisible && bottomLeftVisible && bottomRightVisible) {
+				if (topLeftVisible && topRightVisible) {
 					// Window confirmed visible
 					break;
 				}
@@ -714,7 +704,7 @@ bool sdl_recreate_window(u32 flags)
 		}
 
 		// If position is invalid, reset to defaults
-		if (!topLeftVisible || !topRightVisible || !bottomLeftVisible || !bottomRightVisible) {
+		if (!topLeftVisible || !topRightVisible) {
 			NOTICE_LOG(COMMON, "Saved window position is not on any connected display, resetting to primary display");
 			windowPos.x = SDL_WINDOWPOS_UNDEFINED;
 			windowPos.y = SDL_WINDOWPOS_UNDEFINED;
