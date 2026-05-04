@@ -38,9 +38,6 @@ static u32 windowFlags;
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT  480
-// Minimum width which must be visible before window reset is required
-#define MIN_VISIBLE_WIDTH  100
-static_assert(MIN_VISIBLE_WIDTH < WINDOW_WIDTH, "MIN_VISIBLE_WIDTH must be less than WINDOW_WIDTH");
 
 static std::unordered_map<u32, std::shared_ptr<SDLMouse>> sdl_mice;
 static std::shared_ptr<SDLKeyboardDevice> sdl_keyboard;
@@ -625,6 +622,11 @@ HWND getNativeHwnd()
 }
 #endif
 
+static bool is_point_in_rect(int x, int y, const SDL_Rect& r) {
+    return (x >= r.x && x < (r.x + r.w) &&
+            y >= r.y && y < (r.y + r.h));
+}
+
 bool sdl_recreate_window(u32 flags)
 {
 	windowFlags = flags;
@@ -676,34 +678,41 @@ bool sdl_recreate_window(u32 flags)
 	if (window != nullptr)
 		get_window_state();
 
-	// Ensure the title bar is at least visible, preventing window from opening on a screen no longer plugged in
-	bool validPosition = false;
-	const int titleBottom = windowPos.y - 1; // the title bar sits "above" the window area
+	// Ensure all 4 corners of the window will be visible (spanning multiple monitors allowed)
+	bool topLeftVisible = false;
+	bool topRightVisible = false;
+	bool bottomLeftVisible = false;
+	bool bottomRightVisible = false;
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
 		for (int i = 0; i < numDisplays; i++) {
 			SDL_Rect bounds;
-			if (SDL_GetDisplayBounds(i, &bounds) == 0) {
-				// Check if the window position is inside this display
-				if ((windowPos.x + windowPos.w) > bounds.x && windowPos.x < (bounds.x + bounds.w)) {
-					// Title is contained between left/right bounds of this display
-					// Check if this display contains any part of the title bar
-					if (bounds.y <= titleBottom && (bounds.y + bounds.h) > titleBottom) {
-						// Ensure at least MIN_VISIBLE_WIDTH pixels of the title bar are visible
-						int visibleLeft = std::max(windowPos.x, bounds.x);
-						int visibleRight = std::min(windowPos.x + windowPos.w, bounds.x + bounds.w);
-						int visibleWidth = visibleRight - visibleLeft;
-						if (visibleWidth >= MIN_VISIBLE_WIDTH) {
-							validPosition = true;
-							break;
-						}
-					}
+			if (SDL_GetDisplayUsableBounds(i, &bounds) == 0) {
+				if (is_point_in_rect(windowPos.x, windowPos.y - 1, bounds)) {
+					topLeftVisible = true;
+				}
+
+				if (is_point_in_rect(windowPos.x + windowPos.w, windowPos.y - 1, bounds)) {
+					topRightVisible = true;
+				}
+
+				if (is_point_in_rect(windowPos.x, windowPos.y + windowPos.h, bounds)) {
+					bottomLeftVisible = true;
+				}
+
+				if (is_point_in_rect(windowPos.x + windowPos.w, windowPos.y + windowPos.h, bounds)) {
+					bottomRightVisible = true;
+				}
+
+				if (topLeftVisible && topRightVisible && bottomLeftVisible && bottomRightVisible) {
+					// Window confirmed visible
+					break;
 				}
 			}
 		}
 
 		// If position is invalid, reset to defaults
-		if (!validPosition) {
+		if (!topLeftVisible || !topRightVisible || !bottomLeftVisible || !bottomRightVisible) {
 			NOTICE_LOG(COMMON, "Saved window position is not on any connected display, resetting to primary display");
 			windowPos.x = SDL_WINDOWPOS_UNDEFINED;
 			windowPos.y = SDL_WINDOWPOS_UNDEFINED;
