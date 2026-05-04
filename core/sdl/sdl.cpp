@@ -38,6 +38,9 @@ static u32 windowFlags;
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT  480
+// Minimum width which must be visible before window reset is required
+#define MIN_VISIBLE_WIDTH  100
+static_assert(MIN_VISIBLE_WIDTH < WINDOW_WIDTH, "MIN_VISIBLE_WIDTH must be less than WINDOW_WIDTH");
 
 static std::unordered_map<u32, std::shared_ptr<SDLMouse>> sdl_mice;
 static std::shared_ptr<SDLKeyboardDevice> sdl_keyboard;
@@ -675,8 +678,7 @@ bool sdl_recreate_window(u32 flags)
 
 	// Ensure the title bar is at least visible, preventing window from opening on a screen no longer plugged in
 	bool validPosition = false;
-	const int minVisibleTitlebarWidth = 100; // minimum horizontal pixels of title bar to be visible
-	const int titleBottom = windowPos.y - 1; // the title bar sits "above" the window
+	const int titleBottom = windowPos.y - 1; // the title bar sits "above" the window area
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
 		for (int i = 0; i < numDisplays; i++) {
@@ -687,11 +689,11 @@ bool sdl_recreate_window(u32 flags)
 					// Title is contained between left/right bounds of this display
 					// Check if this display contains any part of the title bar
 					if (bounds.y <= titleBottom && (bounds.y + bounds.h) > titleBottom) {
-						// Ensure at least minVisibleTitlebarWidth pixels of the title bar are visible
+						// Ensure at least MIN_VISIBLE_WIDTH pixels of the title bar are visible
 						int visibleLeft = std::max(windowPos.x, bounds.x);
 						int visibleRight = std::min(windowPos.x + windowPos.w, bounds.x + bounds.w);
 						int visibleWidth = visibleRight - visibleLeft;
-						if (visibleWidth >= minVisibleTitlebarWidth) {
+						if (visibleWidth >= MIN_VISIBLE_WIDTH) {
 							validPosition = true;
 							break;
 						}
