@@ -688,6 +688,8 @@ bool sdl_recreate_window(u32 flags)
 		for (int i = 0; i < numDisplays; i++) {
 			SDL_Rect bounds;
 			if (SDL_GetDisplayUsableBounds(i, &bounds) == 0) {
+				// windowPos doesn't include title bar
+				// Using y-1 at top to ensure at least 1 pixel of the title bar is visible
 				if (is_point_in_rect(windowPos.x, windowPos.y - 1, bounds)) {
 					topLeftVisible = true;
 				}
