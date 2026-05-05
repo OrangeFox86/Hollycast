@@ -1,4 +1,7 @@
 /*
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of reicast.
 
     reicast is free software: you can redistribute it and/or modify

@@ -1,5 +1,6 @@
 /*
-    Copyright 2021 flyinghead
+    Copyright 2024 flyinghead
+    Portions Copyright 2026 The Hollycast Authors
 
     This file is part of Flycast.
 
