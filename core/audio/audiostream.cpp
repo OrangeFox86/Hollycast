@@ -1,8 +1,5 @@
 /*
-    Copyright 2024 flyinghead
-    Portions Copyright 2026 The Hollycast Authors
-
-     Copyright 2013 nullDC
+    Copyright 2013 nullDC
     Portions Copyright 2019 flyinghead
     Portions Copyright 2026 The Hollycast Authors
 
