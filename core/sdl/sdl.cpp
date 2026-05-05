@@ -696,7 +696,7 @@ bool sdl_recreate_window(u32 flags)
 					topLeftVisible = true;
 				}
 
-				if (is_point_in_rect(windowPos.x + windowPos.w, windowPos.y - 1, bounds)) {
+				if (is_point_in_rect(windowPos.x + windowPos.w - 1, windowPos.y - 1, bounds)) {
 					topRightVisible = true;
 				}
 
