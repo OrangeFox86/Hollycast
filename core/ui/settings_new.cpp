@@ -5274,6 +5274,63 @@ void renderAdvancedTab()
 					"Decreasing the clock can lower CPU requirements, but may reduce performance or cause glitches.\n\n"
 					"If you change this, re-test gameplay with the FPS counter enabled and keep adjustments small.");
 			}
+
+			// Fast-Forward Speed Limit
+			{
+				static int fastForwardLimitTemp = config::FastForwardSpeedLimit.get();
+
+				SettingsUI::PopupSliderConfig fastForwardLimitCfg {};
+				fastForwardLimitCfg.label = "Fast-Forward Speed";
+				fastForwardLimitCfg.icon = ICON_FA_FORWARD_FAST;
+				fastForwardLimitCfg.popupID = "FastForwardSpeedLimitPopup";
+				fastForwardLimitCfg.description =
+					"Sets a cap for Fast-Forward speed.\n"
+					"Values below Infinite apply frame pacing while Fast-Forward is active.\n"
+					"Infinite preserves the current uncapped behavior.";
+				fastForwardLimitCfg.currentValue = &fastForwardLimitTemp;
+				fastForwardLimitCfg.minValue = 2;
+				fastForwardLimitCfg.maxValue = 300;
+				fastForwardLimitCfg.defaultValue = 300;
+				fastForwardLimitCfg.format = "%d%%";
+				fastForwardLimitCfg.valueWidth = 220.0f;
+				fastForwardLimitCfg.sliderWidth = 320.0f;
+				fastForwardLimitCfg.valueFormatter = [](int value) {
+					if (value >= 300)
+						return std::string("Infinite");
+					char text[16];
+					snprintf(text, sizeof(text), "%d%%", value);
+					return std::string(text);
+				};
+				fastForwardLimitCfg.onValueChange = []() {
+					config::FastForwardSpeedLimit.set(fastForwardLimitTemp);
+				};
+
+				SettingsUI::PopupConfig fastForwardLimitPopupCfg {};
+				fastForwardLimitPopupCfg.type = SettingsUI::PopupType::Slider;
+				fastForwardLimitPopupCfg.slider = fastForwardLimitCfg;
+
+				RenderGeneralPopupSettingRow(
+					"FastForwardSpeedLimitSetting",
+					"Cap Fast-Forward speed or leave it Infinite.",
+					fastForwardLimitPopupCfg,
+					"Fast-Forward Speed\n"
+					"Controls the Fast-Forward cap while Fast-Forward is active.\n\n"
+					"Set this below Infinite if you want a controlled speed-up instead of running as fast as possible.\n"
+					"Infinite keeps today's uncapped Fast-Forward behavior.\n\n"
+					"Use moderate values first, then raise or lower based on how smooth gameplay and audio feel.");
+			}
+
+			RenderGeneralToggleSettingRow(
+				"FastForwardAudio",
+				ICON_FA_VOLUME_HIGH,
+				"Fast-Forward Audio",
+				"Play audio during Fast-Forward",
+				static_cast<bool>(config::FastForwardAudio),
+				[](bool enabled) { config::FastForwardAudio.set(enabled); },
+				"Fast-Forward Audio\n"
+				"Controls whether audio plays while Fast-Forward is active.\n\n"
+				"When enabled, Fast-Forward audio plays at 35% volume to keep it usable without being too harsh.\n"
+				"When disabled, Fast-Forward keeps the current muted-audio behavior.");
 	#endif
 
 			// HLE BIOS

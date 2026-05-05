@@ -56,7 +56,7 @@ void WriteSample(s16 r, s16 l)
 	if (++writePtr == SAMPLE_COUNT)
 	{
 		if (currentBackend != nullptr)
-			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS);
+			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS && !settings.input.fastForwardMode);
 		writePtr = 0;
 	}
 }
@@ -156,5 +156,4 @@ static void registerForEvents()
 	EventManager::listen(Event::Terminate, callback);
 	EventManager::listen(Event::LoadState, callback);
 }
-
 

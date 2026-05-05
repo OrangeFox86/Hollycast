@@ -457,6 +457,7 @@ struct PopupSliderConfig {
     int maxValue = 100;
     int defaultValue = 100;  // Default value for display
     const char* format = "%d%%";
+    std::function<std::string(int)> valueFormatter = nullptr;
 
     // Optional: Custom apply button
     const char* applyButtonText = "Apply";
