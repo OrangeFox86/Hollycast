@@ -677,7 +677,11 @@ bool sdl_recreate_window(u32 flags)
 	window_maximized = config::loadBool("window", "maximized", window_maximized);
 	if (window != nullptr)
 		get_window_state();
+#endif
 
+	// Workaround for Windows only
+	// This is not an issue in Linux or macOS as the window will always snap to visible area in those
+#ifdef _WIN32
 	// Ensure the top 2 corners of the window will be visible (spanning multiple monitors allowed)
 	bool topLeftVisible = false;
 	bool topRightVisible = false;
@@ -713,6 +717,7 @@ bool sdl_recreate_window(u32 flags)
 		}
 	}
 #endif
+
 	if (window != nullptr)
 	{
 		SDL_DestroyWindow(window);
