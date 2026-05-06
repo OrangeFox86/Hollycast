@@ -370,4 +370,48 @@ void dc_getStateScreenshot(int index, std::vector<u8>& pngData)
 	std::fclose(f);
 }
 
+int dc_findSaveSlotForExit()
+{
+	constexpr int NUM_SAVE_SLOTS = 10;
+	time_t oldestTime = std::numeric_limits<time_t>::max();
+	int oldestSlot = 0;
+	int emptySlot = -1;
+
+	for (int slot = 0; slot < NUM_SAVE_SLOTS; slot++)
+	{
+		time_t timestamp = dc_getStateCreationDate(slot);
+		if (timestamp <= 0)
+		{
+			emptySlot = slot;
+			break;
+		}
+		if (timestamp < oldestTime)
+		{
+			oldestTime = timestamp;
+			oldestSlot = slot;
+		}
+	}
+
+	return emptySlot >= 0 ? emptySlot : oldestSlot;
+}
+
+int dc_findMostRecentSaveSlot()
+{
+	constexpr int NUM_SAVE_SLOTS = 10;
+	time_t newestTime = 0;
+	int newestSlot = -1;
+
+	for (int slot = 0; slot < NUM_SAVE_SLOTS; slot++)
+	{
+		time_t timestamp = dc_getStateCreationDate(slot);
+		if (timestamp > newestTime)
+		{
+			newestTime = timestamp;
+			newestSlot = slot;
+		}
+	}
+
+	return newestSlot;
+}
+
 #endif

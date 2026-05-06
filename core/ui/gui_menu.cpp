@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -131,10 +132,10 @@ void renderFileMenu()
 
 		ImGui::Separator();
 
-		// Exit Game
-		if (ImGui::MenuItem("Exit Game", nullptr, false, ::game_started))
+		// Exit System
+		if (ImGui::MenuItem("Exit System", nullptr, false, ::game_started))
 		{
-			showExitSaveDialog = true; // Trigger dialog instead of immediate exit
+			gui_request_system_exit();
 		}
 
 		ImGui::EndMenu();

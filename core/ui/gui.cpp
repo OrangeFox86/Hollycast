@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,7 @@
 #include "imgui_stdlib.h"
 #include "network/net_handshake.h"
 #include "network/ice.h"
+#include "network/naomi_network.h"
 #include "input/gamepad_device.h"
 #include "gui_util.h"
 #include "imgread/common.h"
@@ -86,6 +88,9 @@ static bool keysUpNextFrame[512];
 bool uiUserScaleUpdated;
 static bool clearActiveIdNextFrame;
 bool showExitSaveDialog = false;
+static bool exitSystemFromDialog = false;
+bool showLoadStateOnBootDialog = false;
+int loadStateOnBootSlot = -1;
 
 GameScanner scanner;
 static BackgroundGameLoader gameLoader;
@@ -94,6 +99,7 @@ static Chat chat;
 static std::recursive_mutex guiMutex;
 using LockGuard = std::lock_guard<std::recursive_mutex>;
 static constexpr int NUM_SAVE_SLOTS = 10;
+static ImTextureID loadSaveStateThumbnail(int slot);
 
 ImFont *largeFont;
 ImFont *settingsTitleFont;
@@ -106,12 +112,12 @@ static void emuEventCallback(Event event, void *)
 {
 	switch (event)
 	{
+	case Event::Start:
+		GamepadDevice::load_system_mappings();
+		break;
 	case Event::Resume:
 		game_started = true;
 		vgamepad::startGame();
-		break;
-	case Event::Start:
-		GamepadDevice::load_system_mappings();
 		break;
 	case Event::Terminate:
 		GamepadDevice::load_system_mappings();
@@ -123,6 +129,7 @@ static void emuEventCallback(Event event, void *)
 }
 
 static void clearThumbnailCache();
+static void gui_stop_game_to_library(const std::string& message = "");
 
 void gui_init()
 {
@@ -722,16 +729,7 @@ void gui_stop_game(const std::string& message)
 	const LockGuard lock(guiMutex);
 	if (!commandLineStart)
 	{
-		// Exit to main menu
-		emu.unloadGame();
-		gui_setState(GuiState::Main);
-		reset_vmus();
-
-		// Clear thumbnail cache when stopping game
-		clearThumbnailCache();
-
-		if (!message.empty())
-			gui_error(Ts("Flycast has stopped.") + "\n\n" + message);
+		gui_stop_game_to_library(message);
 	}
 	else
 	{
@@ -740,6 +738,50 @@ void gui_stop_game(const std::string& message)
 		// Exit emulator
 		dc_exit();
 	}
+}
+
+static void gui_stop_game_to_library(const std::string& message)
+{
+	emu.unloadGame();
+	gui_setState(GuiState::Main);
+	reset_vmus();
+	clearThumbnailCache();
+	if (!message.empty())
+		gui_error(Ts("Flycast has stopped.") + "\n\n" + message);
+}
+
+void gui_request_exit_game()
+{
+	const LockGuard lock(guiMutex);
+	if (!game_started)
+		return;
+
+	if (!config::AutoSaveState)
+	{
+		exitSystemFromDialog = false;
+		showExitSaveDialog = false;
+		gui_stop_game_to_library();
+		return;
+	}
+
+	exitSystemFromDialog = false;
+	showExitSaveDialog = true;
+}
+
+void gui_request_system_exit()
+{
+	const LockGuard lock(guiMutex);
+
+	if (!game_started || !config::AutoSaveState)
+	{
+		exitSystemFromDialog = false;
+		showExitSaveDialog = false;
+		dc_exit();
+		return;
+	}
+
+	exitSystemFromDialog = true;
+	showExitSaveDialog = true;
 }
 
 static void appendVectorData(void *context, void *data, int size)
@@ -774,6 +816,14 @@ static void render_exit_save_dialog()
 {
 	static bool wasDialogShown = false;
 
+	if (!config::AutoSaveState)
+	{
+		exitSystemFromDialog = false;
+		showExitSaveDialog = false;
+		wasDialogShown = false;
+		return;
+	}
+
 	if (!showExitSaveDialog)
 	{
 		wasDialogShown = false;
@@ -795,29 +845,41 @@ static void render_exit_save_dialog()
 	if (ImGui::BeginPopupModal("Exit Game?", NULL,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar))
 	{
-		ImGui::Text("Do you want to save state before exiting?");
+		if (exitSystemFromDialog)
+			ImGui::Text("Exit Flycast.");
+		else
+			ImGui::Text("Exit game and return to library.");
+		ImGui::Separator();
+		if (exitSystemFromDialog)
+			ImGui::Text("Save before exiting Flycast?");
+		else
+			ImGui::Text("Save before exiting?");
 		ImGui::NewLine();
 
 		// Button styling (consistent with existing dialogs)
 		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
 		ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
 		const float buttonWidth = std::max({
-			ImGui::CalcTextSize("Save & Exit").x,
-			ImGui::CalcTextSize("Exit Without Saving").x,
+			ImGui::CalcTextSize("Save & Return").x,
+			ImGui::CalcTextSize("Return Without Saving").x,
 			ImGui::CalcTextSize("Cancel").x
 		}) + ImGui::GetStyle().FramePadding.x * 2 + uiScaled(24.f);
 
 		// Check if save is allowed
 		bool canSave = dc_savestateAllowed();
 
-		if (ImGui::Button("Save & Exit", ImVec2(buttonWidth, 0)))
+		if (ImGui::Button("Save & Return", ImVec2(buttonWidth, 0)))
 		{
 			if (canSave)
 			{
 				savestate(); // Save current state
 				ImGui::CloseCurrentPopup();
 				showExitSaveDialog = false;
-				gui_stop_game();
+				if (exitSystemFromDialog)
+					dc_exit();
+				else
+					gui_stop_game_to_library();
+				exitSystemFromDialog = false;
 			}
 			else
 			{
@@ -826,17 +888,22 @@ static void render_exit_save_dialog()
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Exit Without Saving", ImVec2(buttonWidth, 0)))
+		if (ImGui::Button("Return Without Saving", ImVec2(buttonWidth, 0)))
 		{
 			ImGui::CloseCurrentPopup();
 			showExitSaveDialog = false;
-			gui_stop_game();
+			if (exitSystemFromDialog)
+				dc_exit();
+			else
+				gui_stop_game_to_library();
+			exitSystemFromDialog = false;
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0)))
 		{
 			ImGui::CloseCurrentPopup();
 			showExitSaveDialog = false;
+			exitSystemFromDialog = false;
 		}
 
 		// Error popup for save not allowed
@@ -854,6 +921,86 @@ static void render_exit_save_dialog()
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::EndPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+static void render_load_state_on_boot_dialog()
+{
+	if (!showLoadStateOnBootDialog)
+		return;
+
+	ImGui::SetNextWindowPos(
+		ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f),
+		ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+	if (loadStateOnBootSlot < 0)
+	{
+		showLoadStateOnBootDialog = false;
+		return;
+	}
+
+	if (!ImGui::IsPopupOpen("Load Save State?"))
+		ImGui::OpenPopup("Load Save State?");
+
+	if (ImGui::BeginPopupModal("Load Save State?", NULL,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar))
+	{
+		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
+
+		ImGui::Text("Would you like to load your most recent save state?");
+		ImGui::NewLine();
+
+		ImTextureID thumbnail = loadSaveStateThumbnail(loadStateOnBootSlot);
+		if (thumbnail != ImTextureID_Invalid)
+		{
+			ImGui::Image(thumbnail, ImVec2(uiScaled(320), uiScaled(180)));
+			ImGui::NewLine();
+		}
+
+		char dateStr[64];
+		time_t timestamp = dc_getStateCreationDate(loadStateOnBootSlot);
+		if (timestamp > 0)
+		{
+			struct tm *tm_info = localtime(&timestamp);
+			strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", tm_info);
+			ImGui::Text("Saved: %s", dateStr);
+		}
+		else
+		{
+			dateStr[0] = '\0';
+			ImGui::Text("Date unknown");
+		}
+		ImGui::NewLine();
+
+		const float buttonWidth = 140.f;
+		ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
+
+		if (ImGui::Button("Load State", ImVec2(buttonWidth, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+			showLoadStateOnBootDialog = false;
+			config::SavestateSlot = loadStateOnBootSlot;
+			loadStateOnBootSlot = -1;
+			gui_loadState();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Start Fresh", ImVec2(buttonWidth, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+			showLoadStateOnBootDialog = false;
+			loadStateOnBootSlot = -1;
+			gui_setState(GuiState::Closed);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+			showLoadStateOnBootDialog = false;
+			loadStateOnBootSlot = -1;
+			gui_stop_game_to_library();
 		}
 
 		ImGui::EndPopup();
@@ -974,7 +1121,7 @@ static void gui_display_commands()
 
 		// Exit
 		if (IconButton(ICON_FA_POWER_OFF, commandLineStart ?  T("Exit") : T("Close Game"), ScaledVec2(buttonWidth, 50)).realize())
-			gui_stop_game();
+			gui_request_exit_game();
 
 		ImGui::NextColumn();
 		{
@@ -1579,7 +1726,24 @@ static void gui_display_loadscreen()
 				}
 				else
 				{
-					gui_setState(GuiState::Closed);
+					if (config::AutoLoadState && !showLoadStateOnBootDialog && !settings.content.path.empty()
+							&& !config::GGPOEnable && !settings.naomi.multiboard && !NaomiNetworkSupported())
+					{
+						int slot = dc_findMostRecentSaveSlot();
+						if (slot >= 0)
+						{
+							loadStateOnBootSlot = slot;
+							showLoadStateOnBootDialog = true;
+						}
+						else
+						{
+							gui_setState(GuiState::Closed);
+						}
+					}
+					else if (!showLoadStateOnBootDialog)
+					{
+						gui_setState(GuiState::Closed);
+					}
 					ImGui::Text("%s", label);
 				}
 			}
@@ -1636,7 +1800,7 @@ void gui_display_ui()
 	FC_PROFILE_SCOPE;
 	const LockGuard lock(guiMutex);
 
-	if (gui_state == GuiState::Closed)
+	if (gui_state == GuiState::Closed && !showLoadStateOnBootDialog)
 		return;
 
 	// Initialize ImGui frame BEFORE any early returns
@@ -1684,6 +1848,7 @@ void gui_display_ui()
 	// This ensures modals are not affected by window stack operations
 	error_popup();
 	render_exit_save_dialog();
+	render_load_state_on_boot_dialog();
 
 	switch (gui_state)
 	{

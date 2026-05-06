@@ -2391,13 +2391,13 @@ void renderGeneralTab()
 		RenderGeneralToggleSettingRow(
 			"AutoLoadState",
 			ICON_FA_FOLDER_OPEN,
-			"Auto-Load on Start",
-			"Load the last saved state of the game when starting",
+			"Load State on Boot",
+			"Ask whether to load the most recent save state when starting a game",
 			static_cast<bool>(config::AutoLoadState),
 			[](bool enabled) { config::AutoLoadState = enabled; },
-			"Auto-Load on Start\n"
-			"Automatically loads the last saved state when starting a game.\n"
-			"Convenient, but can hide boot-time issues or break games that don't like savestates.");
+			"Load State on Boot\n"
+			"Shows a prompt when a game starts so you can load the latest save state or start fresh.\n"
+			"Disable it if you want the game to boot normally without the prompt.");
 
 		RenderGeneralToggleSettingRow(
 			"AutoSaveState",

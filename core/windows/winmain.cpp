@@ -1,4 +1,7 @@
 /*
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of Flycast.
 
     Flycast is free software: you can redistribute it and/or modify
@@ -35,6 +38,7 @@
 #include "log/LogManager.h"
 #include "sdl/sdl.h"
 #include "emulator.h"
+#include "ui/gui.h"
 #include "ui/mainui.h"
 #include "oslib/directory.h"
 #include "oslib/i18n.h"
@@ -396,7 +400,7 @@ void os_DoEvents()
 		// If the message is WM_QUIT, exit the while loop
 		if (msg.message == WM_QUIT)
 		{
-			dc_exit();
+			gui_request_system_exit();
 		}
 
 		// Translate the message and dispatch it to WindowProc()

@@ -1,3 +1,7 @@
+/*
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
+*/
 #if defined(USE_SDL)
 #include "types.h"
 #include "cfg/cfg.h"
@@ -18,6 +22,7 @@
 #include "emulator.h"
 #include "stdclass.h"
 #include "imgui.h"
+#include "ui/gui.h"
 #include "hw/naomi/card_reader.h"
 #if !defined(_WIN32) && !defined(__APPLE__) && !defined(__SWITCH__)
 #include "linux-dist/icon.h"
@@ -322,7 +327,7 @@ void input_sdl_handle()
 		switch (event.type)
 		{
 			case SDL_QUIT:
-				dc_exit();
+				gui_request_system_exit();
 				break;
 
 			case SDL_KEYDOWN:
