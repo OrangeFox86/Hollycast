@@ -622,10 +622,12 @@ HWND getNativeHwnd()
 }
 #endif
 
+#ifdef _WIN32
 static bool is_point_in_rect(int x, int y, const SDL_Rect& r) {
     return (x >= r.x && x < (r.x + r.w) &&
             y >= r.y && y < (r.y + r.h));
 }
+#endif
 
 bool sdl_recreate_window(u32 flags)
 {
