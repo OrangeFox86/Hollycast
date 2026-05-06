@@ -43,6 +43,7 @@ time_t dc_getStateCreationDate(int index);
 void dc_getStateScreenshot(int index, std::vector<u8>& pngData);
 int dc_findSaveSlotForExit();
 int dc_findMostRecentSaveSlot();
+void dc_skipAutoSaveOnNextUnload();
 bool dc_savestateAllowed();
 
 enum class Event {

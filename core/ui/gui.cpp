@@ -873,6 +873,7 @@ static void render_exit_save_dialog()
 			if (canSave)
 			{
 				savestate(); // Save current state
+				dc_skipAutoSaveOnNextUnload();
 				ImGui::CloseCurrentPopup();
 				showExitSaveDialog = false;
 				if (exitSystemFromDialog)
@@ -890,6 +891,7 @@ static void render_exit_save_dialog()
 		ImGui::SameLine();
 		if (ImGui::Button("Return Without Saving", ImVec2(buttonWidth, 0)))
 		{
+			dc_skipAutoSaveOnNextUnload();
 			ImGui::CloseCurrentPopup();
 			showExitSaveDialog = false;
 			if (exitSystemFromDialog)
