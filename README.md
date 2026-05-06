@@ -34,6 +34,8 @@ Hollycast aims to support every platform and release offered by Flycast. If Flyc
 > **Note:** Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/pYVqGqvFJW) and open a Feature Request to discuss your plans before submitting code.
 
 ### Build instructions:
+The following assumes prerequisites are already installed. Refer to the [c-cpp CI file](https://github.com/OrangeFox86/Hollycast/blob/master/.github/workflows/c-cpp.yml) under `Set up build environment` for your specific operating system.
+
 ```bash
 # Clone repo
 $ git clone --recursive https://github.com/OrangeFox86/hollycast.git
