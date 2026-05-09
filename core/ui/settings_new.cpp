@@ -29,8 +29,10 @@
 #include "widgets/widgets.h"
 #include "version.h"
 #include "wsi/context.h"
+#include "input/dreampotato.h"
 #include "input/gamepad_device.h"
 #include "input/keyboard_device.h"
+#include "input/maplelinkregistry.h"
 #include "input/mouse.h"
 #include "hw/maple/maple_devs.h"
 #include "hw/maple/maple_cfg.h"
@@ -4251,12 +4253,17 @@ void renderControlsTab()
 		"Panther DC/Full Controller",
 	};
 
+	static constexpr int MDT_DreamPotato = 100;
+	static constexpr int MDT_DreamLink = 101;
+
 	static const char *maple_expansion_device_types[] =
 	{
 		"None",
 		"Sega VMU",
 		"Vibration Pack",
 		"Microphone",
+		"DreamPotato",
+		"DreamLink", // not shown unless a DreamLink controller is present
 	};
 
 	// Helper lambda to get device name
@@ -4285,6 +4292,8 @@ void renderControlsTab()
 		case MDT_SegaVMU: return maple_expansion_device_types[1];
 		case MDT_PurupuruPack: return maple_expansion_device_types[2];
 		case MDT_Microphone: return maple_expansion_device_types[3];
+		case MDT_DreamPotato: return maple_expansion_device_types[4];
+		case MDT_DreamLink: return maple_expansion_device_types[5];
 		case MDT_None: default: return maple_expansion_device_types[0];
 		}
 	};
@@ -4315,6 +4324,8 @@ void renderControlsTab()
 		case 1: return MDT_SegaVMU;
 		case 2: return MDT_PurupuruPack;
 		case 3: return MDT_Microphone;
+		case 4: return (MapleDeviceType)MDT_DreamPotato;
+		case 5: return (MapleDeviceType)MDT_DreamLink;
 		case 0: default: return MDT_None;
 		}
 	};
@@ -4322,17 +4333,36 @@ void renderControlsTab()
 	bool is_there_any_xhair = false;
 
 	if (ImGui::BeginTable("dreamcastDevices", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings,
-			ImVec2(0, 0), 8.0f))
+			ImVec2(0, 0), uiScaled(8)))
 	{
+		// DreamLink device names for main device
+		const char* dream_link_names[MAPLE_PORTS]{};
+		for (int bus = 0; bus < MAPLE_PORTS; bus++)
+		{
+			auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
+			if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				dream_link_names[bus] = link->dreamlink->getName();
+			else
+				dream_link_names[bus] = "";
+		}
+
 		const float mainComboWidth = ImGui::CalcTextSize("Densha de Go! Controller").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
 		const float expComboWidth = ImGui::CalcTextSize("Vibration Pack").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
 
 		// Settings 3-22: Dreamcast Device Ports (4 ports x device + expansion)
 		for (int bus = 0; bus < MAPLE_PORTS; bus++)
 		{
+			const bool has_dream_link = (*dream_link_names[bus] != '\0');
+			const char* selected_name = nullptr;
+
+			if (has_dream_link)
+				selected_name = dream_link_names[bus];
+			else
+				selected_name = maple_device_name(config::MapleMainDevices[bus]);
+
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Port %c", bus + 'A');
+			ImGui::Text(T("Port %c"), bus + 'A');
 
 			ImGui::TableSetColumnIndex(1);
 			char device_name[32];
@@ -4341,57 +4371,87 @@ void renderControlsTab()
 			ImGui::PushItemWidth(w);
 			ImGui::SetNextItemWidth(mainComboWidth);
 
-			// Main device selection
-			if (ImGui::BeginCombo(device_name, maple_device_name(config::MapleMainDevices[bus])))
+			if (has_dream_link)
 			{
-				for (int i = 0; i < 13; i++)
+				// Using real hardware for this - disable selection
+				ImGui::BeginDisabled();
+			}
+
+			if (ImGui::BeginCombo(device_name, selected_name, ImGuiComboFlags_None))
+			{
+				for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
 				{
 					bool is_selected = config::MapleMainDevices[bus] == maple_device_type_from_index(i);
-						if (ImGui::Selectable(maple_device_types[i], &is_selected))
-						{
-							config::MapleMainDevices[bus] = maple_device_type_from_index(i);
-							g_mapleDevicesChangedInSettings = true;
-						}
+					if (ImGui::Selectable(maple_device_types[i], &is_selected))
+					{
+						config::MapleMainDevices[bus] = maple_device_type_from_index(i);
+						g_mapleDevicesChangedInSettings = true;
+					}
 					if (is_selected)
 						ImGui::SetItemDefaultFocus();
 				}
 				ImGui::EndCombo();
 			}
 
-			// Expansion port count based on device type
 			int port_count = 0;
-			switch (config::MapleMainDevices[bus]) {
-				case MDT_SegaController:
-				case MDT_SegaControllerXL:
-					port_count = 2;
-					break;
-				case MDT_LightGun:
-				case MDT_TwinStick:
-				case MDT_AsciiStick:
-				case MDT_RacingController:
-					port_count = 1;
-					break;
-				default: break;
+			int port_type_count = 0;
+			if (has_dream_link)
+			{
+				ImGui::EndDisabled();
+				port_count = 2;
+				port_type_count = IM_ARRAYSIZE(maple_expansion_device_types);
+			}
+			else
+			{
+				port_count = maple_getPortCount(config::MapleMainDevices[bus]);
+				// Remove DreamLink as an option
+				port_type_count = IM_ARRAYSIZE(maple_expansion_device_types) - 1;
 			}
 
-			// Expansion device selections
 			for (int port = 0; port < port_count; port++)
 			{
+				const bool port_has_dream_link = has_dream_link && (MapleLinkRegistry::GetMapleLink(bus, port) != std::nullopt);
+
 				ImGui::TableSetColumnIndex(2 + port);
 				snprintf(device_name, sizeof(device_name), "##device%d.%d", bus, port + 1);
 				ImguiID _(device_name);
 				ImGui::SetNextItemWidth(expComboWidth);
+				int subtype = config::MapleExpansionDevices[bus][port];
+				if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1) {
+					subtype = MDT_DreamPotato;
+				}
+				else if (port_has_dream_link && (config::DreamLinkSelect[bus][port])) {
+					subtype = MDT_DreamLink;
+				}
 
-				if (ImGui::BeginCombo(device_name, maple_expansion_device_name(config::MapleExpansionDevices[bus][port])))
+				if (ImGui::BeginCombo(device_name, maple_expansion_device_name((MapleDeviceType)subtype), ImGuiComboFlags_None))
 				{
-					for (int i = 0; i < 4; i++)
+					for (int i = 0; i < port_type_count; i++)
 					{
-						bool is_selected = config::MapleExpansionDevices[bus][port] == maple_expansion_device_type_from_index(i);
-							if (ImGui::Selectable(maple_expansion_device_types[i], &is_selected))
-							{
-								config::MapleExpansionDevices[bus][port] = maple_expansion_device_type_from_index(i);
-								g_mapleDevicesChangedInSettings = true;
+						bool is_selected = subtype == maple_expansion_device_type_from_index(i);
+						if (ImGui::Selectable(maple_expansion_device_types[i], &is_selected))
+						{
+							subtype = maple_expansion_device_type_from_index(i);
+							if (subtype == MDT_DreamLink) {
+								config::DreamLinkSelect[bus][port] = true;
 							}
+							else if (port_has_dream_link) {
+								config::DreamLinkSelect[bus][port] = false;
+							}
+
+							if (subtype == MDT_DreamPotato) {
+								config::MapleExpansionDevices[bus][port] = MDT_SegaVMU;
+								config::NetworkExpansionDevices[bus][port] = 1;
+							}
+							else {
+								if (subtype != MDT_DreamLink) {
+									config::MapleExpansionDevices[bus][port] = (MapleDeviceType)subtype;
+								}
+								config::NetworkExpansionDevices[bus][port] = 0;
+							}
+
+							g_mapleDevicesChangedInSettings = true;
+						}
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
@@ -4550,54 +4610,15 @@ void renderControlsTab()
 			RenderGeneralToggleSettingRow(
 				"UsePhysicalVmuMemory",
 				ICON_FA_MEMORY,
-				"Use Physical VMU Memory",
-				"Enables direct read/write access to physical VMU memory via DreamPicoPort/DreamConn. This is not compatible with load state events.",
+				T("Use External VMU Storage"),
+				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
 				static_cast<bool>(config::UsePhysicalVmuMemory),
 				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-				"Use Physical VMU Memory\n"
-				"Enables direct read/write access to physical VMU memory via DreamPicoPort/DreamConn.\n"
-				"Not compatible with load state events.",
+				T("Use External VMU Storage") + "\n" +
+				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
 				game_started);
-	}
-
-	for (int bus = 0; bus < MAPLE_PORTS; bus++)
-	{
-		int port_count = 0;
-		switch (config::MapleMainDevices[bus]) {
-			case MDT_SegaController:
-			case MDT_SegaControllerXL:
-				port_count = 2;
-				break;
-			case MDT_LightGun:
-			case MDT_TwinStick:
-			case MDT_AsciiStick:
-			case MDT_RacingController:
-				port_count = 1;
-				break;
-			default: break;
-		}
-
-		if (port_count > 0)
-		{
-			char rowId[64];
-			char rowLabel[64];
-			snprintf(rowId, sizeof(rowId), "UseNetworkExpansionDevices%d", bus);
-			snprintf(rowLabel, sizeof(rowLabel), "Use Network Expansion Devices (Port %c)", 'A' + bus);
-				RenderGeneralToggleSettingRow(
-					rowId,
-					ICON_FA_NETWORK_WIRED,
-					rowLabel,
-					"Connect to expansion devices such as VMUs over local TCP",
-					static_cast<bool>(config::NetworkExpansionDevices[bus][0].get() || config::NetworkExpansionDevices[bus][1].get()),
-					[bus](bool enabled) {
-						const int netEnabled = enabled ? 1 : 0;
-						config::NetworkExpansionDevices[bus][0].set(netEnabled);
-						config::NetworkExpansionDevices[bus][1].set(netEnabled);
-					},
-					"Network Expansion Devices\n"
-					"Connects to expansion devices such as VMUs over local TCP.\n"
-					"Use this only if you have a compatible expansion-device bridge configured on your network.");
-		}
 	}
 #endif
 	}
@@ -5918,6 +5939,7 @@ void renderSettingsNew()
 			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 	{
 		const std::function<void()> exitSettings = [&]() {
+			dreampotato::update();
 			if (g_mapleDevicesChangedInSettings)
 			{
 				g_mapleDevicesChangedInSettings = false;
