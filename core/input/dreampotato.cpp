@@ -250,6 +250,35 @@ public:
 		return needsReconnect;
 	}
 
+	void sendFilePath(int port)
+	{
+		// Check which expansion slots contain VMUs
+		MapleMsg msg;
+		msg.command = MDC_DPOpenFile;
+		msg.destAP = (bus << 6) | port;
+		msg.originAP = bus << 6;
+		msg.pushData(MFID_1_Storage);
+
+		std::string logical_port;
+		logical_port.push_back('A' + bus);
+		logical_port.push_back('0' + port);
+
+		// TODO: may need to replicate more functionality of 'maple_sega_vmu::OnSetup()'.
+		std::string path = hostfs::getVmuPath(logical_port, /*save*/ true);
+		msg.pushData(path.c_str(), path.size());
+
+		auto ec = sendMsg(msg, sock);
+		if (ec)
+		{
+			WARN_LOG(INPUT, "DreamPotato[%d] sendFilePath error: %s", bus, ec.message().c_str());
+			disconnect();
+		}
+		if (!receiveMsg(msg, sock, ioContext)) {
+			WARN_LOG(INPUT, "DreamPotato[%d] read timeout", bus);
+			disconnect();
+		}
+	}
+
 	void updateExpansionDevs()
 	{
 		// Check which expansion slots contain VMUs
@@ -385,7 +414,14 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 
 	connectionStatus = ConnectionStatus::Connected;
 
-	auto slot1HasPotato = config::MapleExpansionDevices[bus][0] == MapleDeviceType;
+	// TODO2: this sends the file path after we have connected.
+	// We should probably send it as a cmd line argument instead, and use this message only when the VMU file changes after we have already started-up.
+	if (initedPorts & 1)
+		sendFilePath(1);
+
+	if (initedPorts & 2)
+		sendFilePath(2);
+
 	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);
 }

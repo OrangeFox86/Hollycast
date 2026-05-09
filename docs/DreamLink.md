@@ -54,7 +54,7 @@ A DreamLink device by nature represents an external expansion device which Holly
 Hollycast will address this issue by ensuring that when loading state, if any expansion slots are using DreamLinks with physical memory (i.e. DreamPotato expansion devices, or DreamPicoPort controllers), and the state of the external device(s) may have changed since saving the state, then the emulated Maple devices are reloaded automatically.
 
 We determine whether the external VMU state changed in the following way:
-- Track a "blockRead" flag for all blocks of the VMU, for the current play session. Flip the flag to true whenever a given block of the VMU is used. (The VMU image has 256 blocks.)
+- Track a "blockRead" flag for each block of the VMU. Default all to false when the VMU is connected. Set the flag to true whenever a given block of the VMU is used. (The VMU image has 256 blocks.)
 - Mirror the contents of the blocks which were used. Persist this data in the save state.
 - When a save state is loaded, then for each block that has been read during the session, read the corresponding block from the external VMU.
 - If the contents of all the external VMU blocks are equal to the contents of the mirrored blocks, then, the external VMU is assumed to not have changed, and doesn't need to be reconnected.

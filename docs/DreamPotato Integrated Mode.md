@@ -14,6 +14,8 @@ We add the following command line flags to DreamPotato:
 - `--port=A`: indicates the port letter that the DreamPotato instance should use. Any port letters A-D are permitted.
 - `--slots=1`: indicates which slots for the port contain "DreamPotato VMUs". Slots `1`, `2`, `both` are permitted.
 
+When the integrated mode is enabled in Hollycast, then, Hollycast will launch a DreamPotato subprocess at the appropriate time, passing the appropriate values for the above flags.
+
 ## File selection
 
 We essentially want the "VMU file used by Hollycast", to be automatically provided to DreamPotato.
@@ -24,10 +26,13 @@ However, the VMU path can change depending on the game (Per-game VMU A1). We don
 
 To support this, we add the following Maple pseudo-commands:
 - `Open File`: Contains a file path as the payload. DreamPotato will receive this message and will open the given file using the "addressed" VMU.
-    - Code: ...
+    - Command code: 0xC0.
+    - TODO: what is the character encoding for file names? UTF-8?
 
 ## Save states
 
 We aren't doing anything special with this right now, compared to the existing DreamPotato connectivity.
+
+For example, loading a save state in this mode, will not revert the VMU contents to when the state was saved, like would be done for ordinary VMUs.
 
 Theoretically, this tighter integration, would be an opportunity to ensure that the DreamPotato savestate is strongly coupled to the Hollycast savestate. This would allow restoring the VMU contents to match the savestate under all conditions, and prevent a need to "simulate reconnecting" VMUs. However, this is additional work and not thought to be part of the "most critical path" to get working.
