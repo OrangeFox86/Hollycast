@@ -97,6 +97,10 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		deserializeVmu(deser, link.storageEnabled());
 	}
 
+	// void OnSetup() override
+	// {
+	// }
+
 	MapleDeviceRV readBlock(unsigned block)
 	{
 		if (accessed_blocks[block])
@@ -380,6 +384,8 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 	}
 
 	connectionStatus = ConnectionStatus::Connected;
+
+	auto slot1HasPotato = config::MapleExpansionDevices[bus][0] == MapleDeviceType;
 	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);
 }
