@@ -4615,9 +4615,11 @@ void renderControlsTab()
 					"VMUs may appear to reconnect after loading state."),
 				static_cast<bool>(config::UsePhysicalVmuMemory),
 				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-				T("Use External VMU Storage") + "\n" +
-				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-					"VMUs may appear to reconnect after loading state."),
+
+				// TODO: localize?
+				"Use External VMU Storage\n"
+				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state.",
 				game_started);
 	}
 #endif
