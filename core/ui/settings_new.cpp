@@ -935,9 +935,12 @@ static const MappingEntry kDreamcastControls[] = {
 	{ EMU_BTN_NONE, "Emulator" },
 	{ EMU_BTN_MENU, "Menu" },
 	{ EMU_BTN_ESCAPE, "Exit" },
+	{ EMU_BTN_PAUSE, Tnop("Pause") },
 	{ EMU_BTN_FFORWARD, "Fast-forward" },
 	{ EMU_BTN_LOADSTATE, "Load State" },
 	{ EMU_BTN_SAVESTATE, "Save State" },
+	{ EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM") },
+	{ EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM") },
 	{ EMU_BTN_BYPASS_KB, "Bypass Emulated Keyboard" },
 	{ EMU_BTN_SCREENSHOT, "Save Screenshot" },
 
@@ -988,9 +991,12 @@ static const MappingEntry kArcadeControls[] = {
 	{ EMU_BTN_NONE, "Emulator" },
 	{ EMU_BTN_MENU, "Menu" },
 	{ EMU_BTN_ESCAPE, "Exit" },
+	{ EMU_BTN_PAUSE, Tnop("Pause") },
 	{ EMU_BTN_FFORWARD, "Fast-forward" },
 	{ EMU_BTN_LOADSTATE, "Load State" },
 	{ EMU_BTN_SAVESTATE, "Save State" },
+	{ EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM") },
+	{ EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM") },
 	{ EMU_BTN_BYPASS_KB, "Bypass Emulated Keyboard" },
 	{ EMU_BTN_SCREENSHOT, "Save Screenshot" },
 
@@ -1851,7 +1857,7 @@ void renderGeneralTab()
 		static const char* languages[] = { "Japanese", "English", "German", "French", "Spanish", "Italian", "Default" };
 		SettingsUI::PopupConfig languageCfg {};
 		languageCfg.type = SettingsUI::PopupType::Options;
-		languageCfg.options.label = "Language";
+		languageCfg.options.label = "Dreamcast Language";
 		languageCfg.options.icon = ICON_FA_LANGUAGE;
 		languageCfg.options.popupID = "LanguagePopup";
 		languageCfg.options.options = languages;
@@ -5634,17 +5640,27 @@ void renderAdvancedTab()
 			ImGui::Indent();
 
 			// Dump Replaced Textures - 2x Row Pattern
-				RenderGeneralToggleSettingRow(
-					"DumpReplacedTextures",
-					ICON_FA_COPY,
-					"Dump Replaced",
-					"Dump replaced textures too",
-					static_cast<bool>(config::DumpReplacedTextures),
-					[](bool enabled) { config::DumpReplacedTextures.set(enabled); },
-					"Dump Replaced Textures\n"
-					"Also dumps textures even when they are being replaced by a custom texture pack.\n\n"
-					"This is useful when comparing originals vs replacements, but it increases disk usage even more.\n"
-					"Leave this off unless you are actively working on textures.");
+			RenderGeneralToggleSettingRow(
+				"DumpReplacedTextures",
+				ICON_FA_COPY,
+				"Dump Replaced",
+				"Dump replaced textures too",
+				static_cast<bool>(config::DumpReplacedTextures),
+				[](bool enabled) { config::DumpReplacedTextures.set(enabled); },
+				"Dump Replaced Textures\n"
+				"Also dumps textures even when they are being replaced by a custom texture pack.\n\n"
+				"This is useful when comparing originals vs replacements, but it increases disk usage even more.\n"
+				"Leave this off unless you are actively working on textures.");
+
+			RenderGeneralToggleSettingRow(
+				"DiscardVideoAndAnimatedTextures",
+				ICON_FA_COPY,
+				T("Discard Video and Animated Textures"),
+				T("Skip dumping video (YUV) and already updated textures"),
+				static_cast<bool>(config::DumpUniqueTextures),
+				[](bool enabled) { config::DumpUniqueTextures.set(enabled); },
+				T("Skip dumping video (YUV) and already updated textures")
+			);
 
 			ImGui::Unindent();
 		}
