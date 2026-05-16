@@ -97,9 +97,21 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		deserializeVmu(deser, link.storageEnabled());
 	}
 
-	// void OnSetup() override
-	// {
-	// }
+	void OnSetup() override;
+
+	bool fullSave() override
+	{
+		// We want fullSaves to occur when integrated mode is used, so that
+		// the VMU file is ready on disk to pass off to DreamPotato.
+		if (config::DreamPotatoIntegratedMode || !link.storageEnabled())
+		{
+			return maple_sega_vmu::fullSave();
+		}
+
+		// Skip virtual save when using MapleLink VMU
+		DEBUG_LOG(MAPLE, "Full save ignored for MapleLink VMU");
+		return true;
+	}
 
 	MapleDeviceRV readBlock(unsigned block)
 	{
@@ -255,7 +267,6 @@ public:
 
 	void sendFilePath(int port)
 	{
-		// Check which expansion slots contain VMUs
 		MapleMsg msg;
 		msg.command = MDC_DPOpenFile;
 		msg.destAP = (bus << 6) | port;
@@ -268,16 +279,21 @@ public:
 
 		// TODO: may need to replicate more functionality of 'maple_sega_vmu::OnSetup()'.
 		std::string path = hostfs::getVmuPath(logical_port, /*save*/ true);
-		msg.pushData(path.c_str(), path.size());
 
+		// Null-pad the string, so that trailing garbage does not get sent over the wire.
+		int remainder = path.length() % 4;
+		if (remainder != 0) {
+			while (remainder < 4) {
+				path.push_back('\0');
+				remainder++;
+			}
+		}
+
+		msg.pushData(path.c_str(), path.size());
 		auto ec = sendMsg(msg, sock);
 		if (ec)
 		{
 			WARN_LOG(INPUT, "DreamPotato[%d] sendFilePath error: %s", bus, ec.message().c_str());
-			disconnect();
-		}
-		if (!receiveMsg(msg, sock, ioContext)) {
-			WARN_LOG(INPUT, "DreamPotato[%d] read timeout", bus);
 			disconnect();
 		}
 	}
@@ -385,6 +401,24 @@ bool DreamPotatoVmu::linkStatus()
 		return true; // local storage means this must always remain "linked"
 }
 
+void DreamPotatoVmu::OnSetup()
+{
+	if (!config::DreamPotatoIntegratedMode) {
+		MapleLinkVmu::OnSetup();
+		return;
+	}
+
+	// Setup the backing VMU file on disk, then close it so we can hand control of it over to DreamPotato.
+	maple_sega_vmu::OnSetup();
+	if (file != nullptr) {
+		std::fclose(file);
+		file = nullptr;
+	}
+
+	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
+	potato->sendFilePath(this->maple_port);
+}
+
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;
 
 void DreamPotato::init(u32 ports)
@@ -401,9 +435,15 @@ void DreamPotato::init(u32 ports)
 			: ports == 2 ? "2"
 			: "?";
 
-		// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
-		// processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe", {"--integrated", slotString, portString });
-		processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe");
+
+		if (config::DreamPotatoIntegratedMode)
+		{
+			// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
+			// processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe", {"--integrated", slotString, portString });
+			processHandle.terminate();
+			processHandle = os_Process::start("C:\\Program Files\\dotnet\\dotnet.exe", {"C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.dll"});
+		}
+
 		initedPorts = ports;
 	}
 }
@@ -411,6 +451,7 @@ void DreamPotato::init(u32 ports)
 void DreamPotato::term()
 {
 	processHandle.terminate();
+	assert(!processHandle.isValid());
 }
 
 void DreamPotato::connect()
@@ -434,13 +475,13 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 
 	connectionStatus = ConnectionStatus::Connected;
 
-	// TODO2: this sends the file path after we have connected.
-	// We should probably send it as a cmd line argument instead, and use this message only when the VMU file changes after we have already started-up.
-	if (initedPorts & 1)
-		sendFilePath(1);
+	if (config::DreamPotatoIntegratedMode) {
+		if (initedPorts & 1)
+			sendFilePath(1);
 
-	if (initedPorts & 2)
-		sendFilePath(2);
+		if (initedPorts & 2)
+			sendFilePath(2);
+	}
 
 	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);

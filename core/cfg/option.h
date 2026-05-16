@@ -564,6 +564,7 @@ extern Option<bool, false> UseRawInput;
 constexpr bool UseRawInput = false;
 #endif
 extern Option<bool> UsePhysicalVmuMemory;
+extern Option<bool> DreamPotatoIntegratedMode;
 
 #ifdef USE_LUA
 extern Option<std::string, false> LuaFileName;

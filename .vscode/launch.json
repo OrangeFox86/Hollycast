@@ -5,7 +5,7 @@
             "name": "(Windows) Attach",
             "type": "cppvsdbg",
             "request": "attach",
-            "processId": "${command:pickProcess}"
+            "program": "${workspaceFolder}/build-debug/Debug/flycast.exe"
         },
         {
             "name": "(Windows) Debug Flycast",

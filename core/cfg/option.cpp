@@ -248,6 +248,7 @@ Option<bool> PerGameVmu("PerGameVmu", true, "config");
 Option<bool, false> UseRawInput("RawInput", false, "input");
 #endif
 Option<bool> UsePhysicalVmuMemory("UsePhysicalVmuMemory", true);
+Option<bool> DreamPotatoIntegratedMode("DreamPotatoIntegratedMode", true);
 
 #ifdef USE_LUA
 Option<std::string, false> LuaFileName("LuaFileName", "flycast.lua");
