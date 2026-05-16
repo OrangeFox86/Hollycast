@@ -8,6 +8,8 @@
 #import <Carbon/Carbon.h>
 #import <AppKit/AppKit.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <mach/task.h>
 #include <mach/mach_init.h>
 #include <mach/mach_port.h>
@@ -214,6 +216,41 @@ void os_RunInstance(int argc, const char *argv[])
 		ERROR_LOG(BOOT, "Error %d launching Flycast instance %s", errno, selfPath);
 		die("execv failed");
 	}
+}
+
+os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
+{
+	os_Process proc;
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		std::vector<char *> cargs;
+		cargs.push_back(const_cast<char *>(executable.c_str()));
+		for (const auto& arg : args)
+			cargs.push_back(const_cast<char *>(arg.c_str()));
+		cargs.push_back(nullptr);
+		execvp(executable.c_str(), cargs.data());
+		_exit(127);
+	}
+	else if (pid > 0)
+	{
+		proc.pid = pid;
+	}
+	else
+	{
+		WARN_LOG(BOOT, "os_Process::start fork failed: %s", strerror(errno));
+	}
+	return proc;
+}
+
+void os_Process::terminate()
+{
+	if (!isValid())
+		return;
+	kill(pid, SIGTERM);
+	int status;
+	waitpid(pid, &status, 0);
+	pid = -1;
 }
 
 #import <Syphon/Syphon.h>

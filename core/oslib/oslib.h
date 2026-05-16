@@ -1,5 +1,6 @@
 #pragma once
 #include "types.h"
+#include <string>
 #include <vector>
 #if defined(__SWITCH__)
 #include <malloc.h>
@@ -16,6 +17,30 @@ void os_UninstallFaultHandler();
 void os_RunInstance(int argc, const char *argv[]);
 void os_SetThreadName(const char *name);
 void os_notify(const char *msg, int durationMs = 2000, const char *details = nullptr);
+
+// Cross-platform process handle.
+class os_Process
+{
+public:
+	bool isValid() const {
+#ifdef _WIN32
+		return handle != nullptr;
+#else
+		return pid > 0;
+#endif
+	}
+
+	// TODO: perhaps impl's of this function, should be deduped with 'os_RunInstance'
+	static os_Process start(const std::string& executable, const std::vector<std::string>& args = {});
+	void terminate();
+
+private:
+#ifdef _WIN32
+	void *handle = nullptr; // HANDLE
+#else
+	pid_t pid = -1;
+#endif
+};
 
 // raii thread name setter
 class ThreadName

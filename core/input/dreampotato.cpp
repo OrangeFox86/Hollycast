@@ -207,6 +207,8 @@ class DreamPotato : public BaseDreamLink
 	time_t lastMsg = 0;
 	u32 initedPorts = 0;
 
+	os_Process processHandle;
+
 	//! Ports which contain a docked VMU in DreamPotato
 	u32 dockedPorts = 0;
 	//! Ports whose devices need to be reconnected due to an external state change
@@ -236,6 +238,7 @@ public:
 	void connectComplete(const asio::error_code& ec);
 	void disconnect() override;
 	void init(u32 ports);
+	void term() override;
 
 	bool isPortDocked(int port)
 	{
@@ -389,8 +392,25 @@ void DreamPotato::init(u32 ports)
 	if (ports != initedPorts)
 	{
 		registerLink(bus, ports);
+
+		std::string slotString;
+		slotString.push_back('A' + bus);
+
+		std::string portString = ports == 3 ? std::string("both")
+			: ports == 1 ? "1"
+			: ports == 2 ? "2"
+			: "?";
+
+		// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
+		// processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe", {"--integrated", slotString, portString });
+		processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe");
 		initedPorts = ports;
 	}
+}
+
+void DreamPotato::term()
+{
+	processHandle.terminate();
 }
 
 void DreamPotato::connect()
