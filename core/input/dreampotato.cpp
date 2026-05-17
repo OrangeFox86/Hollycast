@@ -260,11 +260,13 @@ public:
 
 	bool isPortDocked(int port)
 	{
-		return dockedPorts & port;
+		assert(port == 0 || port == 1);
+		return dockedPorts & (1 << port);
 	}
 
 	bool portNeedsReconnect(int port)
 	{
+		assert(port == 0 || port == 1);
 		int portFlag = 1 << port;
 		bool needsReconnect = portFlag & needsReconnectPorts;
 		needsReconnectPorts &= ~portFlag;
@@ -273,15 +275,16 @@ public:
 
 	void sendFilePath(int port)
 	{
+		assert(port == 0 || port == 1);
 		MapleMsg msg;
 		msg.command = MDC_DPOpenFile;
-		msg.destAP = (bus << 6) | port;
+		msg.destAP = (bus << 6) | (1 << port);
 		msg.originAP = bus << 6;
 		msg.pushData(MFID_1_Storage);
 
 		std::string logical_port;
 		logical_port.push_back('A' + bus);
-		logical_port.push_back('0' + port);
+		logical_port.push_back('1' + port);
 
 		// TODO: have been seeing a bug where the VMU file path has a bogus expansion slot number in it.
 		// Need to track down and fix.
@@ -413,7 +416,7 @@ bool DreamPotatoVmu::linkStatus()
 		return false;
 
 	if (link.storageEnabled())
-		return link.isConnected() && potato->isPortDocked(link.port + 1);
+		return link.isConnected() && potato->isPortDocked(link.port);
 	else
 		return true; // local storage means this must always remain "linked"
 }
@@ -433,7 +436,7 @@ void DreamPotatoVmu::OnSetup()
 	}
 
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
-	potato->sendFilePath(this->maple_port);
+	potato->sendFilePath(bus_port);
 }
 
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;
@@ -457,8 +460,10 @@ void DreamPotato::init(u32 ports)
 			return;
 		}
 
+		// Note: Hollycast uses "bus+port" to refer to "A1", for example,
+		// while DreamPotato uses "port+slot".
 		std::string portString(1, 'A' + bus);
-		std::string slotsString = ports == 3 ? std::string("both")
+		std::string slotsString = ports == 3 ? "both"
 			: ports == 1 ? "1"
 			: ports == 2 ? "2"
 			: "?";
@@ -501,11 +506,11 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 	connectionStatus = ConnectionStatus::Connected;
 
 	if (config::DreamPotatoIntegratedMode) {
-		if (initedPorts & 1)
-			sendFilePath(1);
+		if (initedPorts & (1 << 0))
+			sendFilePath(0);
 
-		if (initedPorts & 2)
-			sendFilePath(2);
+		if (initedPorts & (1 << 1))
+			sendFilePath(1);
 	}
 
 	updateExpansionDevs();
