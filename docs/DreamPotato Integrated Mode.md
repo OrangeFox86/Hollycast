@@ -16,6 +16,14 @@ We add the following command line flags to DreamPotato:
 
 When the integrated mode is enabled in Hollycast, then, Hollycast will launch a DreamPotato subprocess at the appropriate time, passing the appropriate values for the above flags.
 
+## Port selection
+
+Today, the DreamPotato server uses a hard-coded set of local ports for standalone mode. This means it's not possible to have multiple Hollycast sessions, operating alongside DreamPotato on the same ports, on the same machine.
+
+With integrated mode, we could have DreamPotato start listening on a free port number automatically and send it back to the parent Hollycast process somehow. For example, via its standard output stream.
+
+This is not yet implemented, and, would probably be controlled by an additional new DreamPotato flag.
+
 ## File selection
 
 We essentially want the "VMU file used by Hollycast", to be automatically provided to DreamPotato.
