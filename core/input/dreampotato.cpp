@@ -457,6 +457,7 @@ void DreamPotato::init(u32 ports)
 	{
 		std::string dreamPotatoPath = hostfs::getDreamPotatoPath();
 		if (dreamPotatoPath.empty()) {
+			WARN_LOG(INPUT, "Could not launch DreamPotato because the executable was not found");
 			return;
 		}
 
