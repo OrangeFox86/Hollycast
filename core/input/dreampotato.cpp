@@ -26,6 +26,7 @@
 #include <memory>
 #include <array>
 #include <iomanip>
+#include <filesystem>
 
 namespace ip = asio::ip;
 using tcp = ip::tcp;
@@ -234,6 +235,11 @@ public:
 	bool send(const MapleMsg& msg) override;
 	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override;
 
+	bool storageEnabled() override {
+		// DreamPotato integrated mode makes DreamPotato take over VMU read/write operations using Hollycast's VMU files for the given slots
+		return config::DreamPotatoIntegratedMode || BaseDreamLink::storageEnabled();
+	}
+
 	bool isConnected() override {
 		checkConnection();
 		return connectionStatus == ConnectionStatus::Connected;
@@ -277,8 +283,20 @@ public:
 		logical_port.push_back('A' + bus);
 		logical_port.push_back('0' + port);
 
-		// TODO: may need to replicate more functionality of 'maple_sega_vmu::OnSetup()'.
-		std::string path = hostfs::getVmuPath(logical_port, /*save*/ true);
+		// TODO: have been seeing a bug where the VMU file path has a bogus expansion slot number in it.
+		// Need to track down and fix.
+
+		// We expect the preceding 'OnSetup()' for associated VMUs to have placed an exactly 128KB VMU file on disk.
+		// If not, things will go wrong when DreamPotato tries to open the file.
+		std::string path = hostfs::getVmuPath(logical_port, /*save*/ false);
+		std::error_code ec;
+		size_t fileSize = std::filesystem::file_size(path, ec);
+		if (ec) {
+			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' error: %s", bus, path.c_str(), ec.message().c_str());
+		}
+		else if (fileSize != sizeof(maple_sega_vmu::flash_data)) {
+			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' unexpected size: %d", bus, path.c_str(), fileSize);
+		}
 
 		// Null-pad the string, so that trailing garbage does not get sent over the wire.
 		int remainder = path.length() % 4;
@@ -290,9 +308,8 @@ public:
 		}
 
 		msg.pushData(path.c_str(), path.size());
-		auto ec = sendMsg(msg, sock);
-		if (ec)
-		{
+		ec = sendMsg(msg, sock);
+		if (ec) {
 			WARN_LOG(INPUT, "DreamPotato[%d] sendFilePath error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
@@ -427,24 +444,30 @@ void DreamPotato::init(u32 ports)
 	{
 		registerLink(bus, ports);
 
-		std::string slotString;
-		slotString.push_back('A' + bus);
+		initedPorts = ports;
 
-		std::string portString = ports == 3 ? std::string("both")
+		// Ports have changed--close integrated DreamPotato if it is running.
+		if (config::DreamPotatoIntegratedMode)
+			processHandle.terminate();
+	}
+
+	if (config::DreamPotatoIntegratedMode && !processHandle.isRunning())
+	{
+		std::string portString(1, 'A' + bus);
+		std::string slotsString = ports == 3 ? std::string("both")
 			: ports == 1 ? "1"
 			: ports == 2 ? "2"
 			: "?";
 
-
-		if (config::DreamPotatoIntegratedMode)
-		{
-			// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
-			// processHandle = os_Process::start("C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.exe", {"--integrated", slotString, portString });
-			processHandle.terminate();
-			processHandle = os_Process::start("C:\\Program Files\\dotnet\\dotnet.exe", {"C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.dll"});
-		}
-
-		initedPorts = ports;
+		// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
+		processHandle = os_Process::start("C:\\Program Files\\dotnet\\dotnet.exe", {
+			"C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.dll",
+			"--integrated",
+			"--slots",
+			slotsString,
+			"--port",
+			portString
+		});
 	}
 }
 

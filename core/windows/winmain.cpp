@@ -494,6 +494,19 @@ os_Process os_Process::start(const std::string& executable, const std::vector<st
 	return proc;
 }
 
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	DWORD result = WaitForSingleObject(handle, 0);
+	if (result == WAIT_TIMEOUT)
+		return true;
+	// Process has exited
+	CloseHandle(handle);
+	handle = nullptr;
+	return false;
+}
+
 void os_Process::terminate()
 {
 	if (!isValid())

@@ -243,6 +243,19 @@ os_Process os_Process::start(const std::string& executable, const std::vector<st
 	return proc;
 }
 
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	int status;
+	pid_t result = waitpid(pid, &status, WNOHANG);
+	if (result == 0)
+		return true;
+	// Process has exited
+	pid = -1;
+	return false;
+}
+
 void os_Process::terminate()
 {
 	if (!isValid())

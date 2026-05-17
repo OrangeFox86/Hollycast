@@ -32,6 +32,7 @@ public:
 
 	// TODO: perhaps impl's of this function, should be deduped with 'os_RunInstance'
 	static os_Process start(const std::string& executable, const std::vector<std::string>& args = {});
+	bool isRunning();
 	void terminate();
 
 private:
