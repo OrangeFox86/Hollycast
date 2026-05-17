@@ -220,6 +220,7 @@ class DreamPotato : public BaseDreamLink
 	time_t lastMsg = 0;
 	u32 initedPorts = 0;
 
+	//! The handle of the child DreamPotato process. Only used with integrated mode.
 	os_Process processHandle;
 
 	//! Ports which contain a docked VMU in DreamPotato
@@ -236,7 +237,6 @@ public:
 	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override;
 
 	bool storageEnabled() override {
-		// DreamPotato integrated mode makes DreamPotato take over VMU read/write operations using Hollycast's VMU files for the given slots
 		return config::DreamPotatoIntegratedMode || BaseDreamLink::storageEnabled();
 	}
 
@@ -443,10 +443,9 @@ void DreamPotato::init(u32 ports)
 	if (ports != initedPorts)
 	{
 		registerLink(bus, ports);
-
 		initedPorts = ports;
 
-		// Ports have changed--close integrated DreamPotato if it is running.
+		// Close DreamPotato so we can reopen it with the new ports below
 		if (config::DreamPotatoIntegratedMode)
 			processHandle.terminate();
 	}
@@ -455,7 +454,6 @@ void DreamPotato::init(u32 ports)
 	{
 		std::string dreamPotatoPath = hostfs::getDreamPotatoPath();
 		if (dreamPotatoPath.empty()) {
-			os_notify("DreamPotato not found. Please set the DreamPotato path in settings or disable Integrated Mode.");
 			return;
 		}
 

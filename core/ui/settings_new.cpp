@@ -4633,6 +4633,19 @@ void renderControlsTab()
 				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
 					"VMUs may appear to reconnect after loading state."),
 				game_started);
+
+			RenderGeneralToggleSettingRow(
+				"DreamPotatoIntegratedMode",
+				ICON_FA_PLUG,
+				T("DreamPotato Integrated Mode"),
+				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
+				static_cast<bool>(config::DreamPotatoIntegratedMode),
+				[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
+				T("DreamPotato Integrated Mode\n"
+					"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
+					"Applies to all slots which use a DreamPotato device.\n"
+					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
+				game_started);
 	}
 #endif
 	}
