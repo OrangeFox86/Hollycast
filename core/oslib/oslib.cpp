@@ -116,7 +116,6 @@ std::string getDreamPotatoPath()
 
 	if (!config::DreamPotatoPath.get().empty())
 	{
-		// TODO: test actually using a custom path
 		try {
 			std::string fullpath = hostfs::storage().getSubPath(config::DreamPotatoPath, dreamPotatoFileName);
 			if (hostfs::storage().exists(fullpath))

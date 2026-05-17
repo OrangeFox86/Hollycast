@@ -35,7 +35,8 @@ However, the VMU path can change depending on the game (Per-game VMU A1). We don
 To support this, we add the following Maple pseudo-commands:
 - `Open File`: Contains a file path as the payload. DreamPotato will receive this message and will open the given file using the "addressed" VMU.
     - Command code: 0xC0.
-    - TODO: what is the character encoding for file names? UTF-8?
+    - Since Maple payloads are 32-bit words, the file path may be zero-padded at the end. DreamPotato will strip the trailing zeros off of the path before using it.
+    - The file path is assumed to be encoded in UTF-8.
 
 ## Save states
 

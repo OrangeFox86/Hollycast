@@ -2575,9 +2575,8 @@ void renderGeneralTab()
 
 	manageSinglePath("DreamPotato Path", config::DreamPotatoPath,
 		"DreamPotato Path\n"
-		"Location of the DreamPotato (VMU emulator) executable.\n\n"
-		"When this is not specified, the `DreamPotato/` directory in the Flycast folder is searched for an executable by default.\n"
-		"Set this if you want to use a custom install of DreamPotato with integrated mode.");
+		"Path of the folder containing the DreamPotato (VMU emulator) executable.\n\n"
+		"Set this if you want to use a custom version of DreamPotato with integrated mode.");
 	ImGui::Spacing();
 
 	managePathList("Savestate Folders", config::SavestatePath.get(),

@@ -286,9 +286,6 @@ public:
 		logical_port.push_back('A' + bus);
 		logical_port.push_back('1' + port);
 
-		// TODO: have been seeing a bug where the VMU file path has a bogus expansion slot number in it.
-		// Need to track down and fix.
-
 		// We expect the preceding 'OnSetup()' for associated VMUs to have placed an exactly 128KB VMU file on disk.
 		// If not, things will go wrong when DreamPotato tries to open the file.
 		std::string path = hostfs::getVmuPath(logical_port, /*save*/ false);
