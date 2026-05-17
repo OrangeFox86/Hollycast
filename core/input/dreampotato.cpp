@@ -453,15 +453,19 @@ void DreamPotato::init(u32 ports)
 
 	if (config::DreamPotatoIntegratedMode && !processHandle.isRunning())
 	{
+		std::string dreamPotatoPath = hostfs::getDreamPotatoPath();
+		if (dreamPotatoPath.empty()) {
+			os_notify("DreamPotato not found. Please set the DreamPotato path in settings or disable Integrated Mode.");
+			return;
+		}
+
 		std::string portString(1, 'A' + bus);
 		std::string slotsString = ports == 3 ? std::string("both")
 			: ports == 1 ? "1"
 			: ports == 2 ? "2"
 			: "?";
 
-		// TODO: find DreamPotato at well-known path and allow configuring a custom path to it
-		processHandle = os_Process::start("C:\\Program Files\\dotnet\\dotnet.exe", {
-			"C:\\Users\\rikki\\src\\DreamPotato\\artifacts\\bin\\DreamPotato.MonoGame\\debug\\DreamPotato.dll",
+		processHandle = os_Process::start(dreamPotatoPath, {
 			"--integrated",
 			"--slots",
 			slotsString,

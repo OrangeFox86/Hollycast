@@ -150,6 +150,7 @@ Option<std::string, false> TextureDumpPath("Dreamcast.TextureDumpPath");
 Option<std::string, false> BoxartPath("Dreamcast.BoxartPath");
 Option<std::vector<std::string>, false> MappingsPath("Dreamcast.MappingsPath");
 Option<std::vector<std::string>, false> CheatPath("Dreamcast.CheatPath");
+Option<std::string, false> DreamPotatoPath("Dreamcast.DreamPotatoPath");
 Option<bool, false> HideLegacyNaomiRoms("Dreamcast.HideLegacyNaomiRoms", true);
 Option<bool, false> UploadCrashLogs("UploadCrashLogs", true);
 Option<bool, false> DiscordPresence("DiscordPresence", true);

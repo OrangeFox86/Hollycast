@@ -506,6 +506,7 @@ extern Option<std::string, false> TextureDumpPath;
 extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
+extern Option<std::string, false> DreamPotatoPath;
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
 extern Option<bool, false> DiscordPresence;

@@ -105,6 +105,33 @@ std::string getVmuPath(const std::string& port, bool save)
 	return wpath;
 }
 
+std::string getDreamPotatoPath()
+{
+	std::string dreamPotatoFileName =
+#if defined(WIN32)
+		"DreamPotato.exe";
+#else
+		"DreamPotato";
+#endif
+
+	if (!config::DreamPotatoPath.get().empty())
+	{
+		// TODO: test actually using a custom path
+		try {
+			std::string fullpath = hostfs::storage().getSubPath(config::DreamPotatoPath, dreamPotatoFileName);
+			if (hostfs::storage().exists(fullpath))
+				return fullpath;
+		} catch (const hostfs::StorageException& e) {
+		}
+	}
+
+	std::string dreamPotatoPath = get_readonly_data_path("DreamPotato/" + dreamPotatoFileName);
+	if (file_exists(dreamPotatoPath))
+		return dreamPotatoPath;
+
+	return "";
+}
+
 std::string getArcadeFlashPath()
 {
 	// Check user-defined save path first
