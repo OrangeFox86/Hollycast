@@ -495,7 +495,7 @@ void DreamPotato::init(u32 ports)
 			WARN_LOG(INPUT, "Could not launch DreamPotato because the executable was not found");
 			return;
 		}
-		
+
 		if (!acceptor.is_open()) {
 			// Let the OS automatically assign a port to the acceptor
 			tcp::endpoint ep(ip::address_v6::loopback(), 0);
