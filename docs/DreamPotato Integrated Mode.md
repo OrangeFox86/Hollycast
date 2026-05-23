@@ -54,3 +54,4 @@ One way we could approach restoring the state of the device is:
     4) Send a Write LCD message with the VMU screen data from the savestate.
 - If the DreamPotato VMU was *ejected* when the state was saved, then, don't include anything about the VMU in the savestate.
     - When loading the state, the only thing we want to do is tell DreamPotato to eject the VMU (which is a no-op if VMU is already ejected).
+- If loading the state changes the expansion device configuration, from not having a DreamPotato at all to having one for a slot, things probably get more complicated. We would probably just need to overwrite the VMU file on disk, and let DreamPotato connect normally. But in order to avoid the game "noticing" a disconnect, we would probably want to halt emulation until DreamPotato is connected and ready, which doesn't seem great.
