@@ -224,6 +224,11 @@ os_Process os_Process::start(const std::string& executable, const std::vector<st
 	pid_t pid = fork();
 	if (pid == 0)
 	{
+		// Close open file descriptors except for stdio
+		int maxfd = sysconf(_SC_OPEN_MAX);
+		for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++)
+			close(fd);
+
 		std::vector<char *> cargs;
 		cargs.push_back(const_cast<char *>(executable.c_str()));
 		for (const auto& arg : args)
