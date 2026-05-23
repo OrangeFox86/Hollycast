@@ -10,19 +10,20 @@ We refer to this functionality as "integrated mode". The existing feature where 
 
 We add the following command line flags to DreamPotato:
 
-- `--integrated`: indicates the integrated mode should be used in DreamPotato. This disables a number of UI commands and settings. Mainly, commands related to managing VMU files.
-- `--port=A`: indicates the port letter that the DreamPotato instance should use. Any port letters A-D are permitted.
-- `--slots=1`: indicates which slots for the port contain "DreamPotato VMUs". Slots `1`, `2`, `both` are permitted.
+- `--integrated`: Enables integrated mode in DreamPotato. This disables a number of UI commands and settings. Mainly, commands related to managing VMU files.
+- `--tcp-port 12345`: The TCP port that DreamPotato will connect to upon startup.
+- `--port A`: The port letter that the DreamPotato instance should use. Any port letters A-D are permitted.
+- `--slots 1`: Indicates which slots contain "DreamPotato VMUs". Slots `1`, `2`, `both` are permitted.
 
 When the integrated mode is enabled in Hollycast, then, Hollycast will launch a DreamPotato subprocess at the appropriate time, passing the appropriate values for the above flags.
 
-## Port selection
+## TCP connection
 
-Today, the DreamPotato server uses a hard-coded set of local ports for standalone mode. This means it's not possible to have multiple Hollycast sessions, operating alongside DreamPotato on the same ports, on the same machine.
+In standalone mode, DreamPotato acts as the TCP server in the connection, using a hard-coded set of local ports. This was mainly because the DreamConn connectivity was the starting point for this work, and in that case DreamConn was the server.
 
-With integrated mode, we could have DreamPotato start listening on a free port number automatically and send it back to the parent Hollycast process somehow. For example, via its standard output stream.
-
-This is not yet implemented, and, would probably be controlled by an additional new DreamPotato flag.
+Now with integrated mode, Hollycast, as the parent process, acts as the server instead. This way, we can let the OS just assign a TCP port number automatically, pass that port number to the child process via command line, and establish the connection in a more straightforward and predictable way.
+- This also lets many instances of Hollycast "just work" with many instances of DreamPotato, without any of them stomping on each other.
+- This also lets DreamPotato know more consistently when it should exit, even if Hollycast crashes or similar.
 
 ## File selection
 

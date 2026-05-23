@@ -226,8 +226,10 @@ class DreamPotato : public BaseDreamLink
 	u32 initedPorts = 0;
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-	//! The handle of the child DreamPotato process. Only used with integrated mode.
+	//! The handle of the child DreamPotato process. Only used in integrated mode.
 	os_Process processHandle;
+	//! Acceptor for DreamPotato to connect to. Only used in integrated mode.
+	tcp::acceptor acceptor{ioContext};
 #endif
 
 	//! Ports which contain a docked VMU in DreamPotato
@@ -283,6 +285,24 @@ public:
 	}
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
+	void startAccepting()
+	{
+		acceptor.async_accept(
+			[this](const asio::error_code& ec, tcp::socket newSock) {
+				if (connectionStatus == ConnectionStatus::Connected) {
+					// Client is already connected. Drop the new connection.
+					newSock.close();
+				} else {
+					assert(!sock.is_open());
+					sock = std::move(newSock);
+					connectComplete(ec);
+				}
+
+				// Listen for another client
+				startAccepting();
+			});
+	}
+
 	void sendFilePath(int port)
 	{
 		assert(port == 0 || port == 1);
@@ -305,7 +325,7 @@ public:
 			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' error: %s", bus, path.c_str(), ec.message().c_str());
 		}
 		else if (fileSize != sizeof(maple_sega_vmu::flash_data)) {
-			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' unexpected size: %d", bus, path.c_str(), fileSize);
+			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' unexpected size: %ld", bus, path.c_str(), fileSize);
 		}
 
 		// Null-pad the string, so that trailing garbage does not get sent over the wire.
@@ -445,7 +465,9 @@ void DreamPotatoVmu::OnSetup()
 	}
 
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
-	potato->sendFilePath(bus_port);
+	if (potato->isConnected()) {
+		potato->sendFilePath(bus_port);
+	}
 }
 #endif
 
@@ -473,6 +495,21 @@ void DreamPotato::init(u32 ports)
 			WARN_LOG(INPUT, "Could not launch DreamPotato because the executable was not found");
 			return;
 		}
+		
+		if (!acceptor.is_open()) {
+			// Let the OS automatically assign a port to the acceptor
+			tcp::endpoint ep(ip::address_v6::loopback(), 0);
+			acceptor.open(ep.protocol());
+			acceptor.bind(ep);
+			acceptor.listen(1);
+			startAccepting();
+		}
+
+		// TODO: should we call 'disconnect()' or anything here?
+		// Should we assert any expectation about the 'connectionStatus'?
+
+		u16 tcpPort = acceptor.local_endpoint().port();
+		std::string tcpPortString = std::to_string(tcpPort);
 
 		// Note: Hollycast uses "bus+port" to refer to "A1", for example,
 		// while DreamPotato uses "port+slot".
@@ -482,8 +519,11 @@ void DreamPotato::init(u32 ports)
 			: ports == 2 ? "2"
 			: "?";
 
+		INFO_LOG(INPUT, "DreamPotato[%s]: starting subprocess with TCP port %s", portString.c_str(), tcpPortString.c_str());
 		processHandle = os_Process::start(dreamPotatoPath, {
 			"--integrated",
+			"--tcp-port",
+			std::to_string(tcpPort),
 			"--slots",
 			slotsString,
 			"--port",
@@ -497,6 +537,7 @@ void DreamPotato::term()
 {
 	BaseDreamLink::term();
 #ifdef DREAMPOTATO_INTEGRATED_MODE
+	acceptor.close();
 	processHandle.terminate();
 	assert(!processHandle.isValid());
 #endif
@@ -506,6 +547,16 @@ void DreamPotato::connect()
 {
 	if (connectionStatus != ConnectionStatus::Disconnected)
 		return;
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	if (config::DreamPotatoIntegratedMode) {
+		// connect() is a no-op in integrated mode, because we are waiting for DreamPotato to connect to us instead
+		// TODO: perhaps we should spawn DreamPotato again here, if it is not currently running.
+		// However, we need to take care to not cause "crash loops" of DreamPotato processes on the user's machine.
+		DEBUG_LOG(INPUT, "DreamPotato[%d]: Ignoring DreamPotato::connect() call in integrated mode");
+		return;
+	}
+#endif
 
 	connectionStatus = ConnectionStatus::Connecting;
 	sock = tcp::socket{ioContext};
@@ -542,6 +593,8 @@ void DreamPotato::disconnect()
 	if (connectionStatus == ConnectionStatus::Disconnected)
 		return;
 
+	// Note: when we disconnect in integrated mode, we can't retry the connection from our side.
+	// Instead, we expect that DreamPotato will retry the connection, and we will just passively wait for that to occur.
 	connectionStatus = ConnectionStatus::Disconnected;
 	dockedPorts = 0;
 
