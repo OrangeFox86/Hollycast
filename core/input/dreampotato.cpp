@@ -31,6 +31,9 @@
 namespace ip = asio::ip;
 using tcp = ip::tcp;
 
+//! Custom Maple message to instruct DreamPotato to open a file by path
+static const u8 MDC_DPOpenFile = 0xC0;
+
 static asio::error_code sendMsg(const MapleMsg& msg, tcp::socket& sock)
 {
 	static char buffer[1024 * 3 + 2];
@@ -98,6 +101,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		deserializeVmu(deser, link.storageEnabled());
 	}
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	void OnSetup() override;
 
 	bool fullSave() override
@@ -113,6 +117,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		DEBUG_LOG(MAPLE, "Full save ignored for MapleLink VMU");
 		return true;
 	}
+#endif
 
 	MapleDeviceRV readBlock(unsigned block)
 	{
@@ -220,8 +225,10 @@ class DreamPotato : public BaseDreamLink
 	time_t lastMsg = 0;
 	u32 initedPorts = 0;
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	//! The handle of the child DreamPotato process. Only used with integrated mode.
 	os_Process processHandle;
+#endif
 
 	//! Ports which contain a docked VMU in DreamPotato
 	u32 dockedPorts = 0;
@@ -236,9 +243,11 @@ public:
 	bool send(const MapleMsg& msg) override;
 	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override;
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	bool storageEnabled() override {
 		return config::DreamPotatoIntegratedMode || BaseDreamLink::storageEnabled();
 	}
+#endif
 
 	bool isConnected() override {
 		checkConnection();
@@ -273,6 +282,7 @@ public:
 		return needsReconnect;
 	}
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	void sendFilePath(int port)
 	{
 		assert(port == 0 || port == 1);
@@ -314,6 +324,7 @@ public:
 			disconnect();
 		}
 	}
+#endif
 
 	void updateExpansionDevs()
 	{
@@ -418,6 +429,7 @@ bool DreamPotatoVmu::linkStatus()
 		return true; // local storage means this must always remain "linked"
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 void DreamPotatoVmu::OnSetup()
 {
 	if (!config::DreamPotatoIntegratedMode) {
@@ -435,6 +447,7 @@ void DreamPotatoVmu::OnSetup()
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
 	potato->sendFilePath(bus_port);
 }
+#endif
 
 static std::array<std::shared_ptr<DreamPotato>, 4> Potatoes;
 
@@ -445,11 +458,14 @@ void DreamPotato::init(u32 ports)
 		registerLink(bus, ports);
 		initedPorts = ports;
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 		// Close DreamPotato so we can reopen it with the new ports below
 		if (config::DreamPotatoIntegratedMode)
 			processHandle.terminate();
+#endif
 	}
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	if (config::DreamPotatoIntegratedMode && !processHandle.isRunning())
 	{
 		std::string dreamPotatoPath = hostfs::getDreamPotatoPath();
@@ -474,12 +490,15 @@ void DreamPotato::init(u32 ports)
 			portString
 		});
 	}
+#endif
 }
 
 void DreamPotato::term()
 {
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	processHandle.terminate();
 	assert(!processHandle.isValid());
+#endif
 }
 
 void DreamPotato::connect()
@@ -503,6 +522,7 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 
 	connectionStatus = ConnectionStatus::Connected;
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	if (config::DreamPotatoIntegratedMode) {
 		if (initedPorts & (1 << 0))
 			sendFilePath(0);
@@ -510,6 +530,7 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 		if (initedPorts & (1 << 1))
 			sendFilePath(1);
 	}
+#endif
 
 	updateExpansionDevs();
 	NOTICE_LOG(INPUT, "Connected to DreamPotato[%d]", bus);

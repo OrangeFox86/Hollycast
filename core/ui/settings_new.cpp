@@ -2573,11 +2573,13 @@ void renderGeneralTab()
 		"Use this to keep saves on a specific drive or to share saves between installations.");
 	ImGui::Spacing();
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	manageSinglePath("DreamPotato Path", config::DreamPotatoPath,
 		"DreamPotato Path\n"
 		"Path of the folder containing the DreamPotato (VMU emulator) executable.\n\n"
 		"Set this if you want to use a custom version of DreamPotato with integrated mode.");
 	ImGui::Spacing();
+#endif
 
 	managePathList("Savestate Folders", config::SavestatePath.get(),
 		"Savestate Folders\n"
@@ -4632,7 +4634,11 @@ void renderControlsTab()
 				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
 					"VMUs may appear to reconnect after loading state."),
 				game_started);
+	}
+#endif
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	{
 			RenderGeneralToggleSettingRow(
 				"DreamPotatoIntegratedMode",
 				ICON_FA_PLUG,

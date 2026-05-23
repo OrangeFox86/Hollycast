@@ -61,8 +61,6 @@ enum MapleDeviceCommand
 	MDC_JVSGetId		 = 0x82,
 	MDC_JVSSelfTest		 = 0x84,
 	MDC_JVSCommand		 = 0x86, // JVS I/O
-
-	MDC_DPOpenFile		 = 0xC0, // Custom Maple message to instruct DreamPotato to open a file by path
 };
 
 enum MapleDeviceRV
