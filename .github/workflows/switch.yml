@@ -1,3 +1,5 @@
+# Portions Copyright 2026 The Hollycast Authors
+
 name: Nintendo Switch
 
 on:
@@ -45,14 +47,14 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: flycast-switch-${{ matrix.config.name }}
+          name: hollycast-switch-${{ matrix.config.name }}
           path: |
             artifact/bin
             artifact/lib/libretro
 
       - name: Package app
-        run: zip -m artifact/bin/flycast.nro.zip artifact/bin/flycast.nro
-        if: hashFiles('artifact/bin/flycast.nro') != ''
+        run: zip -m artifact/bin/Hollycast.nro.zip artifact/bin/Hollycast.nro
+        if: hashFiles('artifact/bin/Hollycast.nro') != ''
 
       - name: Setup Rclone
         uses: AnimMouse/setup-rclone@v1

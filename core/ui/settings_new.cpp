@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -2082,11 +2083,11 @@ void renderGeneralTab()
 		get_writable_data_path(""),
 		false,
 		"Data Folder\n"
-		"This is Flycast's writable data directory on this platform.\n\n"
+		"This is Hollycast's writable data directory on this platform.\n\n"
 		"It typically contains:\n"
 		"- BIOS/Flash files (for example: `dc_boot.bin`, `dc_flash.bin`)\n"
 		"- Save data (VMU files) and save states\n\n"
-			"If Flycast cannot find a BIOS, double-check that your BIOS files are placed in the expected location and that their filenames match what Flycast looks for.\n"
+			"If Hollycast cannot find a BIOS, double-check that your BIOS files are placed in the expected location and that their filenames match what Hollycast looks for.\n"
 			"Custom Paths below can also override where some of these files are stored.");
 		}
 	#else
@@ -2096,16 +2097,16 @@ void renderGeneralTab()
 		"HomeFolderPathRow",
 		ICON_FA_HOUSE,
 		"Home Directory",
-		"The folder where Flycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\"",
+		"The folder where Hollycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\"",
 		get_writable_config_path(""),
 		false,
 		"Home Directory\n"
-		"This is Flycast's main configuration directory.\n\n"
+		"This is Hollycast's main configuration directory.\n\n"
 		"It typically contains:\n"
 		"- Configuration files\n"
 		"- VMU saves and other user data\n\n"
 		"On platforms that use a `data` subfolder, BIOS/Flash files should be placed under `data` inside this directory.\n"
-		"If you change custom paths below, Flycast may store some files elsewhere, but this directory remains the base for core configuration.");
+		"If you change custom paths below, Hollycast may store some files elsewhere, but this directory remains the base for core configuration.");
 
 	ImguiStyleVar _homePadding(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
 #ifdef __ANDROID__
@@ -2558,9 +2559,9 @@ void renderGeneralTab()
 
 	managePathList("BIOS Folders", config::BiosPath.get(),
 		"BIOS Folders\n"
-		"Folders that Flycast searches for BIOS/Flash files (Dreamcast BIOS/Flash and arcade BIOS).\n\n"
+		"Folders that Hollycast searches for BIOS/Flash files (Dreamcast BIOS/Flash and arcade BIOS).\n\n"
 		"Typical Dreamcast files include `dc_boot.bin` and `dc_flash.bin`.\n"
-		"If you keep multiple BIOS sets, you can add multiple folders and Flycast will search all of them.\n"
+		"If you keep multiple BIOS sets, you can add multiple folders and Hollycast will search all of them.\n"
 		"For troubleshooting, keep your BIOS files in a single known-good folder to avoid confusion.");
 	ImGui::Spacing();
 
@@ -2568,7 +2569,7 @@ void renderGeneralTab()
 	manageSinglePath("VMU Folder", config::VMUPath,
 		"VMU Folder\n"
 		"Where VMU memory card files (`.bin`) are stored.\n\n"
-		"If you change this, Flycast will look for VMUs in the new location.\n"
+		"If you change this, Hollycast will look for VMUs in the new location.\n"
 		"Move/copy your existing VMU files if you want to keep your saves.\n"
 		"Use this to keep saves on a specific drive or to share saves between installations.");
 	ImGui::Spacing();
@@ -2578,7 +2579,7 @@ void renderGeneralTab()
 		"Folders used for save states.\n\n"
 		"The first folder is used when creating new save states.\n"
 		"All listed folders are searched when loading, which is useful if you keep states organized across different locations.\n"
-		"Save states are not always portable between very different Flycast versions; if a state fails to load, try recreating it on your current build.");
+		"Save states are not always portable between very different Hollycast versions; if a state fails to load, try recreating it on your current build.");
 	ImGui::Spacing();
 
 	manageSinglePath("Game Save Folder", config::SavePath,
@@ -2591,7 +2592,7 @@ void renderGeneralTab()
 
 	managePathList("Texture Pack Folders", config::TexturePath.get(),
 		"Texture Pack Folders\n"
-		"Folders that Flycast searches for custom texture packs.\n\n"
+		"Folders that Hollycast searches for custom texture packs.\n\n"
 		"Common layouts include `textures/<gameId>/...` or `<gameId>` inside a `textures` subfolder.\n"
 		"After installing a pack, enable Custom Textures in the Video tab and restart the game.\n"
 		"If you notice stutter while textures stream in, consider using Preload Textures (more RAM/VRAM required).");
@@ -2600,7 +2601,7 @@ void renderGeneralTab()
 #if !defined(__ANDROID__)
 	manageSinglePath("Texture Dump Folder", config::TextureDumpPath,
 		"Texture Dump Folder\n"
-		"Where Flycast saves dumped textures when Texture Dumping is enabled.\n\n"
+		"Where Hollycast saves dumped textures when Texture Dumping is enabled.\n\n"
 		"Game-specific subfolders are created automatically.\n"
 		"Dumping can generate a large number of files quickly and consume significant disk space.\n"
 		"Enable dumping only when needed, then disable it after you are done.");
@@ -2613,7 +2614,7 @@ void renderGeneralTab()
 	managePathList("Cheat Folders", config::CheatPath.get(),
 		"Cheat Folders\n"
 		"Folders containing cheat files (`.cht` / `.txt`) named using the game's ID.\n\n"
-		"Flycast can auto-load matching cheat files when present.\n"
+		"Hollycast can auto-load matching cheat files when present.\n"
 		"If cheats are not loading, verify the filename matches the game ID and that the cheat file format is correct.\n"
 		"Use cheats carefully: they can crash games or cause unexpected behavior.");
 	ImGui::Spacing();
@@ -5230,7 +5231,7 @@ void renderAdvancedTab()
 					"Use the dynamic recompiler for speed, or interpreter for compatibility.",
 					cpuModeCfg,
 					"CPU Mode\n"
-					"Controls how Flycast emulates the SH4 CPU.\n\n"
+					"Controls how Hollycast emulates the SH4 CPU.\n\n"
 					"Dynarec is dramatically faster and is the normal choice for gameplay.\n"
 					"Interpreter is much slower, but can be helpful for compatibility testing.\n\n"
 					"If you are troubleshooting a game-specific issue, switch modes and re-test the exact same scene to compare behavior.");
@@ -5298,7 +5299,7 @@ void renderAdvancedTab()
 					static_cast<bool>(config::ThreadedRendering),
 					[](bool enabled) { config::ThreadedRendering.set(enabled); },
 					"Multi-threading\n"
-					"Allows Flycast to use more than one CPU thread for certain emulation/rendering work.\n\n"
+					"Allows Hollycast to use more than one CPU thread for certain emulation/rendering work.\n\n"
 					"On modern multi-core devices this can improve performance or reduce stutter.\n"
 					"On some drivers/devices it can introduce instability or odd timing issues.\n\n"
 					"If you see new crashes, visual glitches, or inconsistent frame pacing after enabling it, try turning it off and re-testing.");
@@ -5351,7 +5352,7 @@ void renderAdvancedTab()
 				[](bool enabled) { config::GDBWait.set(enabled); },
 				"GDB Server\n"
 				"Starts a GDB debug server for developers.\n\n"
-				"When enabled, Flycast can pause startup and wait for a debugger to attach.\n"
+				"When enabled, Hollycast can pause startup and wait for a debugger to attach.\n"
 				"Leave this disabled unless you are actively debugging.");
 
 		// GDB Server options (shown when enabled)
@@ -5479,7 +5480,7 @@ void renderAdvancedTab()
 					"Control the verbosity of log output",
 					logVerbosityCfg,
 					"Log Verbosity\n"
-					"Controls how much information Flycast writes to the log.\n\n"
+					"Controls how much information Hollycast writes to the log.\n\n"
 					"Lower verbosity is cleaner and faster.\n"
 					"Higher verbosity is useful when diagnosing problems, but can generate a lot of output (and can impact performance in extreme cases).\n\n"
 					"For troubleshooting, start with Warning or Info, then use Debug only if you need deeper detail.");
@@ -5712,7 +5713,7 @@ void renderAdvancedTab()
 		ImGui::Text("Lua Scripting");
 		InputText("Lua Filename", &config::LuaFileName.get(), ImGuiInputTextFlags_CharsNoBlank);
 		ImGui::SameLine();
-		ShowFooterHelpMarker("Specify lua filename to use. Should be located in Flycast config folder. Defaults to flycast.lua when empty.");
+		ShowFooterHelpMarker("Specify lua filename to use. Should be located in Hollycast config folder. Defaults to flycast.lua when empty.");
 #endif
 
 #ifdef SENTRY_UPLOAD

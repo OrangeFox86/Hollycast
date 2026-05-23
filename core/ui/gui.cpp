@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -496,7 +497,7 @@ void gui_stop_game(const std::string& message)
 		clearThumbnailCache();
 
 		if (!message.empty())
-			gui_error(Ts("Flycast has stopped.") + "\n\n" + message);
+			gui_error(Ts("Hollycast has stopped.") + "\n\n" + message);
 	}
 	else
 	{
@@ -1170,7 +1171,7 @@ static bool systemdir_selected_callback(bool cancelled, std::string selection)
 		if (!make_directory(data_path))
 		{
 			WARN_LOG(BOOT, "Cannot create 'data' directory: %s", data_path.c_str());
-			gui_error(Ts("Invalid selection:") + '\n' + Ts("Flycast cannot write to this folder."));
+			gui_error(Ts("Invalid selection:") + '\n' + Ts("Hollycast cannot write to this folder."));
 			return false;
 		}
 	}
@@ -1181,7 +1182,7 @@ static bool systemdir_selected_callback(bool cancelled, std::string selection)
 	if (file == nullptr)
 	{
 		WARN_LOG(BOOT, "Cannot write in the 'data' directory");
-		gui_error(Ts("Invalid selection:") + '\n' + Ts("Flycast cannot write to this folder."));
+		gui_error(Ts("Invalid selection:") + '\n' + Ts("Hollycast cannot write to this folder."));
 		return false;
 	}
 	fclose(file);
@@ -1209,7 +1210,7 @@ static bool systemdir_selected_callback(bool cancelled, std::string selection)
 
 static void gui_display_onboarding()
 {
-	const char *title = T("Select Flycast Home Folder");
+	const char *title = T("Select Hollycast Home Folder");
 	ImGui::OpenPopup(title);
 	select_file_popup(title, &systemdir_selected_callback);
 }
@@ -1832,7 +1833,7 @@ void gui_takeScreenshot()
 		std::string date = timeToISO8601(time(nullptr));
 		std::replace(date.begin(), date.end(), '/', '-');
 		std::replace(date.begin(), date.end(), ':', '-');
-		std::string name = "Flycast-" + date + ".png";
+		std::string name = "Hollycast-" + date + ".png";
 
 		std::vector<u8> data;
 		getScreenshot(data);
