@@ -495,6 +495,7 @@ void DreamPotato::init(u32 ports)
 
 void DreamPotato::term()
 {
+	BaseDreamLink::term();
 #ifdef DREAMPOTATO_INTEGRATED_MODE
 	processHandle.terminate();
 	assert(!processHandle.isValid());
