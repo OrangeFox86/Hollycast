@@ -45,3 +45,12 @@ We aren't doing anything special with this right now, compared to the existing D
 For example, loading a save state in this mode, will not revert the VMU contents to when the state was saved, like would be done for ordinary VMUs.
 
 Theoretically, this tighter integration, would be an opportunity to ensure that the DreamPotato savestate is strongly coupled to the Hollycast savestate. This would allow restoring the VMU contents to match the savestate under all conditions, and prevent a need to "simulate reconnecting" VMUs. However, this is additional work and not thought to be part of the "most critical path" to get working.
+
+One way we could approach restoring the state of the device is:
+- If the DreamPotato VMU was docked when the state was saved, then, include the flash memory contents in the savestate. When the savestate loaded, perform the following steps:
+    1) Tell DreamPotato to close the VMU file it has open.
+    2) Overwrite the VMU file.
+    3) Tell DreamPotato to reopen the VMU file and dock the VMU (no-op if the VMU is already docked).
+    4) Send a Write LCD message with the VMU screen data from the savestate.
+- If the DreamPotato VMU was *ejected* when the state was saved, then, don't include anything about the VMU in the savestate.
+    - When loading the state, the only thing we want to do is tell DreamPotato to eject the VMU (which is a no-op if VMU is already ejected).
