@@ -36,7 +36,14 @@
             "name": "(Linux) Attach",
             "type": "cppdbg",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/flycast"
+            "program": "${workspaceFolder}/build-debug/flycast",
+            "setupCommands": [
+                {
+                    "description": "Ignore SIGSEGV for Dynarec",
+                    "text": "handle SIGSEGV nostop noprint pass",
+                    "ignoreFailures": false
+                }
+            ]
         },
         {
             "name": "(Linux) Debug Flycast",
