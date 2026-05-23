@@ -32,7 +32,12 @@
             "preLaunchTask": "Build Unit Tests (Debug)"
         },
 
-
+        {
+            "name": "(Linux) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/build-debug/flycast"
+        },
         {
             "name": "(Linux) Debug Flycast",
             "type": "cppdbg",
