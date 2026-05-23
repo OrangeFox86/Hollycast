@@ -1,18 +1,19 @@
 /*
-    This file is part of Flycast.
+    This file is part of Hollycast.
+    Portions Copyright 2026 The Hollycast Authors
 
-    Flycast is free software: you can redistribute it and/or modify
+    Hollycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
-    Flycast is distributed in the hope that it will be useful,
+    Hollycast is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
+    along with Hollycast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <cstdio>
 #include <cstdarg>
@@ -2364,7 +2365,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_unload_game()
 {
-	INFO_LOG(COMMON, "Flycast unloading game");
+	INFO_LOG(COMMON, "Hollycast unloading game");
 	emu.unloadGame();
 	dreampotato::term();
 	game_data.clear();
@@ -2485,7 +2486,7 @@ const char* retro_get_system_directory()
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-   info->library_name = "Flycast";
+   info->library_name = "Hollycast";
 #ifndef GIT_VERSION
 #define GIT_VERSION "undefined"
 #endif

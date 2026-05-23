@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
     <string name="OK">OK</string>
     <string name="storage_error">Tárhelyhiba</string>
@@ -10,7 +11,7 @@
     <string name="exporting_home_folder">Kezdőmappa exportálása</string>
     <string name="select_an_import_folder">Válasszon egy import mappát</string>
     <string name="importing_home_folder">Kezdőmappa importálása</string>
-    <string name="flycast_error">Flycast hiba</string>
+    <string name="flycast_error">Hollycast hiba</string>
     <string name="init_failed_message">Sikertelen inicializálás. Próbálkozzon újra, vagy telepítse újra a programot.\n\nHiba: </string>
     <string name="exit">Kilépés</string>
     <string name="copying">Másolás</string>

@@ -1,3 +1,5 @@
+# Portions Copyright 2026 The Hollycast Authors
+
 if(APPLE AND NOT LIBRETRO)
 	# Requirement from SDL
 	# Minimum version for $<LINK_LIBRARY:feature,library-list>
@@ -271,6 +273,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 		CMAKE_CXX_STANDARD 20
 		CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT LIBRETRO AND (WIN32 OR APPLE))
+	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast")
+endif()
+
 if(WINDOWS_STORE)
 	set(USE_OPENGL OFF)
 	set(USE_VULKAN OFF)
@@ -392,27 +398,27 @@ if(USE_BREAKPAD AND NOT LIBRETRO)
 				COMMAND mkdir -p ../symbols
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a x86_64
-					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Flycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Flycast-x64.sym
+					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Hollycast.app.dSYM
+					$<TARGET_FILE:flycast> > ../symbols/Hollycast-x64.sym
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a arm64
-					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Flycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Flycast-arm64.sym
+					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Hollycast.app.dSYM
+					$<TARGET_FILE:flycast> > ../symbols/Hollycast-arm64.sym
 			)
 		else()
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 				COMMAND sleep 20
 				COMMAND mkdir -p ../symbols
 				COMMAND dsymutil $<TARGET_FILE:flycast>
-					-o ${CMAKE_CURRENT_BINARY_DIR}/Flycast.app.dSYM
+					-o ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a x86_64
-					-g ${CMAKE_CURRENT_BINARY_DIR}/Flycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Flycast-x64.sym
+					-g ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
+					$<TARGET_FILE:flycast> > ../symbols/Hollycast-x64.sym
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a arm64
-					-g ${CMAKE_CURRENT_BINARY_DIR}/Flycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Flycast-arm64.sym
+					-g ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
+					$<TARGET_FILE:flycast> > ../symbols/Hollycast-arm64.sym
 			)
 		endif()
 	endif()
@@ -1448,16 +1454,16 @@ if(NOT LIBRETRO)
 			set_source_files_properties(${IOS_RESOURCES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 			set_target_properties(${PROJECT_NAME} PROPERTIES
-				OUTPUT_NAME "Flycast"
+				OUTPUT_NAME "Hollycast"
 				MACOSX_BUNDLE YES
-				MACOSX_BUNDLE_EXECUTABLE_NAME "Flycast"
+				MACOSX_BUNDLE_EXECUTABLE_NAME "Hollycast"
 				MACOSX_BUNDLE_INFO_STRING ""
-				MACOSX_BUNDLE_GUI_IDENTIFIER "com.flyinghead.Flycast"
-				MACOSX_BUNDLE_BUNDLE_NAME "com.flyinghead.Flycast"
+				MACOSX_BUNDLE_GUI_IDENTIFIER "org.hollycast.Hollycast"
+				MACOSX_BUNDLE_BUNDLE_NAME "Hollycast"
 				MACOSX_BUNDLE_LONG_VERSION_STRING "${GIT_VERSION}"
 				MACOSX_BUNDLE_SHORT_VERSION_STRING "${TAG_VERSION}"
 				MACOSX_BUNDLE_BUNDLE_VERSION "${GIT_HASH}"
-				MACOSX_BUNDLE_COPYRIGHT "Copyright © ${YEAR} Flycast contributors. All rights reserved."
+				MACOSX_BUNDLE_COPYRIGHT "Copyright © ${YEAR} The Hollycast Authors. All rights reserved."
 				MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-ios/plist.in
 
 				XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym"
@@ -1469,7 +1475,7 @@ if(NOT LIBRETRO)
 				XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES
 				XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES NO
 				XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-				XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.flyinghead.Flycast")
+				XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.hollycast.Hollycast")
 
 			find_library(UIKIT UIKit)
 			find_library(FOUNDATION Foundation)
@@ -1485,17 +1491,17 @@ if(NOT LIBRETRO)
 				${AUDIOTOOLBOX}
 				${AVFOUNDATION})
 
-			add_custom_target(Flycast.IPA ALL
+			add_custom_target(Hollycast.IPA ALL
 				DEPENDS ${PROJECT_NAME}
 				COMMENT "Building IPA"
 				COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/Payload
 				COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/Payload/*
-				COMMAND cp -r ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Flycast.app ${CMAKE_CURRENT_BINARY_DIR}/Payload
-				COMMAND for lib in ${CMAKE_CURRENT_BINARY_DIR}/Payload/Flycast.app/Frameworks/*.dylib
+				COMMAND cp -r ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.app ${CMAKE_CURRENT_BINARY_DIR}/Payload
+				COMMAND for lib in ${CMAKE_CURRENT_BINARY_DIR}/Payload/Hollycast.app/Frameworks/*.dylib
 				COMMAND do xcrun bitcode_strip -r $lib -o $lib
 				COMMAND done
-				COMMAND ldid -S${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-ios/emulator/flycast.entitlements ${CMAKE_CURRENT_BINARY_DIR}/Payload/Flycast.app/Flycast
-				COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Flycast.ipa" --format=zip ${CMAKE_CURRENT_BINARY_DIR}/Payload)
+				COMMAND ldid -S${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-ios/emulator/flycast.entitlements ${CMAKE_CURRENT_BINARY_DIR}/Payload/Hollycast.app/Hollycast
+				COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.ipa" --format=zip ${CMAKE_CURRENT_BINARY_DIR}/Payload)
 		else()
 
 			add_subdirectory(core/deps/Syphon)
@@ -1517,23 +1523,23 @@ if(NOT LIBRETRO)
 			set_source_files_properties(${ASSETS} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 			set_target_properties(${PROJECT_NAME} PROPERTIES
-				OUTPUT_NAME "Flycast"
+				OUTPUT_NAME "Hollycast"
 				MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/shell/apple/emulator-osx/MacOSXBundleInfo.plist.in
-				MACOSX_BUNDLE_EXECUTABLE_NAME "Flycast"
+				MACOSX_BUNDLE_EXECUTABLE_NAME "Hollycast"
 				MACOSX_BUNDLE_INFO_STRING ""
 				MACOSX_BUNDLE_ICON_FILE "AppIcon"
-				MACOSX_BUNDLE_GUI_IDENTIFIER "com.flyinghead.Flycast"
+				MACOSX_BUNDLE_GUI_IDENTIFIER "org.hollycast.Hollycast"
 				MACOSX_BUNDLE_LONG_VERSION_STRING "${GIT_VERSION}"
 				MACOSX_BUNDLE_SHORT_VERSION_STRING "${TAG_VERSION}"
 				MACOSX_BUNDLE_BUNDLE_VERSION "${GIT_HASH}"
-				MACOSX_BUNDLE_BUNDLE_NAME "Flycast"
-				MACOSX_BUNDLE_COPYRIGHT "Copyright © ${YEAR} Flycast contributors. All rights reserved."
+				MACOSX_BUNDLE_BUNDLE_NAME "Hollycast"
+				MACOSX_BUNDLE_COPYRIGHT "Copyright © ${YEAR} The Hollycast Authors. All rights reserved."
 				XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf"
 				XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT[variant=RelWithDebInfo] "dwarf-with-dsym"
 				XCODE_ATTRIBUTE_CLANG_DEBUG_INFORMATION_LEVEL[variant=RelWithDebInfo] "line-tables-only"
 				XCODE_ATTRIBUTE_DEPLOYMENT_POSTPROCESSING[variant=RelWithDebInfo] YES
 				XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-				XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.flyinghead.Flycast"
+				XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.hollycast.Hollycast"
 				BUILD_WITH_INSTALL_RPATH TRUE
 				INSTALL_RPATH "@loader_path/../Frameworks"
 			)
@@ -1626,13 +1632,13 @@ if(NINTENDO_SWITCH)
 			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 			DEPENDS xxHash::xxhash chdr-static zip ${PROJECT_NAME})
 	else()
-		nx_generate_nacp(flycast.nacp NAME "Flycast" AUTHOR "flyinghead, M4xw" VERSION "${GIT_VERSION}")
+		nx_generate_nacp(flycast.nacp NAME "Hollycast" AUTHOR "The Hollycast Authors" VERSION "${GIT_VERSION}")
 		nx_create_nro(flycast NACP flycast.nacp ICON "${CMAKE_SOURCE_DIR}/shell/switch/flycast.jpeg")
 	endif()
 endif()
 
 if(IOS)
-	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Flycast.ipa" TYPE BIN)
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.ipa" TYPE BIN)
 elseif(NINTENDO_SWITCH AND NOT LIBRETRO)
 	install(FILES ${CMAKE_BINARY_DIR}/flycast.nro DESTINATION "${CMAKE_INSTALL_BINDIR}")
 elseif(LIBRETRO)

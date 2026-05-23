@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
     <string name="OK">Tamam</string>
     <string name="storage_error">Depolama Hatası</string>
@@ -10,7 +11,7 @@
     <string name="exporting_home_folder">Ev klasörü dışa aktarılıyor</string>
     <string name="select_an_import_folder">Bir içe aktarma klasörü seçin</string>
     <string name="importing_home_folder">Ev klasörü içe aktarılıyor</string>
-    <string name="flycast_error">Flycast Hatası</string>
+    <string name="flycast_error">Hollycast Hatası</string>
     <string name="init_failed_message">Başlatma başarısız oldu. Lütfen tekrar deneyin veya yeniden yükleyin.\n\nHata: </string>
     <string name="exit">Çıkış</string>
     <string name="copying">Kopyalanıyor</string>

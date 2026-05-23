@@ -1,5 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
+// Portions Copyright 2026 The Hollycast Authors
+//
 #include "resource.h"
 #include "../../core/version.h"
 
@@ -22,13 +24,13 @@ BEGIN
   BEGIN
     BLOCK "040904E4"
     BEGIN
-      VALUE "CompanyName", "Flycast Team"
-      VALUE "FileDescription", "Flycast"
+      VALUE "CompanyName", "The Hollycast Authors"
+      VALUE "FileDescription", "Hollycast"
       VALUE "FileVersion", GIT_VERSION
       VALUE "InternalName", "flycast"
       VALUE "LegalCopyright", "Copyright various authors. Released under the GNU General Public License."
-      VALUE "OriginalFilename", "flycast.exe"
-      VALUE "ProductName", "Flycast is a multiplatform Sega Dreamcast, Naomi and Atomiswave emulator"
+      VALUE "OriginalFilename", "Hollycast.exe"
+      VALUE "ProductName", "Hollycast is a multiplatform Sega Dreamcast, Naomi and Atomiswave emulator"
       VALUE "ProductVersion", GIT_VERSION
     END
   END

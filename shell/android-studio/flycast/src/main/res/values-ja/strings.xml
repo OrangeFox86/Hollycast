@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
     <string name="OK">OK</string>
     <string name="storage_error">ストレージエラー</string>
@@ -10,7 +11,7 @@
     <string name="exporting_home_folder">ホームフォルダーをエクスポート中</string>
     <string name="select_an_import_folder">インポートフォルダーを選択</string>
     <string name="importing_home_folder">ホームフォルダーをインポート中</string>
-    <string name="flycast_error">Flycastエラー</string>
+    <string name="flycast_error">Hollycastエラー</string>
     <string name="init_failed_message">初期化に失敗しました。もう一度試すか、再インストールしてください。\n\nエラー: </string>
     <string name="exit">終了</string>
     <string name="copying">コピー中</string>

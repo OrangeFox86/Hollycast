@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -378,7 +379,7 @@ public:
 class AndroidVirtualGamepad : public VirtualGamepad
 {
 public:
-	AndroidVirtualGamepad(bool rumbleEnabled) : VirtualGamepad("Flycast") {
+	AndroidVirtualGamepad(bool rumbleEnabled) : VirtualGamepad("Hollycast") {
 		this->rumbleEnabled = rumbleEnabled;
 	}
 
