@@ -316,16 +316,17 @@ public:
 		logical_port.push_back('A' + bus);
 		logical_port.push_back('1' + port);
 
-		// We expect the preceding 'OnSetup()' for associated VMUs to have placed an exactly 128KB VMU file on disk.
-		// If not, things will go wrong when DreamPotato tries to open the file.
+		// Only send the file path if a preceding 'OnSetup()' has placed a 128KB VMU file on disk.
 		std::string path = hostfs::getVmuPath(logical_port, /*save*/ false);
 		std::error_code ec;
 		size_t fileSize = std::filesystem::file_size(path, ec);
 		if (ec) {
 			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' error: %s", bus, path.c_str(), ec.message().c_str());
+			return;
 		}
 		else if (fileSize != sizeof(maple_sega_vmu::flash_data)) {
 			WARN_LOG(INPUT, "DreamPotato[%d] VMU file '%s' unexpected size: %ld", bus, path.c_str(), fileSize);
+			return;
 		}
 
 		// Null-pad the string, so that trailing garbage does not get sent over the wire.
@@ -638,6 +639,13 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 // Instantiate DreamPotato devices where needed and delete the others
 void update()
 {
+	static bool integratedMode = config::DreamPotatoIntegratedMode;
+	if (integratedMode != config::DreamPotatoIntegratedMode) {
+		// Integrated mode setting changed--tear everything down and recreate
+		integratedMode = config::DreamPotatoIntegratedMode;
+		term();
+	}
+
 	for (unsigned bus = 0; bus < Potatoes.size(); bus++)
 	{
 		auto& potato = Potatoes[bus];

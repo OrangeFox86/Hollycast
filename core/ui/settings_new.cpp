@@ -4621,7 +4621,6 @@ void renderControlsTab()
 				"Useful to prevent save-file conflicts between games.");
 
 #ifdef USE_DREAMLINK_DEVICES
-	{
 			RenderGeneralToggleSettingRow(
 				"UsePhysicalVmuMemory",
 				ICON_FA_MEMORY,
@@ -4634,11 +4633,9 @@ void renderControlsTab()
 				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
 					"VMUs may appear to reconnect after loading state."),
 				game_started);
-	}
 #endif
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-	{
 			RenderGeneralToggleSettingRow(
 				"DreamPotatoIntegratedMode",
 				ICON_FA_PLUG,
@@ -4651,7 +4648,12 @@ void renderControlsTab()
 					"Applies to all slots which use a DreamPotato device.\n"
 					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
 				game_started);
-	}
+
+			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
+			{
+				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+				ImGui::TextColored(warningColor, "(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths.");
+			}
 #endif
 	}
 	}
