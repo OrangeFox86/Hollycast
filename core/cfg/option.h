@@ -506,7 +506,9 @@ extern Option<std::string, false> TextureDumpPath;
 extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 extern Option<std::string, false> DreamPotatoPath;
+#endif
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
 extern Option<bool, false> DiscordPresence;
@@ -565,7 +567,9 @@ extern Option<bool, false> UseRawInput;
 constexpr bool UseRawInput = false;
 #endif
 extern Option<bool> UsePhysicalVmuMemory;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 extern Option<bool> DreamPotatoIntegratedMode;
+#endif
 
 #ifdef USE_LUA
 extern Option<std::string, false> LuaFileName;
