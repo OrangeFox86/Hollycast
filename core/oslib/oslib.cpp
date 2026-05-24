@@ -105,6 +105,7 @@ std::string getVmuPath(const std::string& port, bool save)
 	return wpath;
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 std::string getDreamPotatoPath()
 {
 	std::string dreamPotatoFileName =
@@ -130,6 +131,7 @@ std::string getDreamPotatoPath()
 
 	return "";
 }
+#endif
 
 std::string getArcadeFlashPath()
 {
