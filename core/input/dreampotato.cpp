@@ -253,8 +253,14 @@ public:
 
 	bool isConnected() override {
 		checkConnection();
+		return isConnectedInternal();
+	}
+
+	//! Does not perform side effects such as completing a pending connection.
+	bool isConnectedInternal() const {
 		return connectionStatus == ConnectionStatus::Connected;
 	}
+
 	const char* getName() const override {
 		return "DreamPotato";
 	}
@@ -466,7 +472,7 @@ void DreamPotatoVmu::OnSetup()
 	}
 
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
-	if (potato->isConnected()) {
+	if (potato->isConnectedInternal()) {
 		potato->sendFilePath(bus_port);
 	}
 }
