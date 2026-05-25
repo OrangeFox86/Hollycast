@@ -2,6 +2,7 @@
 #include "types.h"
 #include <string>
 #include <vector>
+#include <unistd.h>
 #if defined(__SWITCH__)
 #include <malloc.h>
 #endif
@@ -15,9 +16,12 @@ void os_UpdateInputState();
 void os_InstallFaultHandler();
 void os_UninstallFaultHandler();
 void os_RunInstance(int argc, const char *argv[]);
-std::string os_GetAppContainingDir();
 void os_SetThreadName(const char *name);
 void os_notify(const char *msg, int durationMs = 2000, const char *details = nullptr);
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+//! Get the containing directory of the current '.app'/'AppImage' bundle, if applicable, or of the current executable
+std::string os_GetAppContainingDir();
 
 // Cross-platform process handle.
 class os_Process
@@ -42,6 +46,7 @@ private:
 	pid_t pid = -1;
 #endif
 };
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 // raii thread name setter
 class ThreadName
@@ -74,7 +79,9 @@ u32 static inline bitscanrev(u32 v)
 namespace hostfs
 {
 	std::string getVmuPath(const std::string& port, bool save);
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	std::string getDreamPotatoPath();
+#endif
 
 	std::string getArcadeFlashPath();
 

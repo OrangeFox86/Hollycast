@@ -369,7 +369,18 @@ public:
 			WARN_LOG(INPUT, "DreamPotato[%d] updateExpansionDevs error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
-		if (ec = receiveMsg(msg, sock, ioContext)) {
+
+		ec = receiveMsg(msg, sock, ioContext);
+		if (ec == asio::error::message_size) {
+			// HACK: Here we just received a refresh message. Retry 'receiveMsg()' once here to avoid a clunky disconnect+reconnect.
+			// DP is sending a refresh message because it thinks it needs to tell us about a change in the docked state or the currently loaded VMU file.
+			// But here, we're already in the process of querying the expansion devices. We don't need to be told to do that.
+			// See also TODO in 'checkConnection()'--we want to do away with refresh messages and use a better solution like polling instead
+			ec = receiveMsg(msg, sock, ioContext);
+			DEBUG_LOG(INPUT, "DreamPotato[%d] ignoring a spurious refresh message", bus);
+		}
+
+		if (ec) {
 			WARN_LOG(INPUT, "DreamPotato[%d] updateExpansionDevs error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
@@ -561,7 +572,7 @@ void DreamPotato::connect()
 		// connect() is a no-op in integrated mode, because we are waiting for DreamPotato to connect to us instead
 		// TODO: perhaps we should spawn DreamPotato again here, if it is not currently running.
 		// However, we need to take care to not cause "crash loops" of DreamPotato processes on the user's machine.
-		DEBUG_LOG(INPUT, "DreamPotato[%d]: Ignoring DreamPotato::connect() call in integrated mode");
+		DEBUG_LOG(INPUT, "DreamPotato[%d]: Ignoring DreamPotato::connect() call in integrated mode", bus);
 		return;
 	}
 #endif
@@ -646,12 +657,14 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 // Instantiate DreamPotato devices where needed and delete the others
 void update()
 {
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 	static bool integratedMode = config::DreamPotatoIntegratedMode;
 	if (integratedMode != config::DreamPotatoIntegratedMode) {
 		// Integrated mode setting changed--tear everything down and recreate
 		integratedMode = config::DreamPotatoIntegratedMode;
 		term();
 	}
+#endif
 
 	for (unsigned bus = 0; bus < Potatoes.size(); bus++)
 	{

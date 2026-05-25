@@ -109,7 +109,7 @@ std::string getVmuPath(const std::string& port, bool save)
 std::string getDreamPotatoPath()
 {
 	std::vector<std::string> dreamPotatoFileNames =
-#if defined(WIN32)
+#if defined(_WIN32)
 		// Expect either DreamPotato in a subfolder (most conventional) or just DreamPotato.exe (likely for custom path cases)
 		{ "DreamPotato/DreamPotato.exe", "DreamPotato.exe" };
 #elif defined(TARGET_MAC)
@@ -138,7 +138,7 @@ std::string getDreamPotatoPath()
 
 	return "";
 }
-#endif
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 std::string getArcadeFlashPath()
 {
