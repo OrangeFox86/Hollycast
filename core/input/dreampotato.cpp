@@ -59,9 +59,14 @@ static asio::error_code receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_co
 			read_ec = ec;
 		});
 
-	std::chrono::milliseconds timeout = std::chrono::milliseconds(100);
+	// Run handlers until either deadline passes or our handler is completed (which updates 'read_ec')
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
 	ioContext.restart();
-	ioContext.run_for(timeout);
+	while (read_ec == asio::error::would_block) {
+		if (ioContext.run_one_until(deadline) == 0)
+			break;
+	}
+
 	if (read_ec == asio::error::would_block)
 	{
 		// Timeout. Cancel the ongoing socket operation and drain the
