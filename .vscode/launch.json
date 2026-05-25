@@ -79,6 +79,15 @@
 
 
         {
+            "name": "(macOS) Attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceFolder}/build-debug/Debug/Flycast.app/Contents/MacOS/Flycast",
+            "initCommands": [
+                "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
+            ]
+        },
+        {
             "name": "(macOS) Debug Flycast",
             "type": "lldb",
             "request": "launch",
