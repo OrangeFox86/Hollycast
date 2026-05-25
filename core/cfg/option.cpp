@@ -144,7 +144,7 @@ Option<std::vector<std::string>, false> ContentPath("Dreamcast.ContentPath");
 Option<std::vector<std::string>, false> BiosPath("Dreamcast.BiosPath");
 Option<std::string, false> VMUPath("Dreamcast.VMUPath");
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-Option<std::string, false> DreamPotatoPath("Dreamcast.DreamPotatoPath");
+Option<std::string, false> DreamPotatoFolderPath("Dreamcast.DreamPotatoPath");
 #endif
 Option<std::vector<std::string>, false> SavestatePath("Dreamcast.SavestatePath");
 Option<std::string, false> SavePath("Dreamcast.SavePath");

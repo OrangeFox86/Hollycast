@@ -218,6 +218,26 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+std::string os_GetAppContainingDir()
+{
+	NSBundle *bundle = [NSBundle mainBundle];
+	if (bundle != nil)
+	{
+		// path to the .app folder
+		NSString *bundlePath = [bundle bundlePath];
+		if (bundlePath != nil && [bundlePath length] > 0)
+			return [[[bundlePath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+	}
+
+	// Not packaged in .app. Return the directory containing the executable.
+	NSArray *arguments = [[NSProcessInfo processInfo] arguments];
+	if ([arguments count] == 0)
+		return "";
+
+	NSString *selfPath = [arguments objectAtIndex:0];
+	return [[[selfPath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+}
+
 os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
 {
 	os_Process proc;

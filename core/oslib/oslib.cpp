@@ -108,26 +108,33 @@ std::string getVmuPath(const std::string& port, bool save)
 #ifdef DREAMPOTATO_INTEGRATED_MODE
 std::string getDreamPotatoPath()
 {
-	std::string dreamPotatoFileName =
+	std::vector<std::string> dreamPotatoFileNames =
 #if defined(WIN32)
-		"DreamPotato.exe";
+		// Expect either DreamPotato in a subfolder (most conventional) or just DreamPotato.exe (likely for custom path cases)
+		{ "DreamPotato/DreamPotato.exe", "DreamPotato.exe" };
+#elif defined(TARGET_MAC)
+		// Expect DreamPotato.app side-by-side with Hollycast.app, or, DreamPotato executable possibly in a subfolder
+		{ "DreamPotato.app/Contents/MacOS/DreamPotato", "DreamPotato/DreamPotato", "DreamPotato"  };
 #else
-		"DreamPotato";
+		// Expect DreamPotato.AppImage side-by-side with Hollycast.AppImage, or, DreamPotato executable possibly in a subfolder
+		{ "DreamPotato.AppImage", "DreamPotato-linux-x64.AppImage", "DreamPotato/DreamPotato", "DreamPotato" };
 #endif
 
-	if (!config::DreamPotatoPath.get().empty())
-	{
-		try {
-			std::string fullpath = hostfs::storage().getSubPath(config::DreamPotatoPath, dreamPotatoFileName);
-			if (hostfs::storage().exists(fullpath))
-				return fullpath;
-		} catch (const hostfs::StorageException& e) {
+	for (const std::string& dreamPotatoFileName : dreamPotatoFileNames) {
+		if (!config::DreamPotatoFolderPath.get().empty())
+		{
+			try {
+				std::string fullpath = hostfs::storage().getSubPath(config::DreamPotatoFolderPath, dreamPotatoFileName);
+				if (hostfs::storage().exists(fullpath))
+					return fullpath;
+			} catch (const hostfs::StorageException& e) {
+			}
 		}
-	}
 
-	std::string dreamPotatoPath = get_readonly_data_path("DreamPotato/" + dreamPotatoFileName);
-	if (file_exists(dreamPotatoPath))
-		return dreamPotatoPath;
+		std::string dreamPotatoPath = hostfs::storage().getSubPath(os_GetAppContainingDir(), dreamPotatoFileName);
+		if (file_exists(dreamPotatoPath))
+			return dreamPotatoPath;
+	}
 
 	return "";
 }

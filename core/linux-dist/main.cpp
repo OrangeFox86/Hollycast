@@ -209,6 +209,29 @@ static std::vector<std::string> find_system_data_dirs()
 
 static const char *selfPath;
 
+std::string os_GetAppContainingDir()
+{
+	const char *appImagePath = nowide::getenv("APPIMAGE");
+	if (appImagePath != nullptr && *appImagePath != '\0')
+	{
+		std::string path(appImagePath);
+		size_t pos = get_last_slash_pos(path);
+		if (pos != std::string::npos)
+			return path.substr(0, pos);
+		return ".";
+	}
+
+	if (selfPath != nullptr && *selfPath != '\0')
+	{
+		std::string path(selfPath);
+		size_t pos = get_last_slash_pos(path);
+		if (pos != std::string::npos)
+			return path.substr(0, pos);
+	}
+
+	return ".";
+}
+
 void os_RunInstance(int argc, const char *argv[])
 {
 	if (fork() == 0)

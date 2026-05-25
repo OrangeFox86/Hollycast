@@ -453,6 +453,23 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+std::string os_GetAppContainingDir()
+{
+	wchar_t exePath[MAX_PATH];
+	GetModuleFileNameW(NULL, exePath, std::size(exePath));
+
+	nowide::stackstring path;
+	if (!path.convert(exePath))
+		return ".";
+
+	std::string fullPath = path.get();
+	size_t pos = get_last_slash_pos(fullPath);
+	if (pos == std::string::npos)
+		return ".";
+
+	return fullPath.substr(0, pos);
+}
+
 os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
 {
 	os_Process proc;

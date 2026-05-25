@@ -2574,7 +2574,7 @@ void renderGeneralTab()
 	ImGui::Spacing();
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-	manageSinglePath("DreamPotato Path", config::DreamPotatoPath,
+	manageSinglePath("DreamPotato Path", config::DreamPotatoFolderPath,
 		"DreamPotato Path\n"
 		"Path of the folder containing the DreamPotato (VMU emulator) executable.\n\n"
 		"Set this if you want to use a custom version of DreamPotato with integrated mode.");

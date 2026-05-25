@@ -15,6 +15,7 @@ void os_UpdateInputState();
 void os_InstallFaultHandler();
 void os_UninstallFaultHandler();
 void os_RunInstance(int argc, const char *argv[]);
+std::string os_GetAppContainingDir();
 void os_SetThreadName(const char *name);
 void os_notify(const char *msg, int durationMs = 2000, const char *details = nullptr);
 

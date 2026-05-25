@@ -507,7 +507,7 @@ extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-extern Option<std::string, false> DreamPotatoPath;
+extern Option<std::string, false> DreamPotatoFolderPath;
 #endif
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
