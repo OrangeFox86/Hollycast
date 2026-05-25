@@ -50,7 +50,7 @@ static asio::error_code sendMsg(const MapleMsg& msg, tcp::socket& sock)
 	return ec;
 }
 
-static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioContext)
+static asio::error_code receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioContext)
 {
 	asio::streambuf buf;
 	asio::error_code read_ec = asio::error::would_block;
@@ -68,21 +68,22 @@ static bool receiveMsg(MapleMsg& msg, tcp::socket& sock, asio::io_context& ioCon
 		// ioContext queue so that the callback runs while 'buf' is still live
 		sock.cancel();
 		ioContext.poll();
-		return false;
+		return read_ec;
 	}
 
 	if (read_ec)
-		return false;
+		return read_ec;
 
 	std::string response;
 	std::istream istream(&buf);
 	std::getline(istream, response);
 	sscanf(response.c_str(), "%hhx %hhx %hhx %hhx", &msg.command, &msg.destAP, &msg.originAP, &msg.size);
 	if ((msg.getDataSize() - 1) * 3 + 13 >= response.length())
-		return false;
+		return asio::error::message_size;
+
 	for (unsigned i = 0; i < msg.getDataSize(); i++)
 		sscanf(&response[i * 3 + 12], "%hhx", &msg.data[i]);
-	return true;
+	return read_ec;
 }
 
 namespace dreampotato
@@ -368,8 +369,8 @@ public:
 			WARN_LOG(INPUT, "DreamPotato[%d] updateExpansionDevs error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
-		if (!receiveMsg(msg, sock, ioContext)) {
-			WARN_LOG(INPUT, "DreamPotato[%d] read timeout", bus);
+		if (ec = receiveMsg(msg, sock, ioContext)) {
+			WARN_LOG(INPUT, "DreamPotato[%d] updateExpansionDevs error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
 
@@ -634,8 +635,8 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 	if (!send(txMsg))
 		return false;
 
-	if (!receiveMsg(rxMsg, sock, ioContext)) {
-		WARN_LOG(INPUT, "DreamPotato[%d] receive failed", bus);
+	if (auto ec = receiveMsg(rxMsg, sock, ioContext)) {
+		WARN_LOG(INPUT, "DreamPotato[%d] receive error: %s", bus, ec.message().c_str());
 		connectionStatus = ConnectionStatus::Disconnected;
 		return false;
 	}
