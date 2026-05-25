@@ -11,6 +11,11 @@ void os_DoEvents()
 {
 }
 
+std::string os_GetAppContainingDir()
+{
+	return "";
+}
+
 void os_RunInstance(int argc, const char *argv[])
 {
 }
