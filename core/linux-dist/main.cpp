@@ -209,6 +209,20 @@ static std::vector<std::string> find_system_data_dirs()
 
 static const char *selfPath;
 
+void os_RunInstance(int argc, const char *argv[])
+{
+	if (fork() == 0)
+	{
+		std::vector<char *> localArgs;
+		localArgs.push_back((char *)selfPath);
+		for (int i = 0; i < argc; i++)
+			localArgs.push_back((char *)argv[i]);
+		localArgs.push_back(nullptr);
+		execv(selfPath, &localArgs[0]);
+	}
+}
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 std::string os_GetAppContainingDir()
 {
 	const char *appImagePath = nowide::getenv("APPIMAGE");
@@ -230,19 +244,6 @@ std::string os_GetAppContainingDir()
 	}
 
 	return ".";
-}
-
-void os_RunInstance(int argc, const char *argv[])
-{
-	if (fork() == 0)
-	{
-		std::vector<char *> localArgs;
-		localArgs.push_back((char *)selfPath);
-		for (int i = 0; i < argc; i++)
-			localArgs.push_back((char *)argv[i]);
-		localArgs.push_back(nullptr);
-		execv(selfPath, &localArgs[0]);
-	}
 }
 
 os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
@@ -297,6 +298,7 @@ void os_Process::terminate()
 	waitpid(pid, &status, 0);
 	pid = -1;
 }
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 #if defined(USE_BREAKPAD)
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)

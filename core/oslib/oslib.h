@@ -2,7 +2,9 @@
 #include "types.h"
 #include <string>
 #include <vector>
+#if defined(DREAMPOTATO_INTEGRATED_MODE) && !defined(_WIN32)
 #include <unistd.h>
+#endif
 #if defined(__SWITCH__)
 #include <malloc.h>
 #endif
