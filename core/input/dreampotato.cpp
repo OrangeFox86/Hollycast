@@ -547,7 +547,7 @@ void DreamPotato::init(u32 ports)
 		processHandle = os_Process::start(dreamPotatoPath, {
 			"--integrated",
 			"--tcp-port",
-			std::to_string(tcpPort),
+			tcpPortString,
 			"--slots",
 			slotsString,
 			"--port",
