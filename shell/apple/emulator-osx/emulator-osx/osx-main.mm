@@ -218,6 +218,7 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 std::string os_GetAppContainingDir()
 {
 	NSBundle *bundle = [NSBundle mainBundle];
@@ -290,6 +291,7 @@ void os_Process::terminate()
 	waitpid(pid, &status, 0);
 	pid = -1;
 }
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 #import <Syphon/Syphon.h>
 #import <cfg/cfg.h>

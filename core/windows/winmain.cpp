@@ -453,6 +453,7 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 std::string os_GetAppContainingDir()
 {
 	wchar_t exePath[MAX_PATH];
@@ -533,6 +534,7 @@ void os_Process::terminate()
 	CloseHandle(handle);
 	handle = nullptr;
 }
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 static WinLibLoader kernelBaseLib("KernelBase.dll");
 
