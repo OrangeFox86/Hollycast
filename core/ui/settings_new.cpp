@@ -252,7 +252,7 @@ static void SetSettingsFooterText(const char* text)
 
 static void ShowFooterHelpMarker(const char* desc)
 {
-	ImGui::TextDisabled(Tnop("(?)"));
+	ImGui::TextDisabled("%s", Tnop("(?)"));
 	if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 		SetSettingsFooterText(desc);
 }
@@ -1169,7 +1169,7 @@ static void detect_input_popup(const MappingEntry* mapping)
 
 			if (!g_mapped_codes.empty())
 			{
-				ImGui::Text(T("Current inputs: "));
+				ImGui::Text("%s", T("Current inputs: "));
 				ImGui::SameLine();
 				bool first = true;
 				for (const InputMapping::InputDef& inputDef : g_mapped_codes)
@@ -1429,11 +1429,11 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 		ImguiStyleVar windowPadding(ImGuiStyleVar_WindowPadding, ScaledVec2(20, 20));
 		if (ImGui::BeginPopupModal(T("Confirm Reset"), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 		{
-			ImGui::Text(T("Are you sure you want to reset the mappings to default?"));
+			ImGui::Text("%s", T("Are you sure you want to reset the mappings to default?"));
 			static bool hitbox = false;
 			if (g_arcade_button_mode)
 			{
-				ImGui::Text(T("Controller Type:"));
+				ImGui::Text("%s", T("Controller Type:"));
 				if (ImGui::RadioButton(T("Gamepad"), !hitbox))
 					hitbox = false;
 				ImGui::SameLine();
@@ -1966,7 +1966,7 @@ void renderGeneralTab()
 	using namespace SettingsUI;
 	ScopedTwoLineRowStyle generalRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("General Configuration"));
+	ImGui::TextDisabled("%s", T("General Configuration"));
 	ImGui::Separator();
 
 	// ========================================
@@ -2717,7 +2717,7 @@ void renderGeneralTab()
 				{
 					if (futureLogin.wait_for(std::chrono::seconds::zero()) == std::future_status::timeout)
 					{
-						ImGui::Text(T("Authenticating..."));
+						ImGui::Text("%s", T("Authenticating..."));
 					}
 					else
 					{
@@ -2850,7 +2850,7 @@ void renderVideoTab()
 {
 	ScopedTwoLineRowStyle videoRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("Video Configuration"));
+	ImGui::TextDisabled("%s", T("Video Configuration"));
 	ImGui::Separator();
 
 	// ============================================================
@@ -2944,7 +2944,7 @@ void renderVideoTab()
 		if (currentLevel == VideoPresetLevel::Custom && !presetJustApplied)
 		{
 			ImGui::SameLine();
-			ImGui::TextDisabled(T("(Modified)"));
+			ImGui::TextDisabled("%s", T("(Modified)"));
 			if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 				SetSettingsFooterText(T("Settings have been manually modified from the last preset."));
 		}
@@ -4028,7 +4028,7 @@ void renderAudioTab()
 {
 	ScopedTwoLineRowStyle audioRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("Audio Configuration"));
+	ImGui::TextDisabled("%s", T("Audio Configuration"));
 	ImGui::Separator();
 
 	// Audio Playback Section
@@ -4369,7 +4369,7 @@ void renderAudioTab()
 					}
 					else
 					{
-						WARN_LOG(RENDERER, T("Unknown audio backend option type"));
+						WARN_LOG(RENDERER, "Unknown audio backend option type");
 					}
 
 					options++;
@@ -4385,7 +4385,7 @@ void renderControlsTab()
 
 	ScopedTwoLineRowStyle controlsRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("Controls Configuration"));
+	ImGui::TextDisabled("%s", T("Controls Configuration"));
 	ImGui::Separator();
 
 	if (RenderCollapsingHeader("PhysicalDevicesSection", ICON_FA_GAMEPAD, T("Physical Devices"), ImGuiTreeNodeFlags_DefaultOpen))
@@ -4404,16 +4404,16 @@ void renderControlsTab()
 
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::TextColored(gray, T("System"));
+			ImGui::TextColored(gray, "%s", T("System"));
 
 			ImGui::TableSetColumnIndex(1);
-			ImGui::TextColored(gray, T("Name"));
+			ImGui::TextColored(gray, "%s", T("Name"));
 
 			ImGui::TableSetColumnIndex(2);
-			ImGui::TextColored(gray, T("Status"));
+			ImGui::TextColored(gray, "%s", T("Status"));
 
 			ImGui::TableSetColumnIndex(4);
-			ImGui::TextColored(gray, T("Port"));
+			ImGui::TextColored(gray, "%s", T("Port"));
 
 			// Iterate through all detected gamepads
 			for (int i = 0; i < GamepadDevice::GetGamepadCount(); i++)
@@ -4821,7 +4821,7 @@ void renderControlsTab()
 					ImGui::SameLine(0, uiScaled(6));
 
 					// Label
-					ImGui::Text(T("Crosshair"));
+					ImGui::Text("%s", T("Crosshair"));
 
 					// Toggle switch
 					ImGui::SameLine(ImGui::GetContentRegionAvail().x - uiScaled(40));
@@ -4946,7 +4946,7 @@ void renderNetworkTab()
 {
 	ScopedTwoLineRowStyle networkRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("Network Configuration"));
+	ImGui::TextDisabled("%s", T("Network Configuration"));
 	ImGui::Separator();
 
 	if (RenderCollapsingHeader("NetworkTypeSection", ICON_FA_GLOBE, T("Network Type"), ImGuiTreeNodeFlags_DefaultOpen))
@@ -5536,7 +5536,7 @@ void renderAdvancedTab()
 {
 	ScopedTwoLineRowStyle advancedRowStyle(20.0f, true, 0.5f, 8.0f);
 
-	ImGui::TextDisabled(T("Advanced Configuration"));
+	ImGui::TextDisabled("%s", T("Advanced Configuration"));
 	ImGui::Separator();
 
 	// CPU & Emulation Section
@@ -5910,7 +5910,7 @@ void renderAdvancedTab()
 				ImVec2 line1Start = ImGui::GetCursorPos();
 
 				ImGui::PushFont(largeFont);
-				ImGui::Text(shortName.c_str());
+				ImGui::Text("%s", shortName.c_str());
 				ImGui::PopFont();
 
 				float toggleWidth = uiScaled(50);
@@ -5924,7 +5924,7 @@ void renderAdvancedTab()
 				RenderToggleSwitchVisual(enabled);
 
 				ImGui::SetCursorPos(ImVec2(line1Start.x + uiScaled(28), line1Start.y + ImGui::GetTextLineHeightWithSpacing()));
-				ImGui::TextDisabled(fullName.c_str());
+				ImGui::TextDisabled("%s", fullName.c_str());
 
 				ImGui::PopID();
 
@@ -5944,7 +5944,7 @@ void renderAdvancedTab()
 		SettingIcon(ICON_FA_SERVER, ImVec2(uiScaled(20), uiScaled(20)));
 		ImGui::SameLine(0, uiScaled(8));
 		ImGui::PushFont(largeFont);
-		ImGui::Text(T("Log Server"));
+		ImGui::Text("%s", T("Log Server"));
 		ImGui::PopFont();
 		ImGui::SameLine();
 			InputText("", &config::LogServer.get(),
@@ -6015,7 +6015,7 @@ void renderAdvancedTab()
 	{
 		// Texture Dumping (with warning)
 		ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
-		ImGui::TextColored(warningColor, "(!) Texture Dumping");
+		ImGui::TextColored(warningColor, "%s", T("(!) Texture Dumping"));
 		ImGui::Indent();
 		RenderGeneralToggleSettingRow(
 			"DumpTextures",
@@ -6109,7 +6109,7 @@ void renderAdvancedTab()
 
 #ifdef USE_LUA
 		// Lua Scripting
-		ImGui::Text(T("Lua Scripting"));
+		ImGui::Text("%s", T("Lua Scripting"));
 		InputText(T("Lua Filename"), &config::LuaFileName.get(), ImGuiInputTextFlags_CharsNoBlank);
 		ImGui::SameLine();
 		ShowFooterHelpMarker(T("Specify lua filename to use. Should be located in Flycast config folder. Defaults to flycast.lua when empty."));
@@ -6137,7 +6137,7 @@ void renderAdvancedTab()
 		if (config::GDB)
 		{
 			ImGui::Spacing();
-			ImGui::Text(T("Virtual Memory Addresses"));
+			ImGui::Text("%s", T("Virtual Memory Addresses"));
 			ImGui::Separator();
 			void *ram_base, *ram, *vram, *aram;
 			addrspace::getAddress(&ram_base, &ram, &vram, &aram);
@@ -6146,7 +6146,7 @@ void renderAdvancedTab()
 
 			if (ram == nullptr) {
 				ImVec4 gray = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
-				ImGui::TextColored(gray, T("RAM addresses are not available until the emulation is started"));
+				ImGui::TextColored(gray, "%s", T("RAM addresses are not available until the emulation is started"));
 			} else {
 				ImGui::Columns(3, "virtualMemoryAddress", false);
 				ImGui::Text(T("RAM: %p"), ram);
@@ -6164,7 +6164,7 @@ void renderAdvancedTab()
 void renderAboutTab()
 {
 	// Use TextDisabled for the title (theme-aware)
-	ImGui::TextDisabled(T("About Hollycast"));
+	ImGui::TextDisabled("%s", T("About Hollycast"));
 	ImGui::Separator();
 
 	// Center content for better appearance
@@ -6266,7 +6266,7 @@ void renderAboutTab()
 					std::string name, description, vendor, version;
 					if (getCustomGpuDriverInfo(name, description, vendor, version))
 					{
-						ImGui::Text("Custom Driver:");
+						ImGui::Text("%s", "Custom Driver:");
 						ImGui::Indent();
 						ImGui::Text("%s - %s", name.c_str(), description.c_str());
 						ImGui::Text("%s - %s", vendor.c_str(), version.c_str());
@@ -6282,11 +6282,11 @@ void renderAboutTab()
 	// Project Description
 	if (ImGui::CollapsingHeader("About##Section", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Hollycast is a multi-platform emulator for Sega Dreamcast, "
 			"Naomi, Naomi 2, and Atomiswave arcade systems."
 		));
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Based on Flycast, providing accurate emulation with enhancements "
 			"for modern systems."
 		));
@@ -6298,13 +6298,13 @@ void renderAboutTab()
 	{
 		// Website (colored text to look like a link)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-		ImGui::Text(T("Website"));
+		ImGui::Text("%s", T("Website"));
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
 		ImGui::TextDisabled("https://flycast-emu.com/");
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-		ImGui::Text(T("Source Code"));
+		ImGui::Text("%s", T("Source Code"));
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
 		ImGui::TextDisabled("https://github.com/flycast-emu/flycast");
@@ -6314,10 +6314,10 @@ void renderAboutTab()
 	// License Information
 	if (RenderCollapsingHeader("LicenseSection", ICON_FA_FILE_CONTRACT, T("License"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Copyright (C) 2019-2025 flyinghead and contributors"
 		));
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Hollycast/Flycast is free software; you can redistribute it and/or modify "
 			"it under the terms of the GNU General Public License as published by "
 			"the Free Software Foundation; either version 2 of the License, or "
@@ -6329,11 +6329,11 @@ void renderAboutTab()
 	// Credits
 	if (RenderCollapsingHeader("CreditsSection", ICON_FA_USERS, T("Credits"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"This emulator is based on the work of many talented developers "
 			"who have contributed to the Flycast project and its dependencies."
 		));
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Special thanks to the original Flycast team and all contributors "
 			"who make this project possible."
 		));
