@@ -52,7 +52,9 @@
 #include "hw/sh4/sh4_interpreter.h"
 #include "hw/sh4/dyna/ngen.h"
 #include "oslib/i18n.h"
+#ifndef LIBRETRO
 #include <thread>
+#endif
 
 settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
@@ -1095,6 +1097,7 @@ void Emulator::vblank()
 {
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());
+#ifndef LIBRETRO
 	if (settings.input.fastForwardMode && config::FastForwardSpeedLimit < 300)
 	{
 		const double speedFactor = 1.0 + (double)config::FastForwardSpeedLimit / 100.0;
@@ -1113,6 +1116,7 @@ void Emulator::vblank()
 	{
 		fastForwardThrottleDeadline = {};
 	}
+#endif
 	// Time out if a frame hasn't been rendered for 50 ms
 	if (sh4_sched_now64() - startTime <= 50_sh4ms)
 		return;
