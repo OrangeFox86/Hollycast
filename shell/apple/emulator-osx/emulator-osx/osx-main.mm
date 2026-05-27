@@ -8,6 +8,8 @@
 #import <Carbon/Carbon.h>
 #import <AppKit/AppKit.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <mach/task.h>
 #include <mach/mach_init.h>
 #include <mach/mach_port.h>
@@ -215,6 +217,81 @@ void os_RunInstance(int argc, const char *argv[])
 		die("execv failed");
 	}
 }
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+std::string os_GetAppContainingDir()
+{
+	NSBundle *bundle = [NSBundle mainBundle];
+	if (bundle != nil)
+	{
+		// path to the .app folder
+		NSString *bundlePath = [bundle bundlePath];
+		if (bundlePath != nil && [bundlePath length] > 0)
+			return [[[bundlePath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+	}
+
+	// Not packaged in .app. Return the directory containing the executable.
+	NSArray *arguments = [[NSProcessInfo processInfo] arguments];
+	if ([arguments count] == 0)
+		return "";
+
+	NSString *selfPath = [arguments objectAtIndex:0];
+	return [[[selfPath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+}
+
+os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
+{
+	os_Process proc;
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		// Close open file descriptors except for stdio
+		int maxfd = sysconf(_SC_OPEN_MAX);
+		for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++)
+			close(fd);
+
+		std::vector<char *> cargs;
+		cargs.push_back(const_cast<char *>(executable.c_str()));
+		for (const auto& arg : args)
+			cargs.push_back(const_cast<char *>(arg.c_str()));
+		cargs.push_back(nullptr);
+		execvp(executable.c_str(), cargs.data());
+		_exit(127);
+	}
+	else if (pid > 0)
+	{
+		proc.pid = pid;
+	}
+	else
+	{
+		WARN_LOG(BOOT, "os_Process::start fork failed: %s", strerror(errno));
+	}
+	return proc;
+}
+
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	int status;
+	pid_t result = waitpid(pid, &status, WNOHANG);
+	if (result == 0)
+		return true;
+	// Process has exited
+	pid = -1;
+	return false;
+}
+
+void os_Process::terminate()
+{
+	if (!isValid())
+		return;
+	kill(pid, SIGTERM);
+	int status;
+	waitpid(pid, &status, 0);
+	pid = -1;
+}
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 #import <Syphon/Syphon.h>
 #import <cfg/cfg.h>

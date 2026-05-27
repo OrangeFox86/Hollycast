@@ -22,7 +22,7 @@ DreamLink implementations all expose a connection state, which is displayed in a
 
 DreamLinks associated with physical controllers generally handle setting up and tearing down the DreamLink connection, by checking for specific device IDs when an SDL controller is being set up. Note that this means the controller-based DreamLinks have a dependency on SDL, which means they only work on the desktop OS targets and not on Android, Switch, etc.
 
-We want users to be able to connect/disconnect DreamLinks in the middle of a game with minimal disruption. For example, if a connection is dropped due to an error, like an external program crashing, etc., there should be a straightforward way of re-establishing the connection. For example, a button in the pause UI, or an automatic reconnect mechanism of some kind.
+We want users to be able to connect/disconnect DreamLinks in the middle of a game with minimal disruption. For example, if a connection is dropped due to an error, like an external program crashing, etc., there should be a straightforward way of re-establishing the connection. For example, an automatic reconnect mechanism or UI command.
 
 ### Configuration
 
@@ -53,7 +53,13 @@ A DreamLink device by nature represents an external expansion device which Holly
 
 Hollycast will address this issue by ensuring that when loading state, if any expansion slots are using DreamLinks with physical memory (i.e. DreamPotato expansion devices, or DreamPicoPort controllers), and the state of the external device(s) may have changed since saving the state, then the emulated Maple devices are reloaded automatically.
 
-There are various possible ways to determine if the external devices may have changed. One simple way would be to track a timestamp whenever Maple devices are changed or a WriteBlock message is sent to a VMU. Then, compare this timestamp to the last write time of a save state file. If the save state write time is older than the Maple device update time, then, expansion devices need to be reloaded. (Finer-grained methods of detecting possible changes also exist, but this suggestion is included as a starting point.)
+We determine whether the external VMU state changed in the following way:
+- Track a "blockRead" flag for each block of the VMU. Default all to false when the VMU is connected. Set the flag to true whenever a given block of the VMU is used. (The VMU image has 256 blocks.)
+- Mirror the contents of the blocks which were used. Persist this data in the save state.
+- When a save state is loaded, then for each block that has been read during the session, read the corresponding block from the external VMU.
+- If the contents of all the external VMU blocks are equal to the contents of the mirrored blocks, then, the external VMU is assumed to not have changed, and doesn't need to be reconnected.
+
+Effectively, all we are doing with this check, is upholding the assumption held by the emulated game, that the contents of the blocks it used have not changed since the last use. We don't care about the contents of blocks the game "has not used yet", or perhaps that the game will never use.
 
 #### Alternatives
 

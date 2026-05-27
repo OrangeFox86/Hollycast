@@ -2780,6 +2780,14 @@ void renderGeneralTab()
 		);
 		ImGui::Spacing();
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	manageSinglePath("DreamPotato Path", config::DreamPotatoFolderPath,
+		"DreamPotato Path\n"
+		"Path of the folder containing the DreamPotato (VMU emulator) executable.\n\n"
+		"Set this if you want to use a custom version of DreamPotato with integrated mode.");
+	ImGui::Spacing();
+#endif
+
 		managePathList(T("Savestate Folders"), T("Savestate Folder"), config::SavestatePath.get(),
 			T(
 				"Savestate Folders\n"
@@ -4923,19 +4931,38 @@ void renderControlsTab()
 				));
 
 #ifdef USE_DREAMLINK_DEVICES
+			RenderGeneralToggleSettingRow(
+				"UsePhysicalVmuMemory",
+				ICON_FA_MEMORY,
+				T("Use External VMU Storage"),
+				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
+				static_cast<bool>(config::UsePhysicalVmuMemory),
+				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
+				T("Use External VMU Storage\n"
+				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
+				game_started);
+#endif
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+			RenderGeneralToggleSettingRow(
+				"DreamPotatoIntegratedMode",
+				ICON_FA_PLUG,
+				T("DreamPotato Integrated Mode"),
+				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
+				static_cast<bool>(config::DreamPotatoIntegratedMode),
+				[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
+				T("DreamPotato Integrated Mode\n"
+					"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
+					"Applies to all slots which use a DreamPotato device.\n"
+					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
+				game_started);
+
+			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
 			{
-				RenderGeneralToggleSettingRow(
-					"UsePhysicalVmuMemory",
-					ICON_FA_MEMORY,
-					T("Use External VMU Storage"),
-					T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-						"VMUs may appear to reconnect after loading state."),
-					static_cast<bool>(config::UsePhysicalVmuMemory),
-					[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-					T("Use External VMU Storage\n"
-					"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-						"VMUs may appear to reconnect after loading state."),
-					game_started);
+				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+				ImGui::TextColored(warningColor, "(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths.");
 			}
 #endif
 		}

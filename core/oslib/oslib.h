@@ -1,6 +1,10 @@
 #pragma once
 #include "types.h"
+#include <string>
 #include <vector>
+#if defined(DREAMPOTATO_INTEGRATED_MODE) && !defined(_WIN32)
+#include <unistd.h>
+#endif
 #if defined(__SWITCH__)
 #include <malloc.h>
 #endif
@@ -16,6 +20,35 @@ void os_UninstallFaultHandler();
 void os_RunInstance(int argc, const char *argv[]);
 void os_SetThreadName(const char *name);
 void os_notify(const char *msg, int durationMs = 2000, const char *details = nullptr);
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+//! Get the containing directory of the current '.app'/'AppImage' bundle, if applicable, or of the current executable
+std::string os_GetAppContainingDir();
+
+// Cross-platform process handle.
+class os_Process
+{
+public:
+	bool isValid() const {
+#ifdef _WIN32
+		return handle != nullptr;
+#else
+		return pid > 0;
+#endif
+	}
+
+	static os_Process start(const std::string& executable, const std::vector<std::string>& args = {});
+	bool isRunning();
+	void terminate();
+
+private:
+#ifdef _WIN32
+	void *handle = nullptr; // HANDLE
+#else
+	pid_t pid = -1;
+#endif
+};
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 // raii thread name setter
 class ThreadName
@@ -48,6 +81,9 @@ u32 static inline bitscanrev(u32 v)
 namespace hostfs
 {
 	std::string getVmuPath(const std::string& port, bool save);
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	std::string getDreamPotatoPath();
+#endif
 
 	std::string getArcadeFlashPath();
 
