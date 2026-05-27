@@ -41,8 +41,7 @@ void dc_savestate(int index = 0, const u8 *pngData = nullptr, u32 pngSize = 0);
 void dc_loadstate(int index = 0);
 time_t dc_getStateCreationDate(int index);
 void dc_getStateScreenshot(int index, std::vector<u8>& pngData);
-int dc_findSaveSlotForExit();
-int dc_findMostRecentSaveSlot();
+int dc_getAutoSaveSlot();
 void dc_skipAutoSaveOnNextUnload();
 bool dc_savestateAllowed();
 

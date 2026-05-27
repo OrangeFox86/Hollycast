@@ -802,14 +802,19 @@ static void getScreenshot(std::vector<u8>& data, int width = 0)
 	stbi_write_png_to_func(appendVectorData, &data, width, height, 3, &rawData[0], 0);
 }
 
-static void savestate()
+static void savestate(int slot)
 {
 	// Potential optimization: move screenshot/state compression/write off the UI thread.
 	std::vector<u8> pngData;
 	getScreenshot(pngData, 640);
-	dc_savestate(config::SavestateSlot, pngData.empty() ? nullptr : &pngData[0], pngData.size());
+	dc_savestate(slot, pngData.empty() ? nullptr : &pngData[0], pngData.size());
 	ImguiStateTexture savestatePic;
 	savestatePic.invalidate();
+}
+
+static void savestate()
+{
+	savestate(config::SavestateSlot);
 }
 
 static void render_exit_save_dialog()
@@ -872,7 +877,7 @@ static void render_exit_save_dialog()
 		{
 			if (canSave)
 			{
-				savestate(); // Save current state
+				savestate(dc_getAutoSaveSlot());
 				dc_skipAutoSaveOnNextUnload();
 				ImGui::CloseCurrentPopup();
 				showExitSaveDialog = false;
@@ -952,7 +957,7 @@ static void render_load_state_on_boot_dialog()
 	{
 		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
 
-		ImGui::Text("Would you like to load your most recent save state?");
+		ImGui::Text("Would you like to load your auto save state?");
 		ImGui::NewLine();
 
 		ImTextureID thumbnail = loadSaveStateThumbnail(loadStateOnBootSlot);
@@ -984,9 +989,9 @@ static void render_load_state_on_boot_dialog()
 		{
 			ImGui::CloseCurrentPopup();
 			showLoadStateOnBootDialog = false;
-			config::SavestateSlot = loadStateOnBootSlot;
+			int slot = loadStateOnBootSlot;
 			loadStateOnBootSlot = -1;
-			gui_loadState();
+			gui_loadState(slot);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Start Fresh", ImVec2(buttonWidth, 0)))
@@ -1731,8 +1736,8 @@ static void gui_display_loadscreen()
 					if (config::AutoLoadState && !showLoadStateOnBootDialog && !settings.content.path.empty()
 							&& !config::GGPOEnable && !settings.naomi.multiboard && !NaomiNetworkSupported())
 					{
-						int slot = dc_findMostRecentSaveSlot();
-						if (slot >= 0)
+						int slot = dc_getAutoSaveSlot();
+						if (dc_getStateCreationDate(slot) > 0)
 						{
 							loadStateOnBootSlot = slot;
 							showLoadStateOnBootDialog = true;
@@ -2072,7 +2077,7 @@ void gui_error(const std::string& what) {
 	error_msg = what;
 }
 
-void gui_loadState()
+void gui_loadState(int slot)
 {
 	const LockGuard lock(guiMutex);
 
@@ -2086,7 +2091,7 @@ void gui_loadState()
 			}
 
 			emu.stop();
-            dc_loadstate(config::SavestateSlot);
+            dc_loadstate(slot);
             emu.start();
 		} catch (const FlycastException& e) {
 			gui_stop_game(e.what());
@@ -2101,7 +2106,12 @@ void gui_loadState()
 	}
 }
 
-void gui_saveState(bool stopRestart)
+void gui_loadState()
+{
+	gui_loadState(config::SavestateSlot);
+}
+
+void gui_saveState(int slot, bool stopRestart)
 {
 	const LockGuard lock(guiMutex);
 	if ((gui_state == GuiState::Closed || !stopRestart) && dc_savestateAllowed())
@@ -2109,7 +2119,7 @@ void gui_saveState(bool stopRestart)
 		try {
 			if (stopRestart)
 				emu.stop();
-			savestate();
+			savestate(slot);
 			if (stopRestart)
 				emu.start();
 		} catch (const FlycastException& e) {
@@ -2119,6 +2129,11 @@ void gui_saveState(bool stopRestart)
 				WARN_LOG(COMMON, "gui_saveState: %s", e.what());
 		}
 	}
+}
+
+void gui_saveState(bool stopRestart)
+{
+	gui_saveState(config::SavestateSlot, stopRestart);
 }
 
 void gui_cycleSaveStateSlot(int step)

@@ -756,8 +756,7 @@ void Emulator::unloadGame()
 		if (state == Loaded && config::AutoSaveState && !skipAutoSaveThisUnload && !settings.content.path.empty()
 				&& !settings.naomi.multiboard && !config::GGPOEnable && !NaomiNetworkSupported())
 		{
-			config::SavestateSlot = dc_findSaveSlotForExit();
-			gui_saveState(false);
+			gui_saveState(dc_getAutoSaveSlot(), false);
 		}
 #endif
 		try {
