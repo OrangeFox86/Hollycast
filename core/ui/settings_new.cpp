@@ -5886,8 +5886,7 @@ void renderAboutTab()
 			"Naomi, Naomi 2, and Atomiswave arcade systems."
 		);
 		ImGui::TextWrapped(
-			"Based on Flycast, providing accurate emulation with enhancements "
-			"for modern systems."
+			"Hollycast provides accurate emulation with enhancements for modern systems."
 		);
 		ImGui::Spacing();
 	}
@@ -5900,13 +5899,13 @@ void renderAboutTab()
 		ImGui::Text("Website");
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
-		ImGui::TextDisabled("https://flycast-emu.com/");
+		ImGui::TextDisabled("https://github.com/OrangeFox86/HollyCast#readme");
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
 		ImGui::Text("Source Code");
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
-		ImGui::TextDisabled("https://github.com/flycast-emu/flycast");
+		ImGui::TextDisabled("https://github.com/OrangeFox86/HollyCast");
 		ImGui::Spacing();
 	}
 
@@ -5914,10 +5913,10 @@ void renderAboutTab()
 	if (ImGui::CollapsingHeader(ICON_FA_FILE_CONTRACT " License##Section", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::TextWrapped(
-			"Copyright (C) 2019-2025 flyinghead and contributors"
+			"Portions Copyright 2026 The Hollycast Authors"
 		);
 		ImGui::TextWrapped(
-			"Hollycast/Flycast is free software; you can redistribute it and/or modify "
+			"Hollycast is free software; you can redistribute it and/or modify "
 			"it under the terms of the GNU General Public License as published by "
 			"the Free Software Foundation; either version 2 of the License, or "
 			"(at your option) any later version."
@@ -5930,11 +5929,10 @@ void renderAboutTab()
 	{
 		ImGui::TextWrapped(
 			"This emulator is based on the work of many talented developers "
-			"who have contributed to the Flycast project and its dependencies."
+			"who have contributed to the project and its dependencies."
 		);
 		ImGui::TextWrapped(
-			"Special thanks to the original Flycast team and all contributors "
-			"who make this project possible."
+			"Special thanks to all contributors who make this project possible."
 		);
 	}
 
