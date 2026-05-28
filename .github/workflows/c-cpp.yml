@@ -1,5 +1,3 @@
-# Portions Copyright 2026 The Hollycast Authors
-
 name: Linux, macOS, Windows
 
 on:
@@ -150,7 +148,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: hollycast-${{ matrix.config.name }}
+          name: flycast-${{ matrix.config.name }}
           path: |
             artifact/bin
             artifact/lib/libretro

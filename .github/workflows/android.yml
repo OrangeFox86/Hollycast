@@ -1,5 +1,3 @@
-# Portions Copyright 2026 The Hollycast Authors
-
 name: Android
 
 on:
@@ -53,15 +51,10 @@ jobs:
           SENTRY_UPLOAD_URL: ${{ secrets.SENTRY_UPLOAD_URL }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
-      - name: Rename release artifacts
-        run: |
-          mv shell/android-studio/flycast/build/outputs/apk/release/*.apk shell/android-studio/flycast/build/outputs/apk/release/Hollycast-release.apk
-          mv shell/android-studio/flycast/build/outputs/bundle/release/*.aab shell/android-studio/flycast/build/outputs/bundle/release/Hollycast-release.aab
-
       - uses: actions/upload-artifact@v6
         with:
-          name: Hollycast-release.apk
-          path: shell/android-studio/flycast/build/outputs/apk/release/Hollycast-release.apk
+          name: flycast-release.apk
+          path: shell/android-studio/flycast/build/outputs/apk/release/flycast-release.apk
 
       - name: Build dump_syms
         working-directory: core/deps/breakpad

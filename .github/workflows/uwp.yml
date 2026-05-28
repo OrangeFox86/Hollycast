@@ -1,5 +1,3 @@
-# Portions Copyright 2026 The Hollycast Authors
-
 name: Xbox, UWP
 
 on:
@@ -39,15 +37,15 @@ jobs:
           ren *.msix flycast.msix
           makeappx.exe unpack /p .\flycast.msix /d tmp
           copy ..\..\..\Release\*.dll tmp
-          makeappx pack /d tmp /p ..\..\..\artifact\Hollycast.appx
+          makeappx pack /d tmp /p ..\..\..\artifact\flycast.appx
 
       - name: Sign app
-        run: signtool sign /f shell\uwp\sign_cert.pfx /p '${{ secrets.SIGN_CERT_PWD }}' /v /fd SHA256 build\artifact\Hollycast.appx
+        run: signtool sign /f shell\uwp\sign_cert.pfx /p '${{ secrets.SIGN_CERT_PWD }}' /v /fd SHA256 build\artifact\flycast.appx
         if: github.repository == 'flyinghead/flycast' && github.event_name == 'push'
 
       - uses: actions/upload-artifact@v6
         with:
-          name: hollycast-uwp-${{ matrix.arch }}
+          name: flycast-uwp-${{ matrix.arch }}
           path: build/artifact
 
       - name: Setup Rclone
