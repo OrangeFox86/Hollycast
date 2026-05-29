@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -751,7 +752,8 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)));
 
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
-	if (ImGui::BeginPopupModal(T("Gamepad Settings"), nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_DragScrolling))
+	const std::string gamepadSettingsTitle = std::string(T("Gamepad Settings")) + "###Gamepad Settings";
+	if (ImGui::BeginPopupModal(gamepadSettingsTitle.c_str(), nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_DragScrolling))
 	{
 		if (ImGui::Button(T("Done"), ScaledVec2(100, 30)))
 		{
@@ -878,7 +880,7 @@ static bool g_arcade_button_mode;
 static u32 g_gamepad_port_for_mapping;
 static std::unordered_set<DreamcastKey> g_buttonState;
 
-static const char* const kMaplePorts[] = { "None", "A", "B", "C", "D", "All" };
+static const char* const kMaplePorts[] = { Tnop("None"), "A", "B", "C", "D", Tnop("All") };
 
 struct MappingEntry
 {
@@ -1008,19 +1010,19 @@ static MappingEntry arcadeButtons[std::size(arcadeButtons_src)];
 // Device type arrays for dropdowns
 static constexpr const char *maple_device_types_src[] =
 {
-	"None",
-	"Sega Controller",
-	"Light Gun",
-	"Keyboard",
-	"Mouse",
-	"Twin Stick",
-	"Arcade/Ascii Stick",
-	"Maracas Controller",
-	"Fishing Controller",
-	"Pop'n Music controller",
-	"Racing Controller",
-	"Densha de Go! Controller",
-	"Panther DC/Full Controller",
+	Tnop("None"),
+	Tnop("Sega Controller"),
+	Tnop("Light Gun"),
+	Tnop("Keyboard"),
+	Tnop("Mouse"),
+	Tnop("Twin Stick"),
+	Tnop("Arcade/Ascii Stick"),
+	Tnop("Maracas Controller"),
+	Tnop("Fishing Controller"),
+	Tnop("Pop'n Music controller"),
+	Tnop("Racing Controller"),
+	Tnop("Densha de Go! Controller"),
+	Tnop("Panther DC/Full Controller"),
 };
 static const char *maple_device_types[std::size(maple_device_types_src)];
 
@@ -1029,12 +1031,12 @@ static constexpr int MDT_DreamLink = 101;
 
 static constexpr const char *maple_expansion_device_types_src[] =
 {
-	"None",
-	"Sega VMU",
-	"Vibration Pack",
-	"Microphone",
-	"DreamPotato",
-	"DreamLink", // not shown unless a DreamLink controller is present
+	Tnop("None"),
+	Tnop("Sega VMU"),
+	Tnop("Vibration Pack"),
+	Tnop("Microphone"),
+	Tnop("DreamPotato"),
+	Tnop("DreamLink"), // not shown unless a DreamLink controller is present
 };
 static const char *maple_expansion_device_types[std::size(maple_expansion_device_types_src)];
 
@@ -1152,7 +1154,8 @@ static void detect_input_popup(const MappingEntry* mapping)
 	ImVec2 padding = ScaledVec2(20, 20);
 	ImguiStyleVar _(ImGuiStyleVar_WindowPadding, padding);
 	ImguiStyleVar _1(ImGuiStyleVar_ItemSpacing, padding);
-	if (ImGui::BeginPopupModal(T("Map Control"), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+	const std::string mapControlTitle = std::string(T("Map Control")) + "###Map Control";
+	if (ImGui::BeginPopupModal(mapControlTitle.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 	{
 		ImGui::Text(T("Waiting for control '%s'..."), mapping->name);
 		u64 now = getTimeMs();
@@ -1333,7 +1336,8 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 {
 	fullScreenWindow(true);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
-	if (!ImGui::BeginPopupModal(T("Controller Mapping"), nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+	const std::string controllerMappingTitle = std::string(T("Controller Mapping")) + "###Controller Mapping";
+	if (!ImGui::BeginPopupModal(controllerMappingTitle.c_str(), nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
 		return;
 
 	const ImGuiStyle& style = ImGui::GetStyle();
@@ -1372,12 +1376,12 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 			ImVec2(ImGui::GetStyle().FramePadding.x, (uiScaled(30) - ImGui::GetFontSize()) / 2));
 		portWidth = ImGui::CalcTextSize("AA").x + ImGui::GetStyle().ItemSpacing.x * 2.0f + ImGui::GetFontSize();
 		ImGui::SetNextItemWidth(portWidth);
-		if (ImGui::BeginCombo(T("Port"), kMaplePorts[g_gamepad_port_for_mapping + 1]))
+		if (ImGui::BeginCombo(T("Port"), T(kMaplePorts[g_gamepad_port_for_mapping + 1])))
 		{
 			for (u32 j = 0; j < MAPLE_PORTS; j++)
 			{
 				bool is_selected = g_gamepad_port_for_mapping == j;
-				if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
+				if (ImGui::Selectable(T(kMaplePorts[j + 1]), &is_selected))
 					g_gamepad_port_for_mapping = j;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -1423,11 +1427,12 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 	}
 
 	if (ImGui::Button(T("Reset..."), ScaledVec2(100, 30)))
-		ImGui::OpenPopup(T("Confirm Reset"));
+		ImGui::OpenPopup(Tnop("Confirm Reset"));
 
 	{
 		ImguiStyleVar windowPadding(ImGuiStyleVar_WindowPadding, ScaledVec2(20, 20));
-		if (ImGui::BeginPopupModal(T("Confirm Reset"), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+		const std::string confirmResetTitle = std::string(T("Confirm Reset")) + "###Confirm Reset";
+		if (ImGui::BeginPopupModal(confirmResetTitle.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 		{
 			ImGui::Text("%s", T("Are you sure you want to reset the mappings to default?"));
 			static bool hitbox = false;
@@ -1497,7 +1502,7 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 	}
 
 	char key_id[32];
-	ImGui::BeginChild(ImGui::GetID(T("buttons")), ImVec2(0, 0),
+	ImGui::BeginChild(ImGui::GetID("buttons"), ImVec2(0, 0),
 		ImGuiChildFlags_FrameStyle | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 	for (; systemMapping->name != nullptr; systemMapping++)
 	{
@@ -1553,7 +1558,7 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 		if (ImGui::Button(T("Map")))
 		{
 			g_map_start_time = getTimeMs() + 300;
-			ImGui::OpenPopup(T("Map Control"));
+			ImGui::OpenPopup(Tnop("Map Control"));
 			g_mapped_codes.clear();
 			g_buttonState.erase(systemMapping->key);
 
@@ -1974,8 +1979,81 @@ void renderGeneralTab()
 	// ========================================
 	if (RenderCollapsingHeader("Language&RegionSection", ICON_FA_GLOBE, T("Language & Region"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
+		{
+			struct UILanguageOption
+			{
+				const char* locale;
+				const char* label;
+			};
+			const UILanguageOption uiLanguageOptions[] = {
+				{ "", T("System Default") },
+				{ "en", T("English") },
+				{ "de", T("German") },
+				{ "es", T("Spanish") },
+				{ "fr", T("French") },
+				{ "hu", T("Hungarian") },
+				{ "it", T("Italian") },
+				{ "ja", T("Japanese") },
+				{ "ko", T("Korean") },
+				{ "ms", T("Malay") },
+				{ "pl", T("Polish") },
+				{ "pt", T("Portuguese") },
+				{ "pt_BR", T("Portuguese (Brazil)") },
+				{ "sv", T("Swedish") },
+				{ "tr", T("Turkish") },
+				{ "uk", T("Ukrainian") },
+				{ "zh_CN", T("Chinese (Simplified)") },
+				{ "zh_HK", T("Chinese (Hong Kong)") },
+				{ "zh_TW", T("Chinese (Traditional)") },
+			};
+			const char* uiLanguageLabels[IM_ARRAYSIZE(uiLanguageOptions)];
+			for (int i = 0; i < IM_ARRAYSIZE(uiLanguageOptions); i++)
+				uiLanguageLabels[i] = uiLanguageOptions[i].label;
+
+			int uiLanguageSelection = 0;
+			const std::string currentUILanguage = config::UILanguage.get();
+			for (int i = 0; i < IM_ARRAYSIZE(uiLanguageOptions); i++)
+			{
+				if (currentUILanguage == uiLanguageOptions[i].locale)
+				{
+					uiLanguageSelection = i;
+					break;
+				}
+			}
+
+			SettingsUI::PopupConfig uiLanguageCfg {};
+			uiLanguageCfg.type = SettingsUI::PopupType::Options;
+			uiLanguageCfg.options.label = T("UI Language");
+			uiLanguageCfg.options.icon = ICON_FA_LANGUAGE;
+			uiLanguageCfg.options.popupID = Tnop("UILanguagePopup");
+			uiLanguageCfg.options.options = uiLanguageLabels;
+			uiLanguageCfg.options.optionCount = IM_ARRAYSIZE(uiLanguageLabels);
+			uiLanguageCfg.options.currentValue = &uiLanguageSelection;
+			uiLanguageCfg.options.valueWidth = 220.0f;
+			uiLanguageCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= IM_ARRAYSIZE(uiLanguageOptions))
+					return true;
+				config::UILanguage = uiLanguageOptions[selectedIndex].locale;
+				config::UILanguage.save();
+				i18n::reloadLanguage();
+				mainui_reinit();
+				return true;
+			};
+			RenderGeneralPopupSettingRow(
+				"UILanguageSetting",
+				T("Language used by Hollycast menus and settings."),
+				uiLanguageCfg,
+				T(
+					"UI Language\n"
+					"Changes the language used by Hollycast menus, settings, notifications, and other app UI.\n"
+					"System Default follows your device language when a translation is available.\n\n"
+					"Game text is controlled separately by Dreamcast Language below."
+				)
+			);
+		}
+
 		// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -> IT, 6 -> default
-		static const char* languages[] = { "日本語", "English", "German", "French", "Spanish", "Italian", "Default" };
+		const char* languages[] = { T("日本語"), T("English"), T("German"), T("French"), T("Spanish"), T("Italian"), T("Default") };
 		SettingsUI::PopupConfig languageCfg {};
 		languageCfg.type = SettingsUI::PopupType::Options;
 		languageCfg.options.label = T("Dreamcast Language");
@@ -2001,7 +2079,7 @@ void renderGeneralTab()
 	}
 
 	{
-		static const char* broadcast[] = { "NTSC", "PAL", "PAL/M", "PAL/N", "Default" };
+		const char* broadcast[] = { T("NTSC"), T("PAL"), T("PAL/M"), T("PAL/N"), T("Default") };
 		SettingsUI::PopupConfig broadcastCfg {};
 		broadcastCfg.type = SettingsUI::PopupType::Options;
 		broadcastCfg.options.label = T("Broadcast");
@@ -2015,17 +2093,19 @@ void renderGeneralTab()
 		broadcastCfg.options.valueWidth = 220.0f;
 			RenderGeneralPopupSettingRow(
 				"BroadcastSetting",
-				"TV broadcast standard for non-VGA output modes.",
+				T("TV broadcast standard for non-VGA output modes."),
 				broadcastCfg,
-				"Broadcast\n"
-				"Controls the TV broadcast standard used for non-VGA video modes.\n"
-				"NTSC is typically 60 Hz; PAL is typically 50 Hz.\n\n"
-				"If you see timing issues or a game expects a specific region video mode, try changing this.");
+				T(
+					"Broadcast\n"
+					"Controls the TV broadcast standard used for non-VGA video modes.\n"
+					"NTSC is typically 60 Hz; PAL is typically 50 Hz.\n\n"
+					"If you see timing issues or a game expects a specific region video mode, try changing this."
+				));
 	}
 
 	{
-		static const char* consoleRegion[] = { "Japan", "USA", "Europe", "Default" };
-		static const char* arcadeRegion[] = { "Japan", "USA", "Export", "Korea" };
+		const char* consoleRegion[] = { T("Japan"), T("USA"), T("Europe"), T("Default") };
+		const char* arcadeRegion[] = { T("Japan"), T("USA"), T("Export"), T("Korea") };
 		const char* const* region = settings.platform.isArcade() ? arcadeRegion : consoleRegion;
 
 		SettingsUI::PopupConfig regionCfg {};
@@ -2051,7 +2131,7 @@ void renderGeneralTab()
 	}
 
 	{
-		static const char* cable[] = { T("VGA"), T("RGB Component"), T("TV Composite") };
+		const char* cable[] = { T("VGA"), T("RGB Component"), T("TV Composite") };
 		const bool disabled = config::Cable.isReadOnly() || settings.platform.isArcade();
 
 		SettingsUI::PopupConfig cableCfg {};
@@ -2288,7 +2368,7 @@ void renderGeneralTab()
 		SettingIcon(ICON_FA_ARROWS_ROTATE, ImVec2(uiScaled(20), uiScaled(20)));
 		ImGui::SameLine(0, uiScaled(8));
 		ImGui::PushFont(largeFont);
-		ImGui::TextUnformatted("Rescan Content");
+		ImGui::TextUnformatted(T("Rescan Content"));
 		ImGui::PopFont();
 
 		const float refreshBtnWidthPx = 26.0f;
@@ -2320,7 +2400,7 @@ void renderGeneralTab()
 	// ========================================
 	if (RenderCollapsingHeader("UISettingsSection", ICON_FA_GEAR, T("UI Settings"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		static const char* themes[] = { T("Dark"), T("Light"), T("Dreamcast"), T("High Contrast"), T("Nintendo"), T("Aqua Chill") };
+		const char* themes[] = { T("Dark"), T("Light"), T("Dreamcast"), T("High Contrast"), T("Nintendo"), T("Aqua Chill") };
 		SettingsUI::PopupConfig themeCfg {};
 		themeCfg.type = SettingsUI::PopupType::Options;
 		themeCfg.options.label = T("UI Theme");
@@ -2357,13 +2437,13 @@ void renderGeneralTab()
 		uiScalingCfg.slider.label = T("UI Scaling");
 		uiScalingCfg.slider.icon = ICON_FA_RULER_HORIZONTAL;
 		uiScalingCfg.slider.popupID = Tnop("UIScalingPopup");
-		uiScalingCfg.slider.description = "Adjust UI element sizes";
-			uiScalingCfg.slider.currentValue = &config::UIScaling.get();
-			uiScalingCfg.slider.minValue = 50;
-			uiScalingCfg.slider.maxValue = 200;
-			uiScalingCfg.slider.format = "%d%%";
-			uiScalingCfg.slider.valueWidth = 220.0f;
-			uiScalingCfg.slider.showApplyFlag = &showApplyButtonForUIScaling;
+		uiScalingCfg.slider.description = T("Adjust UI element sizes");
+		uiScalingCfg.slider.currentValue = &config::UIScaling.get();
+		uiScalingCfg.slider.minValue = 50;
+		uiScalingCfg.slider.maxValue = 200;
+		uiScalingCfg.slider.format = "%d%%";
+		uiScalingCfg.slider.valueWidth = 220.0f;
+		uiScalingCfg.slider.showApplyFlag = &showApplyButtonForUIScaling;
 		uiScalingCfg.slider.onApply = [&]() {
 			mainui_reinit();
 			uiUserScaleUpdated = false;
@@ -2427,7 +2507,7 @@ void renderGeneralTab()
 			g_scrollToBoxArtSection = false;
 		}
 
-		static const char* boxartSources[] = { T("Original Box Art"), T("Physical Media"), T("Custom Boxart") };
+		const char* boxartSources[] = { T("Original Box Art"), T("Physical Media"), T("Custom Boxart") };
 		SettingsUI::PopupConfig boxartSourceCfg {};
 		boxartSourceCfg.type = SettingsUI::PopupType::Options;
 		boxartSourceCfg.options.label = T("Box Art Source");
@@ -3250,8 +3330,8 @@ void renderVideoTab()
 					0.5f, 0.75f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 2.25f, 2.5f, 2.75f,
 					3.f, 3.5f, 4.f, 4.5f, 5.f, 5.5f, 6.f, 7.f, 8.f, 9.f
 				};
-				constexpr std::array<const char*, 20> scalingNames {
-					"Half", "x0.75", "Native", "x1.25", "x1.5", "x1.75", "x2", "x2.25", "x2.5", "x2.75",
+				const std::array<const char*, 20> scalingNames {
+					T("Half"), "x0.75", T("Native"), "x1.25", "x1.5", "x1.75", "x2", "x2.25", "x2.5", "x2.75",
 					"x3", "x3.5", "x4", "x4.5", "x5", "x5.5", "x6", "x7", "x8", "x9"
 				};
 
@@ -3657,7 +3737,7 @@ void renderVideoTab()
 					frameSkipCfg.label = T("Frame Skipping");
 					frameSkipCfg.icon = ICON_FA_FORWARD;
 					frameSkipCfg.popupID = Tnop("FrameSkipPopup");
-					frameSkipCfg.description = "Set how many frames to skip between rendered frames.";
+					frameSkipCfg.description = T("Set how many frames to skip between rendered frames.");
 					frameSkipCfg.currentValue = &config::SkipFrame.get();
 					frameSkipCfg.minValue = 0;
 					frameSkipCfg.maxValue = 6;
@@ -3787,7 +3867,7 @@ void renderVideoTab()
 				// Anisotropic Filtering
 				{
 					const std::array<int, 5> anisoValues { 1, 2, 4, 8, 16 };
-					const std::array<const char*, 5> anisoLabels { "Disabled", "2x", "4x", "8x", "16x" };
+					const std::array<const char*, 5> anisoLabels { T("Disabled"), "2x", "4x", "8x", "16x" };
 					int anisoSelection = 0;
 					for (size_t i = 0; i < anisoValues.size(); i++)
 					{
@@ -3829,9 +3909,9 @@ void renderVideoTab()
 			if (RenderCollapsingHeader("TextureFilteringSection", ICON_FA_FILTER, T("Texture Filtering"), ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				const std::array<const char*, 3> textureFilterLabels {
-					"Default",
-					"Force Nearest-Neighbor",
-					"Force Linear"
+					T("Default"),
+					T("Force Nearest-Neighbor"),
+					T("Force Linear")
 				};
 				int textureFilteringSelection = config::TextureFiltering.get();
 				if (textureFilteringSelection < 0 || textureFilteringSelection >= static_cast<int>(textureFilterLabels.size()))
@@ -4456,13 +4536,13 @@ void renderControlsTab()
 				ImGui::SetNextItemWidth(portComboWidth);
 
 				// Port selection combo (None, A, B, C, D, All)
-				const char* current_port = kMaplePorts[gamepad->maple_port() + 1];
+				const char* current_port = T(kMaplePorts[gamepad->maple_port() + 1]);
 				if (ImGui::BeginCombo(port_name, current_port))
 				{
 					for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
 					{
 						bool is_selected = gamepad->maple_port() == j;
-						if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
+						if (ImGui::Selectable(T(kMaplePorts[j + 1]), &is_selected))
 						{
 							gamepad->set_maple_port(j);
 							g_mapleDevicesChangedInSettings = true;
@@ -4483,7 +4563,7 @@ void renderControlsTab()
 					g_currentGamepadForMapping = gamepad;
 					g_currentGamepadForMapping->listenButtons(buttonListener);
 					g_gamepad_port_for_mapping = 0;
-					ImGui::OpenPopup(T("Controller Mapping"));
+					ImGui::OpenPopup(Tnop("Controller Mapping"));
 				}
 
 				// Settings button for rumble/deadzone/saturation
@@ -4493,7 +4573,7 @@ void renderControlsTab()
 					if (ImGui::Button(T("Settings")))
 					{
 						g_currentGamepadForSettings = gamepad;
-						ImGui::OpenPopup(T("Gamepad Settings"));
+						ImGui::OpenPopup(Tnop("Gamepad Settings"));
 					}
 				}
 
@@ -4501,7 +4581,7 @@ void renderControlsTab()
 				if (g_currentGamepadForSettings == gamepad)
 				{
 					gamepadSettingsPopup(gamepad);
-					if (!ImGui::IsPopupOpen(T("Gamepad Settings")))
+					if (!ImGui::IsPopupOpen(Tnop("Gamepad Settings")))
 						g_currentGamepadForSettings.reset();
 				}
 
@@ -4509,7 +4589,7 @@ void renderControlsTab()
 				if (g_currentGamepadForMapping == gamepad)
 				{
 					controller_mapping_popup(gamepad);
-					if (!ImGui::IsPopupOpen(T("Controller Mapping")))
+					if (!ImGui::IsPopupOpen(Tnop("Controller Mapping")))
 						ResetControllerMappingRuntime();
 				}
 			}
@@ -4538,7 +4618,7 @@ void renderControlsTab()
 			sensitivityConfig.maxValue = 500;
 			sensitivityConfig.defaultValue = 100;
 			sensitivityConfig.format = "%d";
-			sensitivityConfig.applyButtonText = "Apply";
+			sensitivityConfig.applyButtonText = T("Apply");
 			sensitivityConfig.onApply = []() {
 				config::MouseSensitivity.set(sensitivityTemp);
 			};
@@ -4885,7 +4965,7 @@ void renderControlsTab()
 			crosshairConfig.maxValue = 100;
 			crosshairConfig.defaultValue = 50;
 			crosshairConfig.format = "%d";
-			crosshairConfig.applyButtonText = "Apply";
+			crosshairConfig.applyButtonText = T("Apply");
 			crosshairConfig.onApply = []() {
 				config::CrosshairSize.set(crosshairSizeTemp);
 			};
@@ -4962,7 +5042,7 @@ void renderControlsTab()
 			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
 			{
 				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
-				ImGui::TextColored(warningColor, "(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths.");
+				ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
 			}
 #endif
 		}
@@ -4990,7 +5070,7 @@ void renderNetworkTab()
 			else
 				netType = 0;
 
-			static const char* const networkTypeOptions[] = {
+			const char* const networkTypeOptions[] = {
 				T("Disabled"),
 				T("GGPO"),
 				T("Naomi"),
@@ -5014,7 +5094,7 @@ void renderNetworkTab()
 			};
 
 			RenderGeneralPopupSettingRow(
-				T("NetworkTypeSetting"),
+				"NetworkTypeSetting",
 				T("Choose which network feature is active."),
 				networkTypeCfg,
 				T(
@@ -5107,7 +5187,7 @@ void renderNetworkTab()
 					if (RenderCollapsingHeader("AnalogAxesSection", ICON_FA_GAMEPAD, T("Analog Axes"), ImGuiTreeNodeFlags_DefaultOpen))
 					{
 						{
-							static const char* axesOptions[] = { T("Disabled"), T("Horizontal"), T("Full") };
+							const char* axesOptions[] = { T("Disabled"), T("Horizontal"), T("Full") };
 							int axesSelection = config::GGPOAnalogAxes.get();
 							if (axesSelection < 0 || axesSelection > 2)
 								axesSelection = 0;
@@ -5273,7 +5353,7 @@ void renderNetworkTab()
 						SettingIcon(ICON_FA_KEY, ImVec2(uiScaled(20), uiScaled(20)));
 						ImGui::SameLine(0, uiScaled(8));
 						ImGui::PushFont(largeFont);
-						ImGui::TextUnformatted("Local Port");
+						ImGui::TextUnformatted(T("Local Port"));
 						ImGui::PopFont();
 
 						const float inputWidth = uiScaled(220.0f);
@@ -5299,18 +5379,18 @@ void renderNetworkTab()
 		else if (config::BattleCableEnable)
 		{
 #ifdef USE_ICE
-			if (ImGui::BeginTabBar(T("battleMode"), ImGuiTabBarFlags_NoTooltip))
+			if (ImGui::BeginTabBar("battleMode", ImGuiTabBarFlags_NoTooltip))
 			{
 				// Match Code Tab
-				char matchCodeTabLabel[128];
-				snprintf(matchCodeTabLabel, sizeof(matchCodeTabLabel), T("%s Match Code"), ICON_FA_TAG);
-				if (ImGui::BeginTabItem(matchCodeTabLabel))
+				const std::string matchCodeTabLabel = std::string(ICON_FA_TAG " ") + T("Match Code") + "###Match Code";
+				if (ImGui::BeginTabItem(matchCodeTabLabel.c_str()))
 				{
 					ice::State state = ice::getState();
 					ImGuiInputTextFlags textFlags = state == ice::Offline ?
 						ImGuiInputTextFlags_CharsNoBlank : ImGuiInputTextFlags_ReadOnly;
 					static std::string matchCode;
-					InputText(T("Code"), &matchCode, textFlags);
+					const std::string matchCodeLabel = std::string(T("Code")) + "###Match Code";
+					InputText(matchCodeLabel.c_str(), &matchCode, textFlags);
 					ImGui::SameLine();
 					ShowFooterHelpMarker(T("Choose a unique word or number and share it with your opponent"));
 
@@ -5364,7 +5444,8 @@ void renderNetworkTab()
 				}
 
 				// Manual Tab
-				if (ImGui::BeginTabItem(T("Manual")))
+				const std::string manualTabLabel = std::string(T("Manual")) + "###Manual";
+				if (ImGui::BeginTabItem(manualTabLabel.c_str()))
 				{
 #endif
 					RenderGeneralTextInputSettingRow(
@@ -5572,7 +5653,7 @@ void renderAdvancedTab()
 #if FEAT_SHREC != DYNAREC_NONE
 		// CPU Mode
 		{
-			static const char* cpuModeLabels[] = { "Dynarec", "Interpreter" };
+			const char* cpuModeLabels[] = { T("Dynarec"), T("Interpreter") };
 			int cpuModeSelection = config::DynarecEnabled.get() ? 0 : 1;
 
 			SettingsUI::PopupConfig cpuModeCfg {};
@@ -5586,7 +5667,7 @@ void renderAdvancedTab()
 			cpuModeCfg.options.valueWidth = 220.0f;
 			cpuModeCfg.options.onOptionHighlight = [](int idx, const char*)
 			{
-				static const char* kHelp[] = {
+				const char* kHelp[] = {
 					T(
 						"CPU Mode: Dynarec\n"
 						"Recommended for almost everyone.\n"
@@ -5833,7 +5914,7 @@ void renderAdvancedTab()
 		LogManager *logManager = LogManager::GetInstance();
 
 		// Log Verbosity
-		static const char *levels[] = { T("Notice"), T("Error"), T("Warning"), T("Info"), T("Debug") };
+		const char *levels[] = { T("Notice"), T("Error"), T("Warning"), T("Info"), T("Debug") };
 		{
 			int logVerbositySelection = logManager->GetLogLevel() - 1;
 			if (logVerbositySelection < 0 || logVerbositySelection >= (int)std::size(levels))
@@ -5850,7 +5931,7 @@ void renderAdvancedTab()
 			logVerbosityCfg.options.valueWidth = 220.0f;
 			logVerbosityCfg.options.onOptionHighlight = [](int idx, const char*)
 			{
-				static const char* kHelp[] = {
+				const char* kHelp[] = {
 					T(
 						"Log Verbosity: Notice\n"
 						"Minimal information.\n"
@@ -5882,12 +5963,12 @@ void renderAdvancedTab()
 			};
 			logVerbosityCfg.options.onChange = [&](int selectedIndex) {
 				LogManager::GetInstance()->SetLogLevel((LogTypes::LOG_LEVELS)(selectedIndex + 1));
-				cfgSaveInt(T("log"), T("Verbosity"), selectedIndex + 1);
+				cfgSaveInt("log", "Verbosity", selectedIndex + 1);
 				return true;
 			};
 
 			RenderGeneralPopupSettingRow(
-				T("LogVerbositySetting"),
+				"LogVerbositySetting",
 				T("Control the verbosity of log output"),
 				logVerbosityCfg,
 				T(
@@ -5900,7 +5981,8 @@ void renderAdvancedTab()
 		}
 
 		// Log Categories (collapsible with 2-column toggle grid)
-		if (ImGui::CollapsingHeader("Log Categories"))
+		const std::string logCategoriesHeader = std::string(T("Log Categories")) + "###Log Categories";
+		if (ImGui::CollapsingHeader(logCategoriesHeader.c_str()))
 		{
 			ImGui::Indent();
 			int columnCount = 0;
@@ -5930,7 +6012,7 @@ void renderAdvancedTab()
 				{
 					enabled = !enabled;
 					logManager->SetEnable(type, enabled);
-					cfgSaveBool(T("log"), shortName.c_str(), enabled);
+					cfgSaveBool("log", shortName.c_str(), enabled);
 				}
 
 				ImGui::SameLine(0, 0);
@@ -6038,7 +6120,8 @@ void renderAdvancedTab()
 
 	// Experimental Features Section (with warnings)
 	ImGui::Spacing();
-	if (ImGui::CollapsingHeader("Experimental Features##Section", ImGuiTreeNodeFlags_DefaultOpen))
+	const std::string experimentalFeaturesHeader = std::string(T("Experimental Features")) + "##Section";
+	if (ImGui::CollapsingHeader(experimentalFeaturesHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		// Texture Dumping (with warning)
 		ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
@@ -6095,7 +6178,8 @@ void renderAdvancedTab()
 
 	// Developer Tools Section
 	ImGui::Spacing();
-	if (ImGui::CollapsingHeader("Developer Tools##Section", ImGuiTreeNodeFlags_DefaultOpen))
+	const std::string developerToolsHeader = std::string(T("Developer Tools")) + "##Section";
+	if (ImGui::CollapsingHeader(developerToolsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		const std::array<const char*, 3> monitorModeLabels {
 			T("Off"),
@@ -6123,7 +6207,7 @@ void renderAdvancedTab()
 		};
 
 		RenderGeneralPopupSettingRow(
-			T("ResourceMonitorMode"),
+			"ResourceMonitorMode",
 			T("Real-time performance overlay updated once per second. Minimal: CPU/GPU/FPS. Full: CPU/GPU/frame time/FPS/VRAM/RAM."),
 			monitorModeCfg,
 			T(
@@ -6137,7 +6221,8 @@ void renderAdvancedTab()
 #ifdef USE_LUA
 		// Lua Scripting
 		ImGui::Text("%s", T("Lua Scripting"));
-		InputText(T("Lua Filename"), &config::LuaFileName.get(), ImGuiInputTextFlags_CharsNoBlank);
+		const std::string luaFilenameLabel = std::string(T("Lua Filename")) + "###Lua Filename";
+		InputText(luaFilenameLabel.c_str(), &config::LuaFileName.get(), ImGuiInputTextFlags_CharsNoBlank);
 		ImGui::SameLine();
 		ShowFooterHelpMarker(T("Specify lua filename to use. Should be located in Flycast config folder. Defaults to flycast.lua when empty."));
 #endif
@@ -6271,15 +6356,15 @@ void renderAboutTab()
 
 	// Graphics Information
 	{
-		const char *graphicsTitle = ICON_FA_DISPLAY " Graphics##Section";
+		std::string graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics") + "##Section";
 		if (isOpenGL(config::RendererType))
-			graphicsTitle = ICON_FA_DISPLAY " Graphics - OpenGL##Section";
+			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - OpenGL") + "##Section";
 		else if (isVulkan(config::RendererType))
-			graphicsTitle = ICON_FA_DISPLAY " Graphics - Vulkan##Section";
+			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - Vulkan") + "##Section";
 		else if (isDirectX(config::RendererType))
-			graphicsTitle = ICON_FA_DISPLAY " Graphics - DirectX##Section";
+			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - DirectX") + "##Section";
 
-		if (ImGui::CollapsingHeader(graphicsTitle, ImGuiTreeNodeFlags_DefaultOpen))
+		if (ImGui::CollapsingHeader(graphicsTitle.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text(T("Driver: %s"), GraphicsContext::Instance()->getDriverName().c_str());
 			ImGui::Text(T("Version: %s"), GraphicsContext::Instance()->getDriverVersion().c_str());
@@ -6293,7 +6378,7 @@ void renderAboutTab()
 					std::string name, description, vendor, version;
 					if (getCustomGpuDriverInfo(name, description, vendor, version))
 					{
-						ImGui::Text("%s", "Custom Driver:");
+						ImGui::Text("%s", T("Custom Driver:"));
 						ImGui::Indent();
 						ImGui::Text("%s - %s", name.c_str(), description.c_str());
 						ImGui::Text("%s - %s", vendor.c_str(), version.c_str());
@@ -6307,7 +6392,8 @@ void renderAboutTab()
 	}
 
 	// Project Description
-	if (ImGui::CollapsingHeader("About##Section", ImGuiTreeNodeFlags_DefaultOpen))
+	const std::string aboutHeader = std::string(T("About")) + "##Section";
+	if (ImGui::CollapsingHeader(aboutHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::TextWrapped("%s", T(
 			"Hollycast is a multi-platform emulator for Sega Dreamcast, "
@@ -6380,7 +6466,8 @@ void renderSettingsNew()
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 
 	// Main settings window
-	if (ImGui::Begin(T("Settings"), nullptr, ImGuiWindowFlags_NoResize
+	const std::string settingsWindowTitle = std::string(T("Settings")) + "###Settings";
+	if (ImGui::Begin(settingsWindowTitle.c_str(), nullptr, ImGuiWindowFlags_NoResize
 			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
 			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 	{
