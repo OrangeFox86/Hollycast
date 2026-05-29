@@ -1,59 +1,42 @@
-# Flycast
+# Hollycast
 
-[![Android CI](https://github.com/flyinghead/flycast/actions/workflows/android.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/android.yml)
-[![C/C++ CI](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml)
-[![Nintendo Switch CI](https://github.com/flyinghead/flycast/actions/workflows/switch.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/switch.yml)
-[![Windows UWP CI](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml)
-[![BSD CI](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml)
+Hollycast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator, derived from [Flycast](https://github.com/flyinghead/flycast), the open-source Sega Dreamcast emulator.
 
-<img src="shell/linux/flycast.png" alt="flycast logo" width="150"/>
+Our mission is simple: follow upstream core emulation code while delivering a modern UI, more front-end features, and power-user controls.
 
-**Flycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**reicast**](https://github.com/skmp/reicast-emulator).
+## Mission & Philosophy
 
-Information about configuration and supported features can be found on [**TheArcadeStriker's flycast wiki**](https://github.com/TheArcadeStriker/flycast-wiki/wiki).
+Hollycast tracks the Flycast core while providing a home for features and experiments that fall outside the upstream scope. The main reasons for this fork are to:
 
-Join us on our [**Discord server**](https://discord.gg/X8YWP8w) for a chat. 
+- Unlock functionality: We integrate community-requested features and experimental changes that Flycast chooses not to merge.
+- Developer freedom: We provide a stable sandbox for passion features and modernizations that keep the emulator evolving.
 
-## Install
+## Technical Standards
 
-### Android ![android](https://flyinghead.github.io/flycast-builds/android.jpg)
-Install Flycast from [**Google Play**](https://play.google.com/store/apps/details?id=com.flycast.emulator).
-### Flatpak (Linux ![ubuntu logo](https://flyinghead.github.io/flycast-builds/ubuntu.png))
+We are committed to maintaining the high bar for speed and precision set by the Flycast core.
 
-1. [Set up Flatpak](https://www.flatpak.org/setup/).
+- Performance parity: We aim to match or exceed the performance benchmarks of the current Flycast core.
+- Verified accuracy: We use the core codebase's internal test suite alongside our own growing collection of tests to prevent regressions.
+- Core integrity: New features are built on a rock-solid foundation, ensuring that fun never comes at the cost of stability.
 
-2. Install Flycast from [Flathub](https://flathub.org/apps/details/org.flycast.Flycast):
+## Key Differences
 
-`flatpak install -y org.flycast.Flycast`
+- Modern interface: A reimagined UI designed for clarity.
+- Out-of-the-box optimization: Sane defaults allow new users to grab and go, while keeping advanced controls accessible for power users.
+- Quality of life: Frequent updates to aged components and new features requested specifically by the daily-player community.
+- Pro gamer ready: Already playing many titles better than original hardware, you can aim for a vanilla experience or enjoy the extra enhancements that help you get the most out of your sessions.
+- Continued development updates: As Hollycast grows, bringing in updates from Flycast will get harder. The goal is to carry forward the performance improvements, enhancements, and features that fit Hollycast without introducing regressions.
 
-3. Run Flycast:
+## Compatibility & Contribution
 
-`flatpak run org.flycast.Flycast`
+Hollycast aims to support every platform and release offered by Flycast. If Flycast can do it, Hollycast will too, ideally with a newer looking and more feature rich environment while keeping the performance you have come to know and love from Flyinghead's hard work and dedication on Flycast.
 
-### Homebrew (MacOS ![apple logo](https://flyinghead.github.io/flycast-builds/apple.png))
-
-1. [Set up Homebrew](https://brew.sh).
-
-2. Install Flycast via Homebrew:
-
-`brew install --cask flycast`
-
-### iOS
-
-Due to persistent harassment from an iOS user, support for this platform has been dropped. 
-
-### Xbox One/Series ![xbox logo](https://flyinghead.github.io/flycast-builds/xbox.png)
-
-Grab the latest build from [**the builds page**](https://flyinghead.github.io/flycast-builds/), or the [**GitHub Actions**](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml). Then install it using the **Xbox Device Portal**.
-
-### Binaries ![android](https://flyinghead.github.io/flycast-builds/android.jpg) ![windows](https://flyinghead.github.io/flycast-builds/windows.png) ![linux](https://flyinghead.github.io/flycast-builds/ubuntu.png) ![apple](https://flyinghead.github.io/flycast-builds/apple.png) ![switch](https://flyinghead.github.io/flycast-builds/switch.png) ![xbox](https://flyinghead.github.io/flycast-builds/xbox.png)
-
-Get fresh builds for your system [**on the builds page**](https://flyinghead.github.io/flycast-builds/).
-
-**New:** Now automated test results are available as well. 
+> **Note:** Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/pYVqGqvFJW) and open a Feature Request to discuss your plans before submitting code.
 
 ### Build instructions:
-```
+The following assumes prerequisites are already installed. Refer to the [c-cpp CI file](https://github.com/OrangeFox86/Hollycast/blob/master/.github/workflows/c-cpp.yml) under `Set up build environment` for your specific operating system.
+
+```bash
 # Clone repo
 $ git clone --recursive https://github.com/OrangeFox86/hollycast.git
 $ cd hollycast

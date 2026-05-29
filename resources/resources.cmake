@@ -34,6 +34,7 @@ cmrc_add_resources(flycast-resources
 if(NOT LIBRETRO)
     cmrc_add_resources(flycast-resources
             fonts/Roboto-Medium.ttf.zip
+            fonts/Roboto-Bold.ttf.zip
             fonts/Roboto-Regular.ttf.zip
             fonts/Jura-wght.ttf.zip
             fonts/EncodeSans-wdth-wght.ttf.zip

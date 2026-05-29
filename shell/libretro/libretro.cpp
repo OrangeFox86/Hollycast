@@ -33,6 +33,7 @@
 
 #include <sys/stat.h>
 #include <file/file_path.h>
+#include <streams/file_stream.h>
 
 #include <libretro.h>
 
@@ -67,8 +68,10 @@
 #include "rend/CustomTexture.h"
 #include "oslib/i18n.h"
 #include "input/dreampotato.h"
+#include "storage.h"
 
-constexpr char slash = path_default_slash_c();
+// SMB support does not work when the path contains a back-slash, so just stick to using the portable forward-slash instead.
+constexpr char slash = '/';
 
 #define RETRO_DEVICE_TWINSTICK				RETRO_DEVICE_SUBCLASS( RETRO_DEVICE_JOYPAD, 1 )
 #define RETRO_DEVICE_TWINSTICK_SATURN		RETRO_DEVICE_SUBCLASS( RETRO_DEVICE_JOYPAD, 2 )
@@ -267,6 +270,8 @@ static void input_set_deadzone_trigger(int percent)
 void retro_set_environment(retro_environment_t cb)
 {
 	environ_cb = cb;
+
+	hostfs::LibretroStorage::initialise(cb);
 
 	// An annoyance: retro_set_environment() can be called
 	// multiple times, and depending upon the current frontend
@@ -2251,7 +2256,7 @@ bool retro_load_game(const struct retro_game_info *game)
 
 		disk_paths.push_back(game->path);
 
-		fill_short_pathname_representation(disk_label, game->path, sizeof(disk_label));
+		fill_pathname(disk_label, path_basename(game->path), "", sizeof(disk_label));
 		disk_labels.push_back(disk_label);
 
 		game_data = game->path;
@@ -3687,7 +3692,7 @@ static bool retro_replace_image_index(unsigned index, const struct retro_game_in
 
 		disk_paths[index] = info->path;
 
-		fill_short_pathname_representation(disk_label, info->path, sizeof(disk_label));
+		fill_pathname(disk_label, path_basename(info->path), "", sizeof(disk_label));
 		disk_labels[index] = disk_label;
 	}
 
@@ -3774,7 +3779,7 @@ static bool read_m3u(const char *file)
 {
 	char line[PATH_MAX];
 	char name[PATH_MAX];
-	FILE *f = fopen(file, "r");
+	RFILE *f = filestream_open(file, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
 	if (!f)
 	{
@@ -3782,7 +3787,7 @@ static bool read_m3u(const char *file)
 		return false;
 	}
 
-	while (fgets(line, sizeof(line), f) && disk_index <= disk_paths.size())
+	while (filestream_gets(f, line, sizeof(line)) && disk_index <= disk_paths.size())
 	{
 		if (line[0] == '#')
 			continue;
@@ -3813,14 +3818,14 @@ static bool read_m3u(const char *file)
 				snprintf(name, sizeof(name), "%s%s", g_roms_dir, line);
 			disk_paths.push_back(name);
 
-			fill_short_pathname_representation(disk_label, name, sizeof(disk_label));
+			fill_pathname(disk_label, path_basename(name), "", sizeof(disk_label));
 			disk_labels.push_back(disk_label);
 
 			disk_index++;
 		}
 	}
 
-	fclose(f);
+	filestream_close(f);
 	return disk_index != 0;
 }
 

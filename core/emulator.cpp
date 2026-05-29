@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 flyinghead
+    Copyright 2024 flyinghead
     Portions Copyright 2026 The Hollycast Authors
     This file is part of Hollycast
 
@@ -51,6 +51,9 @@
 #include "hw/sh4/sh4_interpreter.h"
 #include "hw/sh4/dyna/ngen.h"
 #include "oslib/i18n.h"
+#ifndef LIBRETRO
+#include <thread>
+#endif
 
 settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
@@ -277,7 +280,8 @@ static void loadSpecialSettings()
 			|| prod_id == "T0020M"		// Force Five Atomiswave DC Conversion
 			|| prod_id == "HDR-0187"	// Fushigi no Dungeon - Fuurai no Shiren Gaiden - Onna Kenshi Asuka Kenzan!
 			|| prod_id == "T15104D 50"	// Slave Zero (PAL)
-			|| prod_id == "MK-51152")	// World Series Baseball 2K2
+			|| prod_id == "MK-51152"	// World Series Baseball 2K2
+			|| ip_meta.isMILCD())
 		{
 			NOTICE_LOG(BOOT, "Forcing real BIOS");
 			config::UseReios.override(false);
@@ -305,7 +309,8 @@ static void loadSpecialSettings()
 			|| prod_id == "T7014D  50"		// Super Runabout (EU)
 			|| prod_id == "T10001D 50"		// MTV Sport - Skateboarding (PAL)
 			|| prod_id == "MK-5101050"		// Snow Surfers
-			|| prod_id == "12502D-50")		// Caesar's Palace (PAL)
+			|| prod_id == "12502D-50"		// Caesar's Palace (PAL)
+			|| prod_id == "T46605D 80")		// Evil Twin - Cyprien's Chronicles
 		{
 			NOTICE_LOG(BOOT, "Forcing PAL broadcasting");
 			config::Broadcast.override(1);
@@ -387,6 +392,12 @@ static void loadSpecialSettings()
 		if (layers != 0) {
 			NOTICE_LOG(BOOT, "Forcing %d transparent layers", layers);
 			config::PerPixelLayers.override(layers);
+		}
+		if (prod_id == "HDR-0113"			// Power Smash
+				|| prod_id == "HDR-0091")	// Pro Yakyuu Team de Asobou Net!
+		{
+			NOTICE_LOG(BOOT, "Forcing DCNet use");
+			config::UseDCNet.override(true);
 		}
 	}
 	else if (settings.platform.isArcade())
@@ -972,9 +983,8 @@ void Emulator::run()
 {
 	verify(state == Running);
 	startTime = sh4_sched_now64();
-	renderTimeout = false;
 	if (!singleStep && stepRangeTo == 0)
-	getSh4Executor()->Start();
+		getSh4Executor()->Start();
 	try {
 		runInternal();
 		if (ggpo::active())
@@ -1018,7 +1028,6 @@ void Emulator::start()
 					while (state == Running || singleStep || stepRangeTo != 0)
 					{
 						startTime = sh4_sched_now64();
-						renderTimeout = false;
 						runInternal();
 						if (!ggpo::nextFrame())
 							break;
@@ -1084,8 +1093,7 @@ bool Emulator::render()
 		if (state != Running)
 			return false;
 		run();
-		// TODO if stopping due to a user request, no frame has been rendered
-		return !renderTimeout;
+		return true;
 	}
 	if (!checkStatus())
 		return false;
@@ -1098,10 +1106,29 @@ void Emulator::vblank()
 {
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());
+#ifndef LIBRETRO
+	if (settings.input.fastForwardMode && config::FastForwardSpeedLimit < 300)
+	{
+		const double speedFactor = 1.0 + (double)config::FastForwardSpeedLimit / 100.0;
+		const auto frameDuration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+				std::chrono::duration<double>(1.0 / (60.0 * speedFactor)));
+		const auto now = std::chrono::steady_clock::now();
+		if (fastForwardThrottleDeadline.time_since_epoch().count() == 0)
+			fastForwardThrottleDeadline = now;
+		fastForwardThrottleDeadline += frameDuration;
+		if (fastForwardThrottleDeadline > now)
+			std::this_thread::sleep_until(fastForwardThrottleDeadline);
+		else
+			fastForwardThrottleDeadline = now;
+	}
+	else
+	{
+		fastForwardThrottleDeadline = {};
+	}
+#endif
 	// Time out if a frame hasn't been rendered for 50 ms
-	if (sh4_sched_now64() - startTime <= 10000000)
+	if (sh4_sched_now64() - startTime <= 50_sh4ms)
 		return;
-	renderTimeout = true;
 	if (ggpo::active())
 		ggpo::endOfFrame();
 	else if (!config::ThreadedRendering)

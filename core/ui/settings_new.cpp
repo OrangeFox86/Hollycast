@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -29,8 +30,10 @@
 #include "widgets/widgets.h"
 #include "version.h"
 #include "wsi/context.h"
+#include "input/dreampotato.h"
 #include "input/gamepad_device.h"
 #include "input/keyboard_device.h"
+#include "input/maplelinkregistry.h"
 #include "input/mouse.h"
 #include "hw/maple/maple_devs.h"
 #include "hw/maple/maple_cfg.h"
@@ -749,7 +752,7 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)));
 
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
-	if (ImGui::BeginPopupModal("Gamepad Settings", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_DragScrolling))
+	if (ImGui::BeginPopupModal("Gamepad Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_DragScrolling))
 	{
 		if (ImGui::Button("Done", ScaledVec2(100, 30)))
 		{
@@ -933,9 +936,12 @@ static const MappingEntry kDreamcastControls[] = {
 	{ EMU_BTN_NONE, "Emulator" },
 	{ EMU_BTN_MENU, "Menu" },
 	{ EMU_BTN_ESCAPE, "Exit" },
+	{ EMU_BTN_PAUSE, Tnop("Pause") },
 	{ EMU_BTN_FFORWARD, "Fast-forward" },
 	{ EMU_BTN_LOADSTATE, "Load State" },
 	{ EMU_BTN_SAVESTATE, "Save State" },
+	{ EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM") },
+	{ EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM") },
 	{ EMU_BTN_BYPASS_KB, "Bypass Emulated Keyboard" },
 	{ EMU_BTN_SCREENSHOT, "Save Screenshot" },
 
@@ -986,9 +992,12 @@ static const MappingEntry kArcadeControls[] = {
 	{ EMU_BTN_NONE, "Emulator" },
 	{ EMU_BTN_MENU, "Menu" },
 	{ EMU_BTN_ESCAPE, "Exit" },
+	{ EMU_BTN_PAUSE, Tnop("Pause") },
 	{ EMU_BTN_FFORWARD, "Fast-forward" },
 	{ EMU_BTN_LOADSTATE, "Load State" },
 	{ EMU_BTN_SAVESTATE, "Save State" },
+	{ EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM") },
+	{ EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM") },
 	{ EMU_BTN_BYPASS_KB, "Bypass Emulated Keyboard" },
 	{ EMU_BTN_SCREENSHOT, "Save Screenshot" },
 
@@ -1846,10 +1855,11 @@ void renderGeneralTab()
 	// ========================================
 	if (ImGui::CollapsingHeader(ICON_FA_GLOBE " Language & Region##Section", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		static const char* languages[] = { "Japanese", "English", "German", "French", "Spanish", "Italian", "Default" };
+		// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -> IT, 6 -> default
+		static const char* languages[] = { "日本語", "English", "German", "French", "Spanish", "Italian", "Default" };
 		SettingsUI::PopupConfig languageCfg {};
 		languageCfg.type = SettingsUI::PopupType::Options;
-		languageCfg.options.label = "Language";
+		languageCfg.options.label = "Dreamcast Language";
 		languageCfg.options.icon = ICON_FA_LANGUAGE;
 		languageCfg.options.popupID = "LanguagePopup";
 		languageCfg.options.options = languages;
@@ -2563,6 +2573,14 @@ void renderGeneralTab()
 		"Move/copy your existing VMU files if you want to keep your saves.\n"
 		"Use this to keep saves on a specific drive or to share saves between installations.");
 	ImGui::Spacing();
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	manageSinglePath("DreamPotato Path", config::DreamPotatoFolderPath,
+		"DreamPotato Path\n"
+		"Path of the folder containing the DreamPotato (VMU emulator) executable.\n\n"
+		"Set this if you want to use a custom version of DreamPotato with integrated mode.");
+	ImGui::Spacing();
+#endif
 
 	managePathList("Savestate Folders", config::SavestatePath.get(),
 		"Savestate Folders\n"
@@ -4251,12 +4269,17 @@ void renderControlsTab()
 		"Panther DC/Full Controller",
 	};
 
+	static constexpr int MDT_DreamPotato = 100;
+	static constexpr int MDT_DreamLink = 101;
+
 	static const char *maple_expansion_device_types[] =
 	{
 		"None",
 		"Sega VMU",
 		"Vibration Pack",
 		"Microphone",
+		"DreamPotato",
+		"DreamLink", // not shown unless a DreamLink controller is present
 	};
 
 	// Helper lambda to get device name
@@ -4285,6 +4308,8 @@ void renderControlsTab()
 		case MDT_SegaVMU: return maple_expansion_device_types[1];
 		case MDT_PurupuruPack: return maple_expansion_device_types[2];
 		case MDT_Microphone: return maple_expansion_device_types[3];
+		case MDT_DreamPotato: return maple_expansion_device_types[4];
+		case MDT_DreamLink: return maple_expansion_device_types[5];
 		case MDT_None: default: return maple_expansion_device_types[0];
 		}
 	};
@@ -4315,6 +4340,8 @@ void renderControlsTab()
 		case 1: return MDT_SegaVMU;
 		case 2: return MDT_PurupuruPack;
 		case 3: return MDT_Microphone;
+		case 4: return (MapleDeviceType)MDT_DreamPotato;
+		case 5: return (MapleDeviceType)MDT_DreamLink;
 		case 0: default: return MDT_None;
 		}
 	};
@@ -4322,17 +4349,36 @@ void renderControlsTab()
 	bool is_there_any_xhair = false;
 
 	if (ImGui::BeginTable("dreamcastDevices", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings,
-			ImVec2(0, 0), 8.0f))
+			ImVec2(0, 0), uiScaled(8)))
 	{
+		// DreamLink device names for main device
+		const char* dream_link_names[MAPLE_PORTS]{};
+		for (int bus = 0; bus < MAPLE_PORTS; bus++)
+		{
+			auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
+			if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				dream_link_names[bus] = link->dreamlink->getName();
+			else
+				dream_link_names[bus] = "";
+		}
+
 		const float mainComboWidth = ImGui::CalcTextSize("Densha de Go! Controller").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
 		const float expComboWidth = ImGui::CalcTextSize("Vibration Pack").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
 
 		// Settings 3-22: Dreamcast Device Ports (4 ports x device + expansion)
 		for (int bus = 0; bus < MAPLE_PORTS; bus++)
 		{
+			const bool has_dream_link = (*dream_link_names[bus] != '\0');
+			const char* selected_name = nullptr;
+
+			if (has_dream_link)
+				selected_name = dream_link_names[bus];
+			else
+				selected_name = maple_device_name(config::MapleMainDevices[bus]);
+
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Port %c", bus + 'A');
+			ImGui::Text(T("Port %c"), bus + 'A');
 
 			ImGui::TableSetColumnIndex(1);
 			char device_name[32];
@@ -4341,57 +4387,87 @@ void renderControlsTab()
 			ImGui::PushItemWidth(w);
 			ImGui::SetNextItemWidth(mainComboWidth);
 
-			// Main device selection
-			if (ImGui::BeginCombo(device_name, maple_device_name(config::MapleMainDevices[bus])))
+			if (has_dream_link)
 			{
-				for (int i = 0; i < 13; i++)
+				// Using real hardware for this - disable selection
+				ImGui::BeginDisabled();
+			}
+
+			if (ImGui::BeginCombo(device_name, selected_name, ImGuiComboFlags_None))
+			{
+				for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
 				{
 					bool is_selected = config::MapleMainDevices[bus] == maple_device_type_from_index(i);
-						if (ImGui::Selectable(maple_device_types[i], &is_selected))
-						{
-							config::MapleMainDevices[bus] = maple_device_type_from_index(i);
-							g_mapleDevicesChangedInSettings = true;
-						}
+					if (ImGui::Selectable(maple_device_types[i], &is_selected))
+					{
+						config::MapleMainDevices[bus] = maple_device_type_from_index(i);
+						g_mapleDevicesChangedInSettings = true;
+					}
 					if (is_selected)
 						ImGui::SetItemDefaultFocus();
 				}
 				ImGui::EndCombo();
 			}
 
-			// Expansion port count based on device type
 			int port_count = 0;
-			switch (config::MapleMainDevices[bus]) {
-				case MDT_SegaController:
-				case MDT_SegaControllerXL:
-					port_count = 2;
-					break;
-				case MDT_LightGun:
-				case MDT_TwinStick:
-				case MDT_AsciiStick:
-				case MDT_RacingController:
-					port_count = 1;
-					break;
-				default: break;
+			int port_type_count = 0;
+			if (has_dream_link)
+			{
+				ImGui::EndDisabled();
+				port_count = 2;
+				port_type_count = IM_ARRAYSIZE(maple_expansion_device_types);
+			}
+			else
+			{
+				port_count = maple_getPortCount(config::MapleMainDevices[bus]);
+				// Remove DreamLink as an option
+				port_type_count = IM_ARRAYSIZE(maple_expansion_device_types) - 1;
 			}
 
-			// Expansion device selections
 			for (int port = 0; port < port_count; port++)
 			{
+				const bool port_has_dream_link = has_dream_link && (MapleLinkRegistry::GetMapleLink(bus, port) != std::nullopt);
+
 				ImGui::TableSetColumnIndex(2 + port);
 				snprintf(device_name, sizeof(device_name), "##device%d.%d", bus, port + 1);
 				ImguiID _(device_name);
 				ImGui::SetNextItemWidth(expComboWidth);
+				int subtype = config::MapleExpansionDevices[bus][port];
+				if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1) {
+					subtype = MDT_DreamPotato;
+				}
+				else if (port_has_dream_link && (config::DreamLinkSelect[bus][port])) {
+					subtype = MDT_DreamLink;
+				}
 
-				if (ImGui::BeginCombo(device_name, maple_expansion_device_name(config::MapleExpansionDevices[bus][port])))
+				if (ImGui::BeginCombo(device_name, maple_expansion_device_name((MapleDeviceType)subtype), ImGuiComboFlags_None))
 				{
-					for (int i = 0; i < 4; i++)
+					for (int i = 0; i < port_type_count; i++)
 					{
-						bool is_selected = config::MapleExpansionDevices[bus][port] == maple_expansion_device_type_from_index(i);
-							if (ImGui::Selectable(maple_expansion_device_types[i], &is_selected))
-							{
-								config::MapleExpansionDevices[bus][port] = maple_expansion_device_type_from_index(i);
-								g_mapleDevicesChangedInSettings = true;
+						bool is_selected = subtype == maple_expansion_device_type_from_index(i);
+						if (ImGui::Selectable(maple_expansion_device_types[i], &is_selected))
+						{
+							subtype = maple_expansion_device_type_from_index(i);
+							if (subtype == MDT_DreamLink) {
+								config::DreamLinkSelect[bus][port] = true;
 							}
+							else if (port_has_dream_link) {
+								config::DreamLinkSelect[bus][port] = false;
+							}
+
+							if (subtype == MDT_DreamPotato) {
+								config::MapleExpansionDevices[bus][port] = MDT_SegaVMU;
+								config::NetworkExpansionDevices[bus][port] = 1;
+							}
+							else {
+								if (subtype != MDT_DreamLink) {
+									config::MapleExpansionDevices[bus][port] = (MapleDeviceType)subtype;
+								}
+								config::NetworkExpansionDevices[bus][port] = 0;
+							}
+
+							g_mapleDevicesChangedInSettings = true;
+						}
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
@@ -4546,59 +4622,39 @@ void renderControlsTab()
 				"Useful to prevent save-file conflicts between games.");
 
 #ifdef USE_DREAMLINK_DEVICES
-	{
 			RenderGeneralToggleSettingRow(
 				"UsePhysicalVmuMemory",
 				ICON_FA_MEMORY,
-				"Use Physical VMU Memory",
-				"Enables direct read/write access to physical VMU memory via DreamPicoPort/DreamConn. This is not compatible with load state events.",
+				T("Use External VMU Storage"),
+				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
 				static_cast<bool>(config::UsePhysicalVmuMemory),
 				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-				"Use Physical VMU Memory\n"
-				"Enables direct read/write access to physical VMU memory via DreamPicoPort/DreamConn.\n"
-				"Not compatible with load state events.",
+				T("Use External VMU Storage\n"
+				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."),
 				game_started);
-	}
+#endif
 
-	for (int bus = 0; bus < MAPLE_PORTS; bus++)
-	{
-		int port_count = 0;
-		switch (config::MapleMainDevices[bus]) {
-			case MDT_SegaController:
-			case MDT_SegaControllerXL:
-				port_count = 2;
-				break;
-			case MDT_LightGun:
-			case MDT_TwinStick:
-			case MDT_AsciiStick:
-			case MDT_RacingController:
-				port_count = 1;
-				break;
-			default: break;
-		}
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+			RenderGeneralToggleSettingRow(
+				"DreamPotatoIntegratedMode",
+				ICON_FA_PLUG,
+				T("DreamPotato Integrated Mode"),
+				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
+				static_cast<bool>(config::DreamPotatoIntegratedMode),
+				[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
+				T("DreamPotato Integrated Mode\n"
+					"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
+					"Applies to all slots which use a DreamPotato device.\n"
+					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
+				game_started);
 
-		if (port_count > 0)
-		{
-			char rowId[64];
-			char rowLabel[64];
-			snprintf(rowId, sizeof(rowId), "UseNetworkExpansionDevices%d", bus);
-			snprintf(rowLabel, sizeof(rowLabel), "Use Network Expansion Devices (Port %c)", 'A' + bus);
-				RenderGeneralToggleSettingRow(
-					rowId,
-					ICON_FA_NETWORK_WIRED,
-					rowLabel,
-					"Connect to expansion devices such as VMUs over local TCP",
-					static_cast<bool>(config::NetworkExpansionDevices[bus][0].get() || config::NetworkExpansionDevices[bus][1].get()),
-					[bus](bool enabled) {
-						const int netEnabled = enabled ? 1 : 0;
-						config::NetworkExpansionDevices[bus][0].set(netEnabled);
-						config::NetworkExpansionDevices[bus][1].set(netEnabled);
-					},
-					"Network Expansion Devices\n"
-					"Connects to expansion devices such as VMUs over local TCP.\n"
-					"Use this only if you have a compatible expansion-device bridge configured on your network.");
-		}
-	}
+			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
+			{
+				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+				ImGui::TextColored(warningColor, "(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths.");
+			}
 #endif
 	}
 	}
@@ -5246,6 +5302,63 @@ void renderAdvancedTab()
 					"Decreasing the clock can lower CPU requirements, but may reduce performance or cause glitches.\n\n"
 					"If you change this, re-test gameplay with the FPS counter enabled and keep adjustments small.");
 			}
+
+			// Fast-Forward Speed Limit
+			{
+				static int fastForwardLimitTemp = config::FastForwardSpeedLimit.get();
+
+				SettingsUI::PopupSliderConfig fastForwardLimitCfg {};
+				fastForwardLimitCfg.label = "Fast-Forward Speed";
+				fastForwardLimitCfg.icon = ICON_FA_FORWARD_FAST;
+				fastForwardLimitCfg.popupID = "FastForwardSpeedLimitPopup";
+				fastForwardLimitCfg.description =
+					"Sets a cap for Fast-Forward speed.\n"
+					"Values below Infinite apply frame pacing while Fast-Forward is active.\n"
+					"Infinite preserves the current uncapped behavior.";
+				fastForwardLimitCfg.currentValue = &fastForwardLimitTemp;
+				fastForwardLimitCfg.minValue = 2;
+				fastForwardLimitCfg.maxValue = 300;
+				fastForwardLimitCfg.defaultValue = 300;
+				fastForwardLimitCfg.format = "%d%%";
+				fastForwardLimitCfg.valueWidth = 220.0f;
+				fastForwardLimitCfg.sliderWidth = 320.0f;
+				fastForwardLimitCfg.valueFormatter = [](int value) {
+					if (value >= 300)
+						return std::string("Infinite");
+					char text[16];
+					snprintf(text, sizeof(text), "%d%%", value);
+					return std::string(text);
+				};
+				fastForwardLimitCfg.onValueChange = []() {
+					config::FastForwardSpeedLimit.set(fastForwardLimitTemp);
+				};
+
+				SettingsUI::PopupConfig fastForwardLimitPopupCfg {};
+				fastForwardLimitPopupCfg.type = SettingsUI::PopupType::Slider;
+				fastForwardLimitPopupCfg.slider = fastForwardLimitCfg;
+
+				RenderGeneralPopupSettingRow(
+					"FastForwardSpeedLimitSetting",
+					"Cap Fast-Forward speed or leave it Infinite.",
+					fastForwardLimitPopupCfg,
+					"Fast-Forward Speed\n"
+					"Controls the Fast-Forward cap while Fast-Forward is active.\n\n"
+					"Set this below Infinite if you want a controlled speed-up instead of running as fast as possible.\n"
+					"Infinite keeps today's uncapped Fast-Forward behavior.\n\n"
+					"Use moderate values first, then raise or lower based on how smooth gameplay and audio feel.");
+			}
+
+			RenderGeneralToggleSettingRow(
+				"FastForwardAudio",
+				ICON_FA_VOLUME_HIGH,
+				"Fast-Forward Audio",
+				"Play audio during Fast-Forward",
+				static_cast<bool>(config::FastForwardAudio),
+				[](bool enabled) { config::FastForwardAudio.set(enabled); },
+				"Fast-Forward Audio\n"
+				"Controls whether audio plays while Fast-Forward is active.\n\n"
+				"When enabled, Fast-Forward audio plays at 35% volume to keep it usable without being too harsh.\n"
+				"When disabled, Fast-Forward keeps the current muted-audio behavior.");
 	#endif
 
 			// HLE BIOS
@@ -5613,17 +5726,27 @@ void renderAdvancedTab()
 			ImGui::Indent();
 
 			// Dump Replaced Textures - 2x Row Pattern
-				RenderGeneralToggleSettingRow(
-					"DumpReplacedTextures",
-					ICON_FA_COPY,
-					"Dump Replaced",
-					"Dump replaced textures too",
-					static_cast<bool>(config::DumpReplacedTextures),
-					[](bool enabled) { config::DumpReplacedTextures.set(enabled); },
-					"Dump Replaced Textures\n"
-					"Also dumps textures even when they are being replaced by a custom texture pack.\n\n"
-					"This is useful when comparing originals vs replacements, but it increases disk usage even more.\n"
-					"Leave this off unless you are actively working on textures.");
+			RenderGeneralToggleSettingRow(
+				"DumpReplacedTextures",
+				ICON_FA_COPY,
+				"Dump Replaced",
+				"Dump replaced textures too",
+				static_cast<bool>(config::DumpReplacedTextures),
+				[](bool enabled) { config::DumpReplacedTextures.set(enabled); },
+				"Dump Replaced Textures\n"
+				"Also dumps textures even when they are being replaced by a custom texture pack.\n\n"
+				"This is useful when comparing originals vs replacements, but it increases disk usage even more.\n"
+				"Leave this off unless you are actively working on textures.");
+
+			RenderGeneralToggleSettingRow(
+				"DiscardVideoAndAnimatedTextures",
+				ICON_FA_COPY,
+				T("Discard Video and Animated Textures"),
+				T("Skip dumping video (YUV) and already updated textures"),
+				static_cast<bool>(config::DumpUniqueTextures),
+				[](bool enabled) { config::DumpUniqueTextures.set(enabled); },
+				T("Skip dumping video (YUV) and already updated textures")
+			);
 
 			ImGui::Unindent();
 		}
@@ -5913,11 +6036,12 @@ void renderSettingsNew()
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 
 	// Main settings window
-	if (ImGui::Begin("Settings", NULL, ImGuiWindowFlags_NoResize
+	if (ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoResize
 			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
 			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 	{
 		const std::function<void()> exitSettings = [&]() {
+			dreampotato::update();
 			if (g_mapleDevicesChangedInSettings)
 			{
 				g_mapleDevicesChangedInSettings = false;

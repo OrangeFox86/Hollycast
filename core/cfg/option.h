@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -350,6 +351,8 @@ using OptionString = Option<std::string>;
 // Dynarec
 
 extern Option<bool> DynarecEnabled;
+extern Option<int> FastForwardSpeedLimit;
+extern Option<bool> FastForwardAudio;
 #ifndef LIBRETRO
 extern Option<int> Sh4Clock;
 #endif
@@ -360,6 +363,7 @@ extern Option<int> Cable;		// 0 -> VGA, 1 -> VGA, 2 -> RGB, 3 -> TV Composite
 extern Option<int> Region;		// 0 -> JP, 1 -> USA, 2 -> EU, 3 -> default
 extern Option<int> Broadcast;	// 0 -> NTSC, 1 -> PAL, 2 -> PAL/M, 3 -> PAL/N, 4 -> default
 extern Option<int> Language;	// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -> IT, 6 -> default
+extern OptionString UILanguage;
 extern Option<bool> AutoLoadState;
 extern Option<bool> AutoSaveState;
 extern Option<int, false> SavestateSlot;
@@ -449,6 +453,7 @@ extern Option<float> ExtraDepthScale;
 extern Option<bool> CustomTextures;
 extern Option<bool> PreloadCustomTextures;
 extern Option<bool> DumpTextures;
+extern Option<bool> DumpUniqueTextures;
 extern Option<bool> DumpReplacedTextures;
 extern Option<int> ScreenStretching;	// in percent. 150 means stretch from 4/3 to 6/3
 extern Option<bool> Fog;
@@ -504,6 +509,9 @@ extern Option<std::string, false> TextureDumpPath;
 extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<std::string, false> DreamPotatoFolderPath;
+#endif
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
 extern Option<bool, false> DiscordPresence;
@@ -562,6 +570,9 @@ extern Option<bool, false> UseRawInput;
 constexpr bool UseRawInput = false;
 #endif
 extern Option<bool> UsePhysicalVmuMemory;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<bool> DreamPotatoIntegratedMode;
+#endif
 
 #ifdef USE_LUA
 extern Option<std::string, false> LuaFileName;
