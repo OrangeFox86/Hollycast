@@ -44,6 +44,7 @@ void dc_getStateScreenshot(int index, std::vector<u8>& pngData);
 int dc_getAutoSaveSlot();
 void dc_skipAutoSaveOnNextUnload();
 bool dc_savestateAllowed();
+inline constexpr int NUM_SAVE_SLOTS = 10;
 
 enum class Event {
 	Start,

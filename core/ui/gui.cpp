@@ -98,7 +98,6 @@ static Boxart boxart;
 static Chat chat;
 static std::recursive_mutex guiMutex;
 using LockGuard = std::lock_guard<std::recursive_mutex>;
-static constexpr int NUM_SAVE_SLOTS = 10;
 static ImTextureID loadSaveStateThumbnail(int slot);
 
 ImFont *largeFont;

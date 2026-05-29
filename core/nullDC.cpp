@@ -392,7 +392,7 @@ void dc_getStateScreenshot(int index, std::vector<u8>& pngData)
 
 int dc_getAutoSaveSlot()
 {
-	static constexpr int AUTO_SAVE_STATE_SLOT = 10;
+	static constexpr int AUTO_SAVE_STATE_SLOT = NUM_SAVE_SLOTS;
 	return AUTO_SAVE_STATE_SLOT;
 }
 
