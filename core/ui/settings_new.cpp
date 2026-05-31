@@ -816,7 +816,7 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 						gui_runOnUiThread([path]() {
 							vgamepad::loadImage(path);
 						});
-				}, T("image/png")))
+				}, Tnop("image/png")))
 					ImGui::OpenPopup(gamepadPngTitle);
 			}
 #else
