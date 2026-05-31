@@ -1,4 +1,7 @@
 /*
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of reicast.
 
     reicast is free software: you can redistribute it and/or modify
@@ -1591,7 +1594,7 @@ void AICA_Sample()
 #ifdef LIBRETRO
 	if (settings.aica.muteAudio)
 #else
-	if (settings.input.fastForwardMode || settings.aica.muteAudio)
+	if (settings.aica.muteAudio || (settings.input.fastForwardMode && !config::FastForwardAudio))
 #endif
 		return;
 
@@ -1612,6 +1615,14 @@ void AICA_Sample()
 	s32 val = volume_lut[mvol];
 	mixl = (s32)FPMul<s64>(mixl, val, 15);
 	mixr = (s32)FPMul<s64>(mixr, val, 15);
+
+#ifndef LIBRETRO
+	if (settings.input.fastForwardMode)
+	{
+		mixl = (s32)((s64)mixl * 35 / 100);
+		mixr = (s32)((s64)mixr * 35 / 100);
+	}
+#endif
 
 	if (CommonData->DAC18B)
 	{

@@ -1,3 +1,24 @@
+/*
+    Copyright 2013 nullDC
+    Portions Copyright 2019 flyinghead
+    Portions Copyright 2026 The Hollycast Authors
+
+    This file is part of Hollycast.
+
+    Hollycast is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    Hollycast is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Hollycast.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "audiostream.h"
 #include "cfg/option.h"
 #include "emulator.h"
@@ -56,7 +77,7 @@ void WriteSample(s16 r, s16 l)
 	if (++writePtr == SAMPLE_COUNT)
 	{
 		if (currentBackend != nullptr)
-			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS);
+			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS && !settings.input.fastForwardMode);
 		writePtr = 0;
 	}
 }
@@ -156,5 +177,3 @@ static void registerForEvents()
 	EventManager::listen(Event::Terminate, callback);
 	EventManager::listen(Event::LoadState, callback);
 }
-
-

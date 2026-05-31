@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -26,6 +27,8 @@ namespace config {
 
 Option<bool> DynarecEnabled("Dynarec.Enabled", true);
 Option<int> Sh4Clock("Sh4Clock", 200);
+Option<int> FastForwardSpeedLimit("FastForwardSpeedLimit", 300);
+Option<bool> FastForwardAudio("FastForwardAudio", false);
 
 // General
 

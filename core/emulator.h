@@ -2,6 +2,7 @@
 	Created on: Apr 20, 2020
 
 	Copyright 2020 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of flycast.
 
@@ -244,6 +245,7 @@ private:
 	bool resetRequested = false;
 	bool singleStep = false;
 	u64 startTime = 0;
+	std::chrono::steady_clock::time_point fastForwardThrottleDeadline {};
 	u32 stepRangeFrom = 0;
 	u32 stepRangeTo = 0;
 	bool stopRequested = false;

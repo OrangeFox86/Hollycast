@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -457,6 +458,7 @@ struct PopupSliderConfig {
     int maxValue = 100;
     int defaultValue = 100;  // Default value for display
     const char* format = "%d%%";
+    std::function<std::string(int)> valueFormatter = nullptr;
 
     // Optional: Custom apply button
     const char* applyButtonText = "Apply";

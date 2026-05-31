@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -1434,6 +1435,15 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
 // Internal helper to render slider popup (DuckStation-style)
 bool RenderSliderPopup(PopupSliderConfig& cfg)
 {
+    const auto formatValueText = [&](int value, char* out, size_t outSize) {
+        if (cfg.valueFormatter) {
+            const std::string text = cfg.valueFormatter(value);
+            snprintf(out, outSize, "%s", text.c_str());
+        } else {
+            snprintf(out, outSize, cfg.format, value);
+        }
+    };
+
     // Icon and label
     SettingIcon(cfg.icon, ImVec2(uiScaled(cfg.iconSize), uiScaled(cfg.iconSize)));
     ImGui::SameLine(0, uiScaled(cfg.iconSpacing));
@@ -1456,7 +1466,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
     }
 
     char currentValue[32];
-    snprintf(currentValue, sizeof(currentValue), cfg.format, *cfg.currentValue);
+    formatValueText(*cfg.currentValue, currentValue, sizeof(currentValue));
 
     // Display current value as centered text (full row handles popup opening)
     ImFont* valueFont = SettingsRightValueFont();
@@ -1577,7 +1587,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         if (textEntryMode)
         {
             char sliderValueText[32];
-            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            formatValueText(*cfg.currentValue, sliderValueText, sizeof(sliderValueText));
             const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
             int typedValue = *cfg.currentValue;
             const float inputWidth = std::max(uiScaled(84.0f), valueTextSize.x + uiScaled(18.0f));
@@ -1682,7 +1692,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             }
 
             char sliderValueText[32];
-            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            formatValueText(*cfg.currentValue, sliderValueText, sizeof(sliderValueText));
             const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
             const ImVec2 sliderMin = ImGui::GetItemRectMin();
             const ImVec2 sliderMax = ImGui::GetItemRectMax();
