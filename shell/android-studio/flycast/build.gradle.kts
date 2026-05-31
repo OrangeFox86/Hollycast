@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.flycast.emulator"
+        applicationId = "com.hollycast.emulator"
         minSdk = 21
         targetSdk = 36
         versionCode = 8
@@ -78,6 +78,14 @@ android {
         }
         resources {
             excludes += "META-INF/DEPENDENCIES"
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("Hollycast-${variant.name}.apk")
         }
     }
 }

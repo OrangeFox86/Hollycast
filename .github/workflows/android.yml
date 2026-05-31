@@ -53,15 +53,10 @@ jobs:
           SENTRY_UPLOAD_URL: ${{ secrets.SENTRY_UPLOAD_URL }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
-      - name: Stage release APK
-        run: |
-          mkdir -p artifact/android
-          cp shell/android-studio/flycast/build/outputs/apk/release/flycast-release.apk artifact/android/Hollycast-release.apk
-
       - uses: actions/upload-artifact@v6
         with:
           name: Hollycast-release.apk
-          path: artifact/android/Hollycast-release.apk
+          path: shell/android-studio/flycast/build/outputs/apk/release/Hollycast-release.apk
 
       - name: Build dump_syms
         working-directory: core/deps/breakpad
