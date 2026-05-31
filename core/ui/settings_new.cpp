@@ -2053,7 +2053,7 @@ void renderGeneralTab()
 		}
 
 		// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -> IT, 6 -> default
-		const char* languages[] = { T("日本語"), T("English"), T("German"), T("French"), T("Spanish"), T("Italian"), T("Default") };
+		const char* languages[] = { T("Japanese"), T("English"), T("German"), T("French"), T("Spanish"), T("Italian"), T("Default") };
 		SettingsUI::PopupConfig languageCfg {};
 		languageCfg.type = SettingsUI::PopupType::Options;
 		languageCfg.options.label = T("Dreamcast Language");
@@ -2079,7 +2079,7 @@ void renderGeneralTab()
 	}
 
 	{
-		const char* broadcast[] = { T("NTSC"), T("PAL"), T("PAL/M"), T("PAL/N"), T("Default") };
+		const char* broadcast[] = { Tnop("NTSC"), Tnop("PAL"), Tnop("PAL/M"), Tnop("PAL/N"), T("Default") };
 		SettingsUI::PopupConfig broadcastCfg {};
 		broadcastCfg.type = SettingsUI::PopupType::Options;
 		broadcastCfg.options.label = T("Broadcast");
@@ -4536,13 +4536,13 @@ void renderControlsTab()
 				ImGui::SetNextItemWidth(portComboWidth);
 
 				// Port selection combo (None, A, B, C, D, All)
-				const char* current_port = T(kMaplePorts[gamepad->maple_port() + 1]);
+				const char* current_port = kMaplePorts[gamepad->maple_port() + 1];
 				if (ImGui::BeginCombo(port_name, current_port))
 				{
 					for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
 					{
 						bool is_selected = gamepad->maple_port() == j;
-						if (ImGui::Selectable(T(kMaplePorts[j + 1]), &is_selected))
+						if (ImGui::Selectable(kMaplePorts[j + 1]), &is_selected)
 						{
 							gamepad->set_maple_port(j);
 							g_mapleDevicesChangedInSettings = true;
@@ -4563,7 +4563,7 @@ void renderControlsTab()
 					g_currentGamepadForMapping = gamepad;
 					g_currentGamepadForMapping->listenButtons(buttonListener);
 					g_gamepad_port_for_mapping = 0;
-					ImGui::OpenPopup(Tnop("Controller Mapping"));
+					ImGui::OpenPopup(T("Controller Mapping"));
 				}
 
 				// Settings button for rumble/deadzone/saturation
@@ -4573,7 +4573,7 @@ void renderControlsTab()
 					if (ImGui::Button(T("Settings")))
 					{
 						g_currentGamepadForSettings = gamepad;
-						ImGui::OpenPopup(Tnop("Gamepad Settings"));
+						ImGui::OpenPopup(T("Gamepad Settings"));
 					}
 				}
 
@@ -4581,7 +4581,7 @@ void renderControlsTab()
 				if (g_currentGamepadForSettings == gamepad)
 				{
 					gamepadSettingsPopup(gamepad);
-					if (!ImGui::IsPopupOpen(Tnop("Gamepad Settings")))
+					if (!ImGui::IsPopupOpen(T("Gamepad Settings")))
 						g_currentGamepadForSettings.reset();
 				}
 
@@ -4589,7 +4589,7 @@ void renderControlsTab()
 				if (g_currentGamepadForMapping == gamepad)
 				{
 					controller_mapping_popup(gamepad);
-					if (!ImGui::IsPopupOpen(Tnop("Controller Mapping")))
+					if (!ImGui::IsPopupOpen(T("Controller Mapping")))
 						ResetControllerMappingRuntime();
 				}
 			}
