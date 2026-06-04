@@ -5970,7 +5970,8 @@ void renderAboutTab()
 			"Naomi, Naomi 2, and Atomiswave arcade systems."
 		);
 		ImGui::TextWrapped(
-			"Hollycast provides accurate emulation with enhancements for modern systems."
+			"Based on Flycast, providing accurate emulation with enhancements "
+			"for modern systems."
 		);
 		ImGui::Spacing();
 	}
@@ -5997,6 +5998,7 @@ void renderAboutTab()
 	if (ImGui::CollapsingHeader(ICON_FA_FILE_CONTRACT " License##Section", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::TextWrapped(
+			"Copyright (C) 2019-2025 flyinghead and contributors. "
 			"Portions Copyright 2026 The Hollycast Authors"
 		);
 		ImGui::TextWrapped(
