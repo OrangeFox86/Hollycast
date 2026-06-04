@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -350,6 +351,8 @@ using OptionString = Option<std::string>;
 // Dynarec
 
 extern Option<bool> DynarecEnabled;
+extern Option<int> FastForwardSpeedLimit;
+extern Option<bool> FastForwardAudio;
 #ifndef LIBRETRO
 extern Option<int> Sh4Clock;
 #endif
@@ -506,6 +509,9 @@ extern Option<std::string, false> TextureDumpPath;
 extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<std::string, false> DreamPotatoFolderPath;
+#endif
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
 extern Option<bool, false> DiscordPresence;
@@ -564,6 +570,9 @@ extern Option<bool, false> UseRawInput;
 constexpr bool UseRawInput = false;
 #endif
 extern Option<bool> UsePhysicalVmuMemory;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<bool> DreamPotatoIntegratedMode;
+#endif
 
 #ifdef USE_LUA
 extern Option<std::string, false> LuaFileName;

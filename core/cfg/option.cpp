@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -26,6 +27,8 @@ namespace config {
 
 Option<bool> DynarecEnabled("Dynarec.Enabled", true);
 Option<int> Sh4Clock("Sh4Clock", 200);
+Option<int> FastForwardSpeedLimit("FastForwardSpeedLimit", 300);
+Option<bool> FastForwardAudio("FastForwardAudio", false);
 
 // General
 
@@ -143,6 +146,9 @@ Option<bool> OpenGlChecks("OpenGlChecks", false, "validate");
 Option<std::vector<std::string>, false> ContentPath("Dreamcast.ContentPath");
 Option<std::vector<std::string>, false> BiosPath("Dreamcast.BiosPath");
 Option<std::string, false> VMUPath("Dreamcast.VMUPath");
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+Option<std::string, false> DreamPotatoFolderPath("Dreamcast.DreamPotatoPath");
+#endif
 Option<std::vector<std::string>, false> SavestatePath("Dreamcast.SavestatePath");
 Option<std::string, false> SavePath("Dreamcast.SavePath");
 Option<std::vector<std::string>, false> TexturePath("Dreamcast.TexturePath");
@@ -248,6 +254,9 @@ Option<bool> PerGameVmu("PerGameVmu", true, "config");
 Option<bool, false> UseRawInput("RawInput", false, "input");
 #endif
 Option<bool> UsePhysicalVmuMemory("UsePhysicalVmuMemory", true);
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+Option<bool> DreamPotatoIntegratedMode("DreamPotatoIntegratedMode", true);
+#endif
 
 #ifdef USE_LUA
 Option<std::string, false> LuaFileName("LuaFileName", "flycast.lua");

@@ -26,6 +26,14 @@
 #include <vector>
 #include <string>
 
+static void warmUpSwitchExceptions()
+{
+	try {
+		throw 1;
+	} catch (...) {
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	socketInitializeDefault();
@@ -46,6 +54,8 @@ int main(int argc, char *argv[])
 	add_system_data_dir("/flycast/data/");
 	add_system_data_dir("./");
 	add_system_data_dir("data/");
+
+	warmUpSwitchExceptions();
 
 	if (flycast_init(argc, argv))
 		die("Hollycast initialization failed");

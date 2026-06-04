@@ -182,7 +182,7 @@ MapleLinkVmu::MapleLinkVmu(const MapleLink& link) : MapleLinkDeviceBase<maple_se
 
 void MapleLinkVmu::OnSetup()
 {
-	if (link.storageEnabled())
+	if (!link.storageEnabled())
 	{
 		maple_sega_vmu::OnSetup();
 		return;

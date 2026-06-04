@@ -453,6 +453,89 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+std::string os_GetAppContainingDir()
+{
+	wchar_t exePath[MAX_PATH];
+	GetModuleFileNameW(NULL, exePath, std::size(exePath));
+
+	nowide::stackstring path;
+	if (!path.convert(exePath))
+		return ".";
+
+	std::string fullPath = path.get();
+	size_t pos = get_last_slash_pos(fullPath);
+	if (pos == std::string::npos)
+		return ".";
+
+	return fullPath.substr(0, pos);
+}
+
+os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
+{
+	os_Process proc;
+
+	nowide::wstackstring wexe;
+	if (!wexe.convert(executable.c_str()))
+		return proc;
+
+	std::wstring cmdLine = L'"' + std::wstring(wexe.get()) + L'"';
+	for (const auto& arg : args)
+	{
+		nowide::wstackstring warg;
+		if (!warg.convert(arg.c_str()))
+			continue;
+		cmdLine += L" \"";
+		for (wchar_t *p = warg.get(); *p != L'\0'; p++)
+		{
+			cmdLine += *p;
+			if (*p == L'"')
+				cmdLine += L'"';
+		}
+		cmdLine += L'"';
+	}
+
+	STARTUPINFOW startupInfo{};
+	startupInfo.cb = sizeof(startupInfo);
+
+	PROCESS_INFORMATION processInfo{};
+	BOOL rc = CreateProcessW(wexe.get(), (wchar_t *)cmdLine.c_str(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo, &processInfo);
+	if (rc)
+	{
+		proc.handle = processInfo.hProcess;
+		CloseHandle(processInfo.hThread);
+	}
+	else
+	{
+		WARN_LOG(BOOT, "os_Process::start failed: error %d", GetLastError());
+	}
+	return proc;
+}
+
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	DWORD result = WaitForSingleObject(handle, 0);
+	if (result == WAIT_TIMEOUT)
+		return true;
+	// Process has exited
+	CloseHandle(handle);
+	handle = nullptr;
+	return false;
+}
+
+void os_Process::terminate()
+{
+	if (!isValid())
+		return;
+	TerminateProcess(handle, 1);
+	WaitForSingleObject(handle, 5000);
+	CloseHandle(handle);
+	handle = nullptr;
+}
+#endif // DREAMPOTATO_INTEGRATED_MODE
+
 static WinLibLoader kernelBaseLib("KernelBase.dll");
 
 void os_SetThreadName(const char *name)
