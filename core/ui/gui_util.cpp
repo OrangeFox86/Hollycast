@@ -1599,7 +1599,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             ImGui::PushID("SliderTypedValue");
             if (ImGui::IsWindowAppearing())
                 ImGui::SetKeyboardFocusHere();
-            const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0);
             const bool accept = typedChanged || ImGui::IsItemDeactivatedAfterEdit();
             ImGui::PopID();
 
