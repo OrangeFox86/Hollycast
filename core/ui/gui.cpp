@@ -1950,20 +1950,20 @@ static void clearThumbnailCache()
 static std::string format_save_state_menu_time(time_t timestamp)
 {
 	if (timestamp <= 0)
-		return Ts("Unknown");
+		return T("Unknown");
 
 	struct tm tmInfo {};
 #ifdef _WIN32
 	if (localtime_s(&tmInfo, &timestamp) != 0)
-		return Ts("Unknown");
+		return T("Unknown");
 #else
 	if (localtime_r(&timestamp, &tmInfo) == nullptr)
-		return Ts("Unknown");
+		return T("Unknown");
 #endif
 
 	char timeStr[64];
 	if (strftime(timeStr, sizeof(timeStr), "%m/%d/%Y %I:%M %p", &tmInfo) == 0)
-		return Ts("Unknown");
+		return T("Unknown");
 
 	return timeStr;
 }

@@ -1376,12 +1376,12 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 			ImVec2(ImGui::GetStyle().FramePadding.x, (uiScaled(30) - ImGui::GetFontSize()) / 2));
 		portWidth = ImGui::CalcTextSize("AA").x + ImGui::GetStyle().ItemSpacing.x * 2.0f + ImGui::GetFontSize();
 		ImGui::SetNextItemWidth(portWidth);
-		if (ImGui::BeginCombo(T("Port"), T(kMaplePorts[g_gamepad_port_for_mapping + 1])))
+		if (ImGui::BeginCombo(T("Port"), kMaplePorts[g_gamepad_port_for_mapping + 1]))
 		{
 			for (u32 j = 0; j < MAPLE_PORTS; j++)
 			{
 				bool is_selected = g_gamepad_port_for_mapping == j;
-				if (ImGui::Selectable(T(kMaplePorts[j + 1]), &is_selected))
+				if (ImGui::Selectable(kMaplePorts[j + 1]), &is_selected)
 					g_gamepad_port_for_mapping = j;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -1982,30 +1982,20 @@ void renderGeneralTab()
 		{
 			struct UILanguageOption
 			{
-				const char* locale;
 				const char* label;
+				const char* locale;
 			};
+
 			const UILanguageOption uiLanguageOptions[] = {
-				{ "", T("System Default") },
-				{ "en", T("English") },
-				{ "de", T("German") },
-				{ "es", T("Spanish") },
-				{ "fr", T("French") },
-				{ "hu", T("Hungarian") },
-				{ "it", T("Italian") },
-				{ "ja", T("Japanese") },
-				{ "ko", T("Korean") },
-				{ "ms", T("Malay") },
-				{ "pl", T("Polish") },
-				{ "pt", T("Portuguese") },
-				{ "pt_BR", T("Portuguese (Brazil)") },
-				{ "sv", T("Swedish") },
-				{ "tr", T("Turkish") },
-				{ "uk", T("Ukrainian") },
-				{ "zh_CN", T("Chinese (Simplified)") },
-				{ "zh_HK", T("Chinese (Hong Kong)") },
-				{ "zh_TW", T("Chinese (Traditional)") },
+				{ T("System Default"), "" },
+				{ Tnop("English"), "en" },
+				{ Tnop("Français"), "fr" },
+				{ Tnop("Magyar"), "hu" },
+				{ Tnop("日本語"), "ja" },
+				{ Tnop("Português (Brasil)"), "pt_BR" },
+				{ Tnop("Svenska"), "sv" },
 			};
+
 			const char* uiLanguageLabels[IM_ARRAYSIZE(uiLanguageOptions)];
 			for (int i = 0; i < IM_ARRAYSIZE(uiLanguageOptions); i++)
 				uiLanguageLabels[i] = uiLanguageOptions[i].label;
@@ -2040,7 +2030,7 @@ void renderGeneralTab()
 				return true;
 			};
 			RenderGeneralPopupSettingRow(
-				"UILanguageSetting",
+				Tnop("UILanguageSetting"),
 				T("Language used by Hollycast menus and settings."),
 				uiLanguageCfg,
 				T(
@@ -2066,7 +2056,7 @@ void renderGeneralTab()
 		languageCfg.options.disabledPrefix = T("(auto) ");
 		languageCfg.options.valueWidth = 220.0f;
 			RenderGeneralPopupSettingRow(
-				"LanguageSetting",
+				Tnop("LanguageSetting"),
 				T("Dreamcast BIOS language (affects game text/menus)."),
 				languageCfg,
 				T(
@@ -2092,7 +2082,7 @@ void renderGeneralTab()
 		broadcastCfg.options.disabledPrefix = T("(auto) ");
 		broadcastCfg.options.valueWidth = 220.0f;
 			RenderGeneralPopupSettingRow(
-				"BroadcastSetting",
+				Tnop("BroadcastSetting"),
 				T("TV broadcast standard for non-VGA output modes."),
 				broadcastCfg,
 				T(
@@ -2118,7 +2108,7 @@ void renderGeneralTab()
 		regionCfg.options.currentValue = &config::Region.get();
 		regionCfg.options.valueWidth = 220.0f;
 			RenderGeneralPopupSettingRow(
-				"RegionSetting",
+				Tnop("RegionSetting"),
 				T("BIOS region (can affect compatibility and defaults)."),
 				regionCfg,
 				T(
@@ -2163,7 +2153,7 @@ void renderGeneralTab()
 			return displayIndex == 0 ? 0 : displayIndex + 1;
 		};
 			RenderGeneralPopupSettingRow(
-				"CableSetting",
+				Tnop("CableSetting"),
 				T("Emulated video cable type (affects game video modes)."),
 				cableCfg,
 				T(
@@ -2416,7 +2406,7 @@ void renderGeneralTab()
 		};
 
 		RenderGeneralPopupSettingRow(
-			"UIThemeSetting",
+			Tnop("UIThemeSetting"),
 			T("Choose the UI theme colors."),
 			themeCfg,
 			T(
@@ -2451,7 +2441,7 @@ void renderGeneralTab()
 		};
 
 		RenderGeneralPopupSettingRow(
-			"UIScalingSetting",
+			Tnop("UIScalingSetting"),
 			T("Scale the UI to fit your screen and viewing distance."),
 			uiScalingCfg,
 			T(
@@ -2523,7 +2513,7 @@ void renderGeneralTab()
 		};
 
 		RenderGeneralPopupSettingRow(
-			"BoxartSourceSetting",
+			Tnop("BoxartSourceSetting"),
 			T("Choose which box art source to display."),
 			boxartSourceCfg,
 			T(
@@ -3194,7 +3184,7 @@ void renderVideoTab()
 			};
 
 			RenderGeneralPopupSettingRow(
-				"GraphicsApiSetting",
+				Tnop("GraphicsApiSetting"),
 				T(
 					"Graphics API\n"
 					"One of the most important settings when you're not getting a good experience.\n"
@@ -3308,7 +3298,7 @@ void renderVideoTab()
 				};
 
 				RenderGeneralPopupSettingRow(
-					"TransparentSortingSetting",
+					Tnop("TransparentSortingSetting"),
 					T(
 						"Sorting Option\n"
 						"This controls how we sort transparent layers in games.\n"
@@ -3371,7 +3361,7 @@ void renderVideoTab()
 				};
 
 				RenderGeneralPopupSettingRow(
-					"InternalResolutionSetting",
+					Tnop("InternalResolutionSetting"),
 					T("Internal render resolution (the biggest performance lever)."),
 					internalResCfg,
 					T(
@@ -3569,7 +3559,7 @@ void renderVideoTab()
 					stretchPopupCfg.slider = stretchCfg;
 
 					RenderGeneralPopupSettingRow(
-						"HorizontalStretchingSetting",
+						Tnop("HorizontalStretchingSetting"),
 						T("Fine-tune horizontal scaling (often 132% for 16:9 correction)."),
 						stretchPopupCfg,
 						T(
@@ -3637,7 +3627,7 @@ void renderVideoTab()
 					};
 
 					RenderGeneralPopupSettingRow(
-						"PixelBufferSizeSetting",
+						Tnop("PixelBufferSizeSetting"),
 						T("Reserved memory for Per-Pixel transparency rendering."),
 						pixelBufferCfg,
 						T(
@@ -3677,7 +3667,7 @@ void renderVideoTab()
 					perPixelLayersPopupCfg.slider = perPixelLayersCfg;
 
 					RenderGeneralPopupSettingRow(
-						"PerPixelMaximumLayersSetting",
+						Tnop("PerPixelMaximumLayersSetting"),
 						T("Maximum transparent layers resolved per pixel."),
 						perPixelLayersPopupCfg,
 						T(
@@ -3718,7 +3708,7 @@ void renderVideoTab()
 					};
 
 					RenderGeneralPopupSettingRow(
-						"AutoFrameSkippingSetting",
+						Tnop("AutoFrameSkippingSetting"),
 						T("Auto-skip frames to maintain full-speed gameplay."),
 						autoSkipCfg,
 						T(
@@ -3750,7 +3740,7 @@ void renderVideoTab()
 					frameSkipPopupCfg.slider = frameSkipCfg;
 
 					RenderGeneralPopupSettingRow(
-						"FrameSkippingSetting",
+						Tnop("FrameSkippingSetting"),
 						T("Force a fixed number of skipped frames."),
 						frameSkipPopupCfg,
 						T(
@@ -3895,15 +3885,17 @@ void renderVideoTab()
 					};
 
 					RenderGeneralPopupSettingRow(
-						"AnisotropicFilteringSetting",
-						"Sharper textures at steep angles (mipmapped textures only).",
+						Tnop("AnisotropicFilteringSetting"),
+						T("Sharper textures at steep angles (mipmapped textures only)."),
 						anisoCfg,
-						"Anisotropic Filtering\n"
-						"Makes mipmapped textures viewed at sharp angles look cleaner (less shimmer).\n"
-						"Increases GPU cost.\n\n"
-						"Only affects mipmapped textures. If you want this to do anything, keep mipmaps enabled.");
-						}
-					}
+						T(
+							"Anisotropic Filtering\n"
+							"Makes mipmapped textures viewed at sharp angles look cleaner (less shimmer).\n"
+							"Increases GPU cost.\n\n"
+							"Only affects mipmapped textures. If you want this to do anything, keep mipmaps enabled."
+						));
+				}
+			}
 
 			// Texture Filtering
 			if (RenderCollapsingHeader("TextureFilteringSection", ICON_FA_FILTER, T("Texture Filtering"), ImGuiTreeNodeFlags_DefaultOpen))
@@ -3934,7 +3926,7 @@ void renderVideoTab()
 				};
 
 				RenderGeneralPopupSettingRow(
-					"TextureFilteringSetting",
+					Tnop("TextureFilteringSetting"),
 					T("Override how textures are filtered (sampled)."),
 					textureFilterCfg,
 					T(
@@ -4039,7 +4031,7 @@ void renderVideoTab()
 						vresPopupCfg.slider = vresCfg;
 
 						RenderGeneralPopupSettingRow(
-							"VideoRoutingVResSetting",
+							Tnop("VideoRoutingVResSetting"),
 							T("Set vertical resolution for the shared output texture."),
 							vresPopupCfg,
 							T(
@@ -4182,7 +4174,7 @@ void renderAudioTab()
 		volumePopupCfg.slider = volumeConfig;
 
 			RenderGeneralPopupSettingRow(
-				"VolumeLevelSetting",
+				Tnop("VolumeLevelSetting"),
 				T("Master audio volume."),
 				volumePopupCfg,
 				T(
@@ -4252,7 +4244,7 @@ void renderAudioTab()
 		latencyPopupCfg.slider = latencyConfig;
 
 			RenderGeneralPopupSettingRow(
-				"AudioLatencySetting",
+				Tnop("AudioLatencySetting"),
 				T("Audio buffer size in milliseconds."),
 				latencyPopupCfg,
 				T(
@@ -4324,7 +4316,7 @@ void renderAudioTab()
 		driverPopupCfg.options = driverConfig;
 
 			RenderGeneralPopupSettingRow(
-				"AudioDriverSetting",
+				Tnop("AudioDriverSetting"),
 				T("Select the host audio backend/driver."),
 				driverPopupCfg,
 				T(
@@ -4353,7 +4345,7 @@ void renderAudioTab()
 					{
 						static std::unordered_map<std::string, int> g_audioBackendIntValues;
 						const std::string optionKey = current_backend->slug + "." + options->name;
-						const std::string popupId = "AudioBackendInt_" + optionKey;
+						const std::string popupId = Tnop("AudioBackendInt_") + optionKey;
 						const int cfgVal = stoi(value);
 
 						if (!ImGui::IsPopupOpen(popupId.c_str()))
@@ -4426,7 +4418,7 @@ void renderAudioTab()
 
 						static std::unordered_map<std::string, int> g_audioBackendListIndex;
 						const std::string optionKey = current_backend->slug + "." + options->name;
-						const std::string popupId = "AudioBackendList_" + optionKey;
+						const std::string popupId = Tnop("AudioBackendList_") + optionKey;
 						if (!ImGui::IsPopupOpen(popupId.c_str()))
 							g_audioBackendListIndex[optionKey] = currentIndex;
 						int& tempIndex = g_audioBackendListIndex[optionKey];
@@ -4634,16 +4626,16 @@ void renderControlsTab()
 			sensitivityPopupCfg.type = SettingsUI::PopupType::Slider;
 			sensitivityPopupCfg.slider = sensitivityConfig;
 
-				RenderGeneralPopupSettingRow(
-					"SensitivitySetting",
-					T("Mouse/light gun sensitivity."),
-					sensitivityPopupCfg,
-					T(
-						"Sensitivity\n"
-						"Adjusts mouse and light gun sensitivity.\n"
-						"Higher values make the cursor move faster.\n\n"
-						"Tip: tune this in actual gameplay (not just menus) and keep it consistent across devices when possible."
-					));
+			RenderGeneralPopupSettingRow(
+				Tnop("SensitivitySetting"),
+				T("Mouse/light gun sensitivity."),
+				sensitivityPopupCfg,
+				T(
+					"Sensitivity\n"
+					"Adjusts mouse and light gun sensitivity.\n"
+					"Higher values make the cursor move faster.\n\n"
+					"Tip: tune this in actual gameplay (not just menus) and keep it consistent across devices when possible."
+				));
 		}
 
 #if defined(_WIN32) && !defined(TARGET_UWP)
@@ -4982,7 +4974,7 @@ void renderControlsTab()
 			crosshairPopupCfg.slider = crosshairConfig;
 
 				RenderGeneralPopupSettingRow(
-					"CrosshairSizeSetting",
+					Tnop("CrosshairSizeSetting"),
 					T("Crosshair size for light guns."),
 					crosshairPopupCfg,
 					T(
@@ -5094,7 +5086,7 @@ void renderNetworkTab()
 			};
 
 			RenderGeneralPopupSettingRow(
-				"NetworkTypeSetting",
+				Tnop("NetworkTypeSetting"),
 				T("Choose which network feature is active."),
 				networkTypeCfg,
 				T(
@@ -5172,7 +5164,7 @@ void renderNetworkTab()
 						ggpoDelayPopupCfg.slider = ggpoDelayCfg;
 
 						RenderGeneralPopupSettingRow(
-							"GGPOFrameDelaySetting",
+							Tnop("GGPOFrameDelaySetting"),
 							T("Extra buffering for higher ping sessions."),
 							ggpoDelayPopupCfg,
 							T(
@@ -5207,7 +5199,7 @@ void renderNetworkTab()
 							};
 
 							RenderGeneralPopupSettingRow(
-								"GGPOAnalogAxesSetting",
+								Tnop("GGPOAnalogAxesSetting"),
 								T("Control how the left thumbstick is used in GGPO."),
 								axesCfg,
 								T(
@@ -5313,9 +5305,9 @@ void renderNetworkTab()
 
 					SettingsUI::PopupConfig networkRoleCfg {};
 					networkRoleCfg.type = SettingsUI::PopupType::Options;
-					networkRoleCfg.options.label = "Network Role";
+					networkRoleCfg.options.label = T("Network Role");
 					networkRoleCfg.options.icon = ICON_FA_GLOBE;
-					networkRoleCfg.options.popupID = "NetworkRolePopup";
+					networkRoleCfg.options.popupID = Tnop("NetworkRolePopup");
 					networkRoleCfg.options.options = networkRoles;
 					networkRoleCfg.options.optionCount = IM_ARRAYSIZE(networkRoles);
 					networkRoleCfg.options.currentValue = &role;
@@ -5338,7 +5330,7 @@ void renderNetworkTab()
 						return true;
 					};
 					RenderGeneralPopupSettingRow(
-						"NetworkRoleSetting",
+						Tnop("NetworkRoleSetting"),
 						T("Choose the network role."),
 						networkRoleCfg,
 						T(
@@ -5726,7 +5718,7 @@ void renderAdvancedTab()
 				};
 
 			RenderGeneralPopupSettingRow(
-				"CpuModeSetting",
+				Tnop("CpuModeSetting"),
 				T("Use the dynamic recompiler for speed, or interpreter for compatibility."),
 				cpuModeCfg,
 				T(
@@ -5766,7 +5758,7 @@ void renderAdvancedTab()
 			sh4ClockPopupCfg.slider = sh4ClockCfg;
 
 			RenderGeneralPopupSettingRow(
-				"Sh4ClockSetting",
+				Tnop("Sh4ClockSetting"),
 				T("Over/Underclock the main SH4 CPU."),
 				sh4ClockPopupCfg,
 				T(
@@ -5784,13 +5776,14 @@ void renderAdvancedTab()
 			static int fastForwardLimitTemp = config::FastForwardSpeedLimit.get();
 
 			SettingsUI::PopupSliderConfig fastForwardLimitCfg {};
-			fastForwardLimitCfg.label = "Fast-Forward Speed";
+			fastForwardLimitCfg.label = T("Fast-Forward Speed");
 			fastForwardLimitCfg.icon = ICON_FA_FORWARD_FAST;
-			fastForwardLimitCfg.popupID = "FastForwardSpeedLimitPopup";
-			fastForwardLimitCfg.description =
+			fastForwardLimitCfg.popupID = Tnop("FastForwardSpeedLimitPopup");
+			fastForwardLimitCfg.description = T(
 				"Sets a cap for Fast-Forward speed.\n"
 				"Values below Infinite apply frame pacing while Fast-Forward is active.\n"
-				"Infinite preserves the current uncapped behavior.";
+				"Infinite preserves the current uncapped behavior."
+			);
 			fastForwardLimitCfg.currentValue = &fastForwardLimitTemp;
 			fastForwardLimitCfg.minValue = 2;
 			fastForwardLimitCfg.maxValue = 300;
@@ -5814,7 +5807,7 @@ void renderAdvancedTab()
 			fastForwardLimitPopupCfg.slider = fastForwardLimitCfg;
 
 			RenderGeneralPopupSettingRow(
-				"FastForwardSpeedLimitSetting",
+				Tnop("FastForwardSpeedLimitSetting"),
 				T("Cap Fast-Forward speed or leave it Infinite."),
 				fastForwardLimitPopupCfg,
 				T(
@@ -6067,7 +6060,7 @@ void renderAdvancedTab()
 			};
 
 			RenderGeneralPopupSettingRow(
-				"LogVerbositySetting",
+				Tnop("LogVerbositySetting"),
 				T("Control the verbosity of log output"),
 				logVerbosityCfg,
 				T(
@@ -6306,7 +6299,7 @@ void renderAdvancedTab()
 		};
 
 		RenderGeneralPopupSettingRow(
-			"ResourceMonitorMode",
+			Tnop("ResourceMonitorMode"),
 			T("Real-time performance overlay updated once per second. Minimal: CPU/GPU/FPS. Full: CPU/GPU/frame time/FPS/VRAM/RAM."),
 			monitorModeCfg,
 			T(

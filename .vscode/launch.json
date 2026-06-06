@@ -5,25 +5,25 @@
             "name": "(Windows) Attach",
             "type": "cppvsdbg",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/Debug/flycast.exe"
+            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.exe"
         },
         {
-            "name": "(Windows) Debug Flycast",
+            "name": "(Windows) Debug Hollycast",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/Debug/flycast.exe",
+            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.exe",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-debug/Debug/",
             "environment": [],
-            "console": "integratedTerminal",
+            "console": "internalConsole",
             "preLaunchTask": "Build Debug"
         },
         {
             "name": "(Windows) Debug Unit Tests",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-unit-tests-debug/Debug/flycast.exe",
+            "program": "${workspaceFolder}/build-unit-tests-debug/Debug/Hollycast.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-unit-tests-debug/Debug/",
@@ -36,7 +36,7 @@
             "name": "(Linux) Attach",
             "type": "cppdbg",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/flycast",
+            "program": "${workspaceFolder}/build-debug/Hollycast",
             "setupCommands": [
                 {
                     "description": "Ignore SIGSEGV for Dynarec",
@@ -46,11 +46,11 @@
             ]
         },
         {
-            "name": "(Linux) Debug Flycast",
+            "name": "(Linux) Debug Hollycast",
             "type": "cppdbg",
             "MIMode": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/flycast",
+            "program": "${workspaceFolder}/build-debug/Hollycast",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-debug/",
@@ -69,7 +69,7 @@
             "type": "cppdbg",
             "MIMode": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build-unit-tests-debug/flycast",
+            "program": "${workspaceFolder}/build-unit-tests-debug/Hollycast",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-unit-tests-debug/",
@@ -82,16 +82,16 @@
             "name": "(macOS) Attach",
             "type": "lldb",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/Debug/Flycast.app/Contents/MacOS/Flycast",
+            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.app/Contents/MacOS/Hollycast",
             "initCommands": [
                 "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
             ]
         },
         {
-            "name": "(macOS) Debug Flycast",
+            "name": "(macOS) Debug Hollycast",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/Debug/Flycast.app/Contents/MacOS/Flycast",
+            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.app/Contents/MacOS/Hollycast",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
             "cwd": "${workspaceFolder}/build-debug",
             "preLaunchTask": "Build Debug",
