@@ -6519,11 +6519,11 @@ void renderAboutTab()
 	// License Information
 	if (RenderCollapsingHeader("LicenseSection", ICON_FA_FILE_CONTRACT, T("License"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Copyright (C) 2019-2025 flyinghead and contributors. "
 			"Portions Copyright 2026 The Hollycast Authors"
 		));
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Hollycast is free software; you can redistribute it and/or modify "
 			"it under the terms of the GNU General Public License as published by "
 			"the Free Software Foundation; either version 2 of the License, or "
@@ -6539,7 +6539,7 @@ void renderAboutTab()
 			"This emulator is based on the work of many talented developers "
 			"who have contributed to the project and its dependencies."
 		));
-		ImGui::TextWrapped(T(
+		ImGui::TextWrapped("%s", T(
 			"Special thanks to all contributors who make this project possible."
 		));
 	}
