@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,7 @@
 #include "rend/sorter.h"
 #include "oslib/i18n.h"
 #include <glm/gtx/transform.hpp>
+#include "imgui.h"
 
 const u32 DstBlendGL[]
 {
@@ -1174,17 +1176,21 @@ void D3DRenderer::displayFramebuffer()
 {
 	devCache.SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
 	device->ColorFill(backbuffer, 0, D3DCOLOR_COLORVALUE(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f));
-	
+
+	// Adjust 'rd.top', 'viewport.Y', and 'viewport.Height' to avoid framebuffer overlapping with the menu bar
+	int topInset = (int)ImGui::GetFrameHeight();
+	int outheight = settings.display.height - topInset;
+
 	int dx = 0;
 	int dy = 0;
-	getWindowboxDimensions(settings.display.width, settings.display.height, aspectRatio, dx, dy, config::Rotate90);
+	getWindowboxDimensions(settings.display.width, outheight, aspectRatio, dx, dy, config::Rotate90);
 
 	float shiftX, shiftY;
 	getVideoShift(shiftX, shiftY);
 	if (!config::Rotate90 && shiftX == 0 && shiftY == 0)
 	{
 		RECT rs { 0, 0, (long)width, (long)height };
-		RECT rd { dx, dy, settings.display.width - dx, settings.display.height - dy };
+		RECT rd { dx, dy + topInset, settings.display.width - dx, settings.display.height - dy };
 		device->StretchRect(framebufferSurface, &rs, backbuffer, &rd,
 				config::LinearInterpolation ? D3DTEXF_LINEAR : D3DTEXF_POINT);	// This can fail if window is minimized
 	}
@@ -1211,9 +1217,9 @@ void D3DRenderer::displayFramebuffer()
 		device->SetFVF(D3DFVF_XYZ | D3DFVF_TEX1);
 		D3DVIEWPORT9 viewport;
 		viewport.X = dx;
-		viewport.Y = dy;
+		viewport.Y = dy + topInset;
 		viewport.Width = settings.display.width - dx * 2;
-		viewport.Height = settings.display.height - dy * 2;
+		viewport.Height = outheight - dy * 2;
 		viewport.MinZ = 0;
 		viewport.MaxZ = 1;
 		bool rc = SUCCEEDED(device->SetViewport(&viewport));

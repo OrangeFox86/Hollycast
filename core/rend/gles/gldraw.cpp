@@ -1,8 +1,10 @@
+// Portions Copyright 2026 The Hollycast Authors
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
 #include "rend/osd.h"
 #include "naomi2.h"
+#include "imgui.h"
 #ifdef LIBRETRO
 #include "postprocess.h"
 #include "vmu_xhair.h"
@@ -764,14 +766,19 @@ bool OpenGLRenderer::renderLastFrame()
 	if (framebuffer == nullptr)
 		return false;
 	
+	// Adjust 'glViewport(.., height)' and 'glBlitFramebuffer(.., dstY0, ..)' arguments
+	// to avoid framebuffer overlapping with the menu bar
+	int topInset = (int)ImGui::GetFrameHeight();
+	int outheight = settings.display.height - topInset;
+
 	int dx = 0;
 	int dy = 0;
 	glcache.Disable(GL_SCISSOR_TEST);
-	getWindowboxDimensions(settings.display.width, settings.display.height, gl.ofbo.aspectRatio, dx, dy, config::Rotate90);
+	getWindowboxDimensions(settings.display.width, outheight, gl.ofbo.aspectRatio, dx, dy, config::Rotate90);
 
 	if (gl.bogusBlitFramebuffer || config::Rotate90)
 	{
-		glViewport(dx, dy, settings.display.width - dx * 2, settings.display.height - dy * 2);
+		glViewport(dx, dy, settings.display.width - dx * 2, outheight - dy * 2);
 		glBindFramebuffer(GL_FRAMEBUFFER, gl.ofbo.origFbo);
 		glcache.ClearColor(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -803,7 +810,7 @@ bool OpenGLRenderer::renderLastFrame()
 		glcache.ClearColor(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glBlitFramebuffer(-gl.ofbo.shiftX, -gl.ofbo.shiftY, framebuffer->getWidth() - gl.ofbo.shiftX, framebuffer->getHeight() - gl.ofbo.shiftY,
-				dx, settings.display.height - dy, settings.display.width - dx, dy,
+				dx, outheight - dy, settings.display.width - dx, dy,
 				GL_COLOR_BUFFER_BIT, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
     	glBindFramebuffer(GL_FRAMEBUFFER, gl.ofbo.origFbo);
 #endif
@@ -924,7 +931,9 @@ static void drawVmuTexture(u8 vmuIndex, int width, int height)
 	}
 	else
 	{
-		y = vmu_padding;
+		// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
+		// Note: we intentionally do not multiply by 'settings.display.uiScale' here
+		y = vmu_padding + ImGui::GetFrameHeight();
 		if (vmuIndex & 1)
 			y += vmu_padding + h;
 	}

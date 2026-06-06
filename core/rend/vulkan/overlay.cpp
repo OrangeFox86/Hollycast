@@ -23,6 +23,7 @@
 #include "cfg/option.h"
 #include "hw/maple/maple_cfg.h"
 #include "rend/osd.h"
+#include "imgui.h"
 #ifdef LIBRETRO
 #include "vmu_xhair.h"
 #endif
@@ -200,7 +201,9 @@ void VulkanOverlay::Draw(vk::CommandBuffer commandBuffer, vk::Extent2D viewport,
 			}
 			else
 			{
-				y = vmu_padding;
+				// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
+				// Note: we intentionally do not multiply by 'scaling' here
+				y = vmu_padding + ImGui::GetFrameHeight();
 				if (i & 1)
 					y += vmu_padding + h;
 			}

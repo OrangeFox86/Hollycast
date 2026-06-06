@@ -1081,13 +1081,18 @@ void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& exten
 	else
 		quadPipeline->BindPipeline(commandBuffer);
 
+	// Adjust 'viewport.y', 'viewport.height', 'Offset2D.y', and 'Extent2D.height'
+	// to avoid framebuffer overlapping with the menu bar
+	int topInset = (int)ImGui::GetFrameHeight();
+	int outheight = height - topInset;
+
 	int dx = 0;
 	int dy = 0;
-	getWindowboxDimensions(width, height, aspectRatio, dx, dy, config::Rotate90);
+	getWindowboxDimensions(width, outheight, aspectRatio, dx, dy, config::Rotate90);
 	
-	vk::Viewport viewport(dx, dy, width - dx * 2, height - dy * 2);
+	vk::Viewport viewport(dx, dy + topInset, width - dx * 2, outheight - dy * 2);
 	commandBuffer.setViewport(0, viewport);
-	commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(dx, dy), vk::Extent2D(width - dx * 2, height - dy * 2)));
+	commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(dx, dy + topInset), vk::Extent2D(width - dx * 2, outheight - dy * 2)));
 	if (config::Rotate90)
 		quadRotateDrawer->Draw(commandBuffer, imageView, vtx, !config::LinearInterpolation);
 	else

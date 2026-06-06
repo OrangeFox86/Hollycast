@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -20,6 +21,7 @@
 #include "rend/osd.h"
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
+#include "imgui.h"
 
 void D3DOverlay::drawQuad(const RECT& rect, D3DCOLOR color)
 {
@@ -78,7 +80,9 @@ void D3DOverlay::draw(u32 width, u32 height, bool vmu, bool crosshair)
 			}
 			else
 			{
-				y = vmu_padding;
+				// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
+				// Note: we intentionally do not multiply by 'settings.display.uiScale' here
+				y = vmu_padding + ImGui::GetFrameHeight();
 				if (i & 1)
 					y += vmu_padding + vmu_height;
 			}

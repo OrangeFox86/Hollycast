@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -21,6 +22,7 @@
 #ifdef LIBRETRO
 #include "vmu_xhair.h"
 #endif
+#include "imgui.h"
 
 void DX11Overlay::draw(u32 width, u32 height, bool vmu, bool crosshair)
 {
@@ -126,7 +128,9 @@ void DX11Overlay::draw(u32 width, u32 height, bool vmu, bool crosshair)
 			}
 			else
 			{
-				y = vmu_padding;
+				// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
+				// Note: we intentionally do not multiply by 'settings.display.uiScale' here
+				y = vmu_padding + ImGui::GetFrameHeight();
 				if (i & 1)
 					y += vmu_padding + vmu_height;
 			}
