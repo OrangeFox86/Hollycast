@@ -686,7 +686,7 @@ static void gui_display_commands()
 			ImGui::SetColumnWidth(1, uiScaled(columnWidth));
 			ImGui::SetColumnWidth(2, uiScaled(columnWidth));
 			const ImVec2 vmuPos = ImGui::GetStyle().WindowPadding + ScaledVec2(0.f, 100.f)
-					+ ImVec2(insetLeft, ImGui::GetStyle().ItemSpacing.y);
+					+ ImVec2(insetLeft, ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeight());
 			ImguiVmuTexture::displayVmus(vmuPos);
 			ImGui::NextColumn();
 		}
