@@ -1,5 +1,6 @@
 /*
     This file is part of Flycast.
+	Portions Copyright 2026 The Hollycast Authors
 
     Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -57,7 +58,7 @@ int main(int argc, char *argv[])
 	warmUpSwitchExceptions();
 
 	if (flycast_init(argc, argv))
-		die("Flycast initialization failed");
+		die("Hollycast initialization failed");
 
 	try {
 		mainui_loop();

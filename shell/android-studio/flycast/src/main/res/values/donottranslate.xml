@@ -1,3 +1,4 @@
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
-    <string name="app_name" translatable="false">Flycast</string>
+    <string name="app_name" translatable="false">Hollycast</string>
 </resources>

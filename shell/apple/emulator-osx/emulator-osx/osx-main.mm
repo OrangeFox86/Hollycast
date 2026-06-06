@@ -4,6 +4,7 @@
 //
 //  Created by admin on 8/5/15.
 //  Copyright (c) 2015 reicast. All rights reserved.
+// Portions Copyright 2026 The Hollycast Authors
 //
 #import <Carbon/Carbon.h>
 #import <AppKit/AppKit.h>
@@ -213,7 +214,7 @@ void os_RunInstance(int argc, const char *argv[])
 			localArgs.push_back((char *)argv[i]);
 		localArgs.push_back(nullptr);
 		execv(selfPath, &localArgs[0]);
-		ERROR_LOG(BOOT, "Error %d launching Flycast instance %s", errno, selfPath);
+		ERROR_LOG(BOOT, "Error %d launching Hollycast instance %s", errno, selfPath);
 		die("execv failed");
 	}
 }

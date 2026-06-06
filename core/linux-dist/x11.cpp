@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #if defined(SUPPORT_X11)
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -122,7 +123,7 @@ static void destroy_empty_cursor()
 
 static void x11_capture_mouse()
 {
-	x11_window_set_text("Flycast - mouse capture");
+	x11_window_set_text("Hollycast - mouse capture");
 	capturing_mouse = true;
 	Cursor cursor = create_empty_cursor();
 	XDefineCursor(x11_disp, x11_win, cursor);
@@ -133,7 +134,7 @@ static void x11_capture_mouse()
 
 static void x11_uncapture_mouse()
 {
-	x11_window_set_text("Flycast");
+	x11_window_set_text("Hollycast");
 	capturing_mouse = false;
 	XUndefineCursor(x11_disp, x11_win);
 	XUngrabPointer(x11_disp, CurrentTime);
@@ -358,7 +359,7 @@ void x11_window_create()
 
 		XFlush(x11_disp);
 
-		x11_window_set_text("Flycast");
+		x11_window_set_text("Hollycast");
 	}
 	else
 	{

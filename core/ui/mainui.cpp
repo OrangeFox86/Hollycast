@@ -1,5 +1,6 @@
 /*
 	Copyright 2020 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -67,7 +68,7 @@ bool mainui_rend_frame()
 			gui_draw_osd();
 		} catch (const RendererException& e) {
 			gui_error(i18n::Ts("Renderer error:") + "\n" + e.what() + "\n\n"
-					+ i18n::Ts("The game has been paused but it is recommended to restart Flycast"));
+					+ i18n::Ts("The game has been paused but it is recommended to restart Hollycast"));
 			rend_term_renderer();
 			if (!rend_init_renderer())
 				ERROR_LOG(RENDERER, "Renderer re-initialization failed");

@@ -1,3 +1,5 @@
+# Portions Copyright 2026 The Hollycast Authors
+
 name: Android
 
 on:
@@ -53,8 +55,8 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: flycast-release.apk
-          path: shell/android-studio/flycast/build/outputs/apk/release/flycast-release.apk
+          name: Hollycast-release.apk
+          path: shell/android-studio/flycast/build/outputs/apk/release/Hollycast-release.apk
 
       - name: Build dump_syms
         working-directory: core/deps/breakpad

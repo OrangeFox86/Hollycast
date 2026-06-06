@@ -124,8 +124,8 @@ jobs:
       - name: Dump symbols
         run: |
           mkdir -p symbols
-          core/deps/breakpad/bin/dump_syms artifact/bin/flycast.exe > symbols/flycast.sym 2>/dev/null
-          strip artifact/bin/flycast.exe
+          core/deps/breakpad/bin/dump_syms artifact/bin/Hollycast.exe > symbols/Hollycast.sym 2>/dev/null
+          strip artifact/bin/Hollycast.exe
         if: matrix.config.name == 'x86_64-w64-mingw32'
 
       - name: Build breakpad (linux)
@@ -142,7 +142,7 @@ jobs:
           dump_syms artifact/bin/flycast > symbols/flycast.sym 2>/dev/null
           strip artifact/bin/flycast
           shell/linux/make-appimage.sh . artifact/bin appimage
-          mv flycast-x86_64.AppImage artifact/bin
+          mv Hollycast-x86_64.AppImage artifact/bin
           rm artifact/bin/flycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu'
 
@@ -156,13 +156,13 @@ jobs:
       - name: Package app (macos)
         run: |
           cd artifact/bin
-          zip -rm flycast.app.zip Flycast.app
+          zip -rm Hollycast.app.zip Hollycast.app
         if: matrix.config.name == 'apple-darwin'
 
       - name: Package app (windows)
         run: |
-          powershell Compress-Archive artifact/bin/flycast.exe artifact/bin/flycast.zip 
-          rm artifact/bin/flycast.exe
+          powershell Compress-Archive artifact/bin/Hollycast.exe artifact/bin/Hollycast.zip
+          rm artifact/bin/Hollycast.exe
         if: matrix.config.name == 'x86_64-w64-mingw32'
 
       - name: Setup Rclone

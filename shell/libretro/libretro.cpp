@@ -1,5 +1,6 @@
 /*
     This file is part of Flycast.
+	Portions Copyright 2026 The Hollycast Authors
 
     Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -2366,7 +2367,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 
 void retro_unload_game()
 {
-	INFO_LOG(COMMON, "Flycast unloading game");
+	INFO_LOG(COMMON, "Hollycast unloading game");
 	emu.unloadGame();
 	dreampotato::term();
 	game_data.clear();
@@ -2487,7 +2488,7 @@ const char* retro_get_system_directory()
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-   info->library_name = "Flycast";
+   info->library_name = "Hollycast";
 #ifndef GIT_VERSION
 #define GIT_VERSION "undefined"
 #endif

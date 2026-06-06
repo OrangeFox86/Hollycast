@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS 1
 #endif
@@ -342,7 +343,7 @@ int main(int argc, char* argv[])
 	common_linux_setup();
 
 	if (flycast_init(argc, argv))
-		die("Flycast initialization failed\n");
+		die("Hollycast initialization failed\n");
 
 #if defined(USE_BREAKPAD)
 	auto async = std::async(std::launch::async, uploadCrashes, "/tmp");

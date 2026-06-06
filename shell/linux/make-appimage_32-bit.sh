@@ -1,4 +1,5 @@
 #!/bin/bash
+# Portions Copyright 2026 The Hollycast Authors
 
 if [ "$#" -ne 3 ]; then
     echo "Syntax: $0 <source root dir> <artifact dir> <output dir>"
@@ -154,4 +155,4 @@ EOF
 chmod +x "$OUTDIR/AppRun"
 
 echo "Generate AppImage"
-ARCH=i386 ./appimagetool-i686.AppImage -v "$OUTDIR" "flycast-i386.AppImage"
+ARCH=i386 ./appimagetool-i686.AppImage -v "$OUTDIR" "Hollycast-i386.AppImage"

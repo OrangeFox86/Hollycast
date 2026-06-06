@@ -1,5 +1,5 @@
 /*
-	Copyright 2024 flyinghead
+	Copyright 2019 flyinghead
 	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
@@ -2300,11 +2300,11 @@ void renderGeneralTab()
 				false,
 				T(
 					"Data Folder\n"
-					"This is Flycast's writable data directory on this platform.\n\n"
+					"This is Hollycast's writable data directory on this platform.\n\n"
 					"It typically contains:\n"
 					"- BIOS/Flash files (for example: `dc_boot.bin`, `dc_flash.bin`)\n"
 					"- Save data (VMU files) and save states\n\n"
-						"If Flycast cannot find a BIOS, double-check that your BIOS files are placed in the expected location and that their filenames match what Flycast looks for.\n"
+						"If Hollycast cannot find a BIOS, double-check that your BIOS files are placed in the expected location and that their filenames match what Flycast looks for.\n"
 						"Custom Paths below can also override where some of these files are stored."
 				)
 			);
@@ -2316,17 +2316,17 @@ void renderGeneralTab()
 				"HomeFolderPathRow",
 				ICON_FA_HOUSE,
 				T("Home Directory"),
-				T("The folder where Flycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\""),
+				T("The folder where Hollycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\""),
 				get_writable_config_path(""),
 				false,
 				T(
 					"Home Directory\n"
-					"This is Flycast's main configuration directory.\n\n"
+					"This is Hollycast's main configuration directory.\n\n"
 					"It typically contains:\n"
 					"- Configuration files\n"
 					"- VMU saves and other user data\n\n"
 					"On platforms that use a `data` subfolder, BIOS/Flash files should be placed under `data` inside this directory.\n"
-					"If you change custom paths below, Flycast may store some files elsewhere, but this directory remains the base for core configuration."
+					"If you change custom paths below, Hollycast may store some files elsewhere, but this directory remains the base for core configuration."
 				)
 			);
 
@@ -2840,9 +2840,9 @@ void renderGeneralTab()
 		managePathList(T("BIOS Folders"), T("BIOS Folder"), config::BiosPath.get(),
 			T(
 				"BIOS Folders\n"
-				"Folders that Flycast searches for BIOS/Flash files (Dreamcast BIOS/Flash and arcade BIOS).\n\n"
+				"Folders that Hollycast searches for BIOS/Flash files (Dreamcast BIOS/Flash and arcade BIOS).\n\n"
 				"Typical Dreamcast files include `dc_boot.bin` and `dc_flash.bin`.\n"
-				"If you keep multiple BIOS sets, you can add multiple folders and Flycast will search all of them.\n"
+				"If you keep multiple BIOS sets, you can add multiple folders and Hollycast will search all of them.\n"
 				"For troubleshooting, keep your BIOS files in a single known-good folder to avoid confusion."
 			)
 		);
@@ -2853,7 +2853,7 @@ void renderGeneralTab()
 			T(
 				"VMU Folder\n"
 				"Where VMU memory card files (`.bin`) are stored.\n\n"
-				"If you change this, Flycast will look for VMUs in the new location.\n"
+				"If you change this, Hollycast will look for VMUs in the new location.\n"
 				"Move/copy your existing VMU files if you want to keep your saves.\n"
 				"Use this to keep saves on a specific drive or to share saves between installations."
 			)
@@ -2874,7 +2874,7 @@ void renderGeneralTab()
 				"Folders used for save states.\n\n"
 				"The first folder is used when creating new save states.\n"
 				"All listed folders are searched when loading, which is useful if you keep states organized across different locations.\n"
-				"Save states are not always portable between very different Flycast versions; if a state fails to load, try recreating it on your current build."
+				"Save states are not always portable between very different Hollycast versions; if a state fails to load, try recreating it on your current build."
 			)
 		);
 		ImGui::Spacing();
@@ -2893,7 +2893,7 @@ void renderGeneralTab()
 		managePathList(T("Texture Pack Folders"), T("Texture Pack Folder"), config::TexturePath.get(),
 			T(
 				"Texture Pack Folders\n"
-				"Folders that Flycast searches for custom texture packs.\n\n"
+				"Folders that Hollycast searches for custom texture packs.\n\n"
 				"Common layouts include `textures/<gameId>/...` or `<gameId>` inside a `textures` subfolder.\n"
 				"After installing a pack, enable Custom Textures in the Video tab and restart the game.\n"
 				"If you notice stutter while textures stream in, consider using Preload Textures (more RAM/VRAM required)."
@@ -2905,7 +2905,7 @@ void renderGeneralTab()
 		manageSinglePath("Texture Dump Folder", config::TextureDumpPath,
 			T(
 				"Texture Dump Folder\n"
-				"Where Flycast saves dumped textures when Texture Dumping is enabled.\n\n"
+				"Where Hollycast saves dumped textures when Texture Dumping is enabled.\n\n"
 				"Game-specific subfolders are created automatically.\n"
 				"Dumping can generate a large number of files quickly and consume significant disk space.\n"
 				"Enable dumping only when needed, then disable it after you are done."
@@ -2922,7 +2922,7 @@ void renderGeneralTab()
 			T(
 				"Cheat Folders\n"
 				"Folders containing cheat files (`.cht` / `.txt`) named using the game's ID.\n\n"
-				"Flycast can auto-load matching cheat files when present.\n"
+				"Hollycast can auto-load matching cheat files when present.\n"
 				"If cheats are not loading, verify the filename matches the game ID and that the cheat file format is correct.\n"
 				"Use cheats carefully: they can crash games or cause unexpected behavior."
 			)
@@ -5300,20 +5300,56 @@ void renderNetworkTab()
 				}
 				// Naomi Network Settings
 				else if (config::NetworkEnable)
-			{
-				RenderGeneralToggleSettingRow(
-					"ActAsServer",
-					ICON_FA_SERVER,
-					T("Act as Server"),
-					T("Host Naomi network game"),
-					static_cast<bool>(config::ActAsServer),
-					[](bool enabled) { config::ActAsServer = enabled; },
-					T(
-						"Naomi Netplay: Act as Server\n"
-						"When enabled, this device hosts the Naomi network session and waits for another player to connect.\n\n"
-						"If you cannot connect to each other, check firewalls/NAT rules and confirm both players are using the same game/version.\n"
-						"Use the Local Port setting if you need to match a specific port or avoid conflicts."
-					));
+				{
+					int role = 0;
+					if (!config::ActAsServer)
+						role = config::NaomiSatellite ? 2 : 1;
+
+					const char* const networkRoles[] = {
+						T("Server"),
+						T("Client"),
+						T("Satellite")
+					};
+
+					SettingsUI::PopupConfig networkRoleCfg {};
+					networkRoleCfg.type = SettingsUI::PopupType::Options;
+					networkRoleCfg.options.label = "Network Role";
+					networkRoleCfg.options.icon = ICON_FA_GLOBE;
+					networkRoleCfg.options.popupID = "NetworkRolePopup";
+					networkRoleCfg.options.options = networkRoles;
+					networkRoleCfg.options.optionCount = IM_ARRAYSIZE(networkRoles);
+					networkRoleCfg.options.currentValue = &role;
+					networkRoleCfg.options.valueWidth = 220.0f;
+					networkRoleCfg.options.onChange = [](int selectedType) {
+						switch (selectedType) {
+						case 0:
+							config::ActAsServer = true;
+							config::NaomiSatellite = false;
+							break;
+						case 1:
+							config::ActAsServer = false;
+							config::NaomiSatellite = false;
+							break;
+						case 2:
+							config::ActAsServer = false;
+							config::NaomiSatellite = true;
+							break;
+						}
+						return true;
+					};
+					RenderGeneralPopupSettingRow(
+						"NetworkRoleSetting",
+						T("Choose the network role."),
+						networkRoleCfg,
+						T(
+							"Network Role\n"
+							"Selects the active network role:\n"
+							"Server to create a local server for Naomi network games, client to connect to a server, "
+							"satellite to monitor games that support it (Virtual-On Oratorio Tangram and Club Kart)\n\n"
+							"If you cannot connect to each other, check firewalls/NAT rules and confirm both players are using the same game/version.\n"
+							"Use the Local Port setting if you need to match a specific port or avoid conflicts."
+						)
+					);
 
 					// Server Address (only when not acting as server)
 					if (!config::ActAsServer)
@@ -5631,11 +5667,11 @@ void renderNetworkTab()
 
 	if (RenderCollapsingHeader("MultiboardSection", ICON_FA_TABLE, T("Multiboard"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		OptionRadioButton<int>(T("1 (Twin)"), config::MultiboardSlaves, 1,
-			T("One screen configuration (F355 Twin)"));
+		OptionRadioButton<int>(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1,
+			T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));
 		ImGui::SameLine();
-		OptionRadioButton<int>(T("3 (Deluxe)"), config::MultiboardSlaves, 2,
-			T("Three screens configuration"));
+		OptionRadioButton<int>(T("2+ (Deluxe, Main screen)"), config::MultiboardSlaves, 2,
+			T("Two or three screens configuration (Airline Pilot, Derby Owners Club main screen, F355 Deluxe, Sega Strike Fighter)"));
 	}
 #endif
 }
@@ -5695,7 +5731,7 @@ void renderAdvancedTab()
 				cpuModeCfg,
 				T(
 					"CPU Mode\n"
-					"Controls how Flycast emulates the SH4 CPU.\n\n"
+					"Controls how Hollycast emulates the SH4 CPU.\n\n"
 					"Dynarec is dramatically faster and is the normal choice for gameplay.\n"
 					"Interpreter is much slower, but can be helpful for compatibility testing.\n\n"
 					"If you are troubleshooting a game-specific issue, switch modes and re-test the exact same scene to compare behavior."
@@ -5832,7 +5868,7 @@ void renderAdvancedTab()
 			[](bool enabled) { config::ThreadedRendering.set(enabled); },
 			T(
 				"Multi-threading\n"
-				"Allows Flycast to use more than one CPU thread for certain emulation/rendering work.\n\n"
+				"Allows Hollycast to use more than one CPU thread for certain emulation/rendering work.\n\n"
 				"On modern multi-core devices this can improve performance or reduce stutter.\n"
 				"On some drivers/devices it can introduce instability or odd timing issues.\n\n"
 				"If you see new crashes, visual glitches, or inconsistent frame pacing after enabling it, try turning it off and re-testing."
@@ -5891,7 +5927,7 @@ void renderAdvancedTab()
 			T(
 				"GDB Server\n"
 				"Starts a GDB debug server for developers.\n\n"
-				"When enabled, Flycast can pause startup and wait for a debugger to attach.\n"
+				"When enabled, Hollycast can pause startup and wait for a debugger to attach.\n"
 				"Leave this disabled unless you are actively debugging."
 			));
 
@@ -6036,7 +6072,7 @@ void renderAdvancedTab()
 				logVerbosityCfg,
 				T(
 					"Log Verbosity\n"
-					"Controls how much information Flycast writes to the log.\n\n"
+					"Controls how much information Hollycast writes to the log.\n\n"
 					"Lower verbosity is cleaner and faster.\n"
 					"Higher verbosity is useful when diagnosing problems, but can generate a lot of output (and can impact performance in extreme cases).\n\n"
 					"For troubleshooting, start with Warning or Info, then use Debug only if you need deeper detail."
@@ -6287,7 +6323,7 @@ void renderAdvancedTab()
 		const std::string luaFilenameLabel = std::string(T("Lua Filename")) + "###Lua Filename";
 		InputText(luaFilenameLabel.c_str(), &config::LuaFileName.get(), ImGuiInputTextFlags_CharsNoBlank);
 		ImGui::SameLine();
-		ShowFooterHelpMarker(T("Specify lua filename to use. Should be located in Flycast config folder. Defaults to flycast.lua when empty."));
+		ShowFooterHelpMarker(T("Specify lua filename to use. Should be located in Hollycast config folder. Defaults to flycast.lua when empty."));
 #endif
 
 #ifdef SENTRY_UPLOAD
@@ -6477,24 +6513,25 @@ void renderAboutTab()
 		ImGui::Text("%s", T("Website"));
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
-		ImGui::TextDisabled("https://flycast-emu.com/");
+		ImGui::TextDisabled("https://github.com/OrangeFox86/HollyCast#readme");
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
 		ImGui::Text("%s", T("Source Code"));
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
-		ImGui::TextDisabled("https://github.com/flycast-emu/flycast");
+		ImGui::TextDisabled("https://github.com/OrangeFox86/HollyCast");
 		ImGui::Spacing();
 	}
 
 	// License Information
 	if (RenderCollapsingHeader("LicenseSection", ICON_FA_FILE_CONTRACT, T("License"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::TextWrapped("%s", T(
-			"Copyright (C) 2019-2025 flyinghead and contributors"
+		ImGui::TextWrapped(T(
+			"Copyright (C) 2019-2025 flyinghead and contributors. "
+			"Portions Copyright 2026 The Hollycast Authors"
 		));
-		ImGui::TextWrapped("%s", T(
-			"Hollycast/Flycast is free software; you can redistribute it and/or modify "
+		ImGui::TextWrapped(T(
+			"Hollycast is free software; you can redistribute it and/or modify "
 			"it under the terms of the GNU General Public License as published by "
 			"the Free Software Foundation; either version 2 of the License, or "
 			"(at your option) any later version."
@@ -6507,11 +6544,10 @@ void renderAboutTab()
 	{
 		ImGui::TextWrapped("%s", T(
 			"This emulator is based on the work of many talented developers "
-			"who have contributed to the Flycast project and its dependencies."
+			"who have contributed to the project and its dependencies."
 		));
-		ImGui::TextWrapped("%s", T(
-			"Special thanks to the original Flycast team and all contributors "
-			"who make this project possible."
+		ImGui::TextWrapped(T(
+			"Special thanks to all contributors who make this project possible."
 		));
 	}
 

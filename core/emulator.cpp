@@ -39,7 +39,6 @@
 #include "network/ice.h"
 #include "hw/mem/mem_watch.h"
 #include "network/net_handshake.h"
-#include "network/naomi_network.h"
 #include "serialize.h"
 #include "hw/pvr/pvr.h"
 #include "profiler/fc_profiler.h"
@@ -576,15 +575,16 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 		if (path != nullptr && strlen(path) > 0)
 		{
 			settings.content.path = path;
-			if (settings.naomi.slave) {
-				settings.content.fileName = path;
-			}
-			else
-			{
+			try {
 				hostfs::FileInfo info = hostfs::storage().getFileInfo(settings.content.path);
 				settings.content.fileName = info.name;
 				if (settings.content.title.empty())
 					settings.content.title = get_file_basename(info.name);
+			} catch (const hostfs::StorageException& e) {
+				if (settings.naomi.slave)
+					settings.content.fileName = path;
+				else
+					throw;
 			}
 		}
 		else
@@ -650,27 +650,25 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 		}
 		else if (settings.platform.isArcade())
 		{
-			nvmem::loadFiles();
 			naomi_cart_LoadRom(settings.content.path, settings.content.fileName, progress);
+			nvmem::loadFiles();
 			loadGameSpecificSettings();
 			// Reload the BIOS in case a game-specific region is set
 			naomi_cart_LoadBios(path);
 		}
-		if (!settings.naomi.slave)
-		{
-			mcfg_DestroyDevices();
-			mcfg_CreateDevices();
-			if (settings.platform.isNaomi())
-				// Must be done after the maple devices are created and EEPROM is accessible
-				naomi_cart_ConfigureEEPROM();
-		}
+		mcfg_DestroyDevices();
+		mcfg_CreateDevices();
+		if (settings.platform.isNaomi())
+			// Must be done after the maple devices are created and EEPROM is accessible
+			naomi_cart_ConfigureEEPROM();
+
 #ifdef USE_RACHIEVEMENTS
 		// RA probably isn't expecting to travel back in the past so disable it
 		if (config::GGPOEnable)
 			config::EnableAchievements.override(false);
 		// Hardcore mode disables all cheats, under/overclocking, load state, lua and forces dynarec on
 		settings.raHardcoreMode = config::EnableAchievements && config::AchievementsHardcoreMode
-			&& !NaomiNetworkSupported();
+			&& !naomiNetworkSupported();
 #endif
 		cheatManager.reset(settings.content.gameId);
 		if (cheatManager.isWidescreen())
@@ -688,7 +686,7 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 #ifndef LIBRETRO
 			if (config::GGPOEnable)
 				dc_loadstate(-1);
-			else if (config::AutoLoadState && !NaomiNetworkSupported() && !settings.naomi.multiboard)
+			else if (config::AutoLoadState && !naomiNetworkSupported() && !settings.naomi.multiboard)
 				dc_loadstate(config::SavestateSlot);
 #endif
 		}
@@ -758,7 +756,7 @@ void Emulator::unloadGame()
 	{
 #ifndef LIBRETRO
 		if (state == Loaded && config::AutoSaveState && !settings.content.path.empty()
-				&& !settings.naomi.multiboard && !config::GGPOEnable && !NaomiNetworkSupported())
+				&& !settings.naomi.multiboard && !config::GGPOEnable && !naomiNetworkSupported())
 			gui_saveState(false);
 #endif
 		try {
@@ -770,10 +768,7 @@ void Emulator::unloadGame()
 		mcfg_DestroyDevices(true);
 		config::Settings::instance().reset();
 		config::Settings::instance().load(false);
-		settings.content.path.clear();
-		settings.content.gameId.clear();
-		settings.content.fileName.clear();
-		settings.content.title.clear();
+		settings.content.reset();
 		settings.platform.system = DC_PLATFORM_DREAMCAST;
 		custom_texture.terminate();
 		state = Init;
@@ -1164,8 +1159,7 @@ void Emulator::diskChange()
 	}
 	else
 	{
-		settings.content.fileName.clear();
-		settings.content.gameId.clear();
+		settings.content.reset();
 		settings.content.title = BIOS_TITLE;
 	}
 	cheatManager.reset(settings.content.gameId);
