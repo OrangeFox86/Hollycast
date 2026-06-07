@@ -4960,71 +4960,71 @@ void renderControlsTab()
 			crosshairPopupCfg.type = SettingsUI::PopupType::Slider;
 			crosshairPopupCfg.slider = crosshairConfig;
 
-				RenderGeneralPopupSettingRow(
-					Tnop("CrosshairSizeSetting"),
-					T("Crosshair size for light guns."),
-					crosshairPopupCfg,
-					T(
-						"Crosshair Size\n"
-						"Adjusts the size of the on-screen crosshair for light guns.\n"
-						"Only available when a light gun device is connected.\n\n"
-						"Choose a size that is visible without covering targets."
-					),
-					!is_there_any_xhair);
-		}
-
-		ImGui::Spacing();
-		if (RenderCollapsingHeader("VMUSettingsSection", ICON_FA_MICROCHIP, T("VMU Settings"), ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			RenderGeneralToggleSettingRow(
-				"PerGameVmu",
-				ICON_FA_MICROCHIP,
-				T("Per Game VMU A1"),
-				T("When enabled, each game has its own VMU on port 1 of controller A"),
-				static_cast<bool>(config::PerGameVmu),
-				[](bool enabled) { config::PerGameVmu.set(enabled); },
+			RenderGeneralPopupSettingRow(
+				Tnop("CrosshairSizeSetting"),
+				T("Crosshair size for light guns."),
+				crosshairPopupCfg,
 				T(
-					"Per Game VMU\n"
-					"When enabled, each game has its own VMU on port 1 of controller A.\n"
-					"Useful to prevent save-file conflicts between games."
-				));
+					"Crosshair Size\n"
+					"Adjusts the size of the on-screen crosshair for light guns.\n"
+					"Only available when a light gun device is connected.\n\n"
+					"Choose a size that is visible without covering targets."
+				),
+				!is_there_any_xhair);
+		}
+	}
+
+	ImGui::Spacing();
+	if (RenderCollapsingHeader("VMUSettingsSection", ICON_FA_MICROCHIP, T("VMU Settings"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		RenderGeneralToggleSettingRow(
+			"PerGameVmu",
+			ICON_FA_MICROCHIP,
+			T("Per Game VMU A1"),
+			T("When enabled, each game has its own VMU on port 1 of controller A"),
+			static_cast<bool>(config::PerGameVmu),
+			[](bool enabled) { config::PerGameVmu.set(enabled); },
+			T(
+				"Per Game VMU\n"
+				"When enabled, each game has its own VMU on port 1 of controller A.\n"
+				"Useful to prevent save-file conflicts between games."
+			));
 
 #ifdef USE_DREAMLINK_DEVICES
-			RenderGeneralToggleSettingRow(
-				"UsePhysicalVmuMemory",
-				ICON_FA_MEMORY,
-				T("Use External VMU Storage"),
-				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-					"VMUs may appear to reconnect after loading state."),
-				static_cast<bool>(config::UsePhysicalVmuMemory),
-				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-				T("Use External VMU Storage\n"
-				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-					"VMUs may appear to reconnect after loading state."),
-				game_started);
+		RenderGeneralToggleSettingRow(
+			"UsePhysicalVmuMemory",
+			ICON_FA_MEMORY,
+			T("Use External VMU Storage"),
+			T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+				"VMUs may appear to reconnect after loading state."),
+			static_cast<bool>(config::UsePhysicalVmuMemory),
+			[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
+			T("Use External VMU Storage\n"
+			"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+				"VMUs may appear to reconnect after loading state."),
+			game_started);
 #endif
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-			RenderGeneralToggleSettingRow(
-				"DreamPotatoIntegratedMode",
-				ICON_FA_PLUG,
-				T("DreamPotato Integrated Mode"),
-				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
-				static_cast<bool>(config::DreamPotatoIntegratedMode),
-				[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
-				T("DreamPotato Integrated Mode\n"
-					"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
-					"Applies to all slots which use a DreamPotato device.\n"
-					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
-				game_started);
+		RenderGeneralToggleSettingRow(
+			"DreamPotatoIntegratedMode",
+			ICON_FA_PLUG,
+			T("DreamPotato Integrated Mode"),
+			T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
+			static_cast<bool>(config::DreamPotatoIntegratedMode),
+			[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
+			T("DreamPotato Integrated Mode\n"
+				"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
+				"Applies to all slots which use a DreamPotato device.\n"
+				"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
+			game_started);
 
-			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
-			{
-				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
-				ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
-			}
-#endif
+		if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
+		{
+			ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+			ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
 		}
+#endif
 	}
 }
 
