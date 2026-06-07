@@ -128,9 +128,7 @@ void DX11Overlay::draw(u32 width, u32 height, bool vmu, bool crosshair)
 			}
 			else
 			{
-				// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
-				// Note: we intentionally do not multiply by 'settings.display.uiScale' here
-				y = vmu_padding + ImGui::GetFrameHeight();
+				y = vmu_padding + getScaledTopInset();
 				if (i & 1)
 					y += vmu_padding + vmu_height;
 			}

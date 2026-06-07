@@ -33,6 +33,7 @@
 #include "oslib/oslib.h"
 #include "vulkan_driver.h"
 #include "rend/transform_matrix.h"
+#include "rend/osd.h"
 #if defined(__ANDROID__) && HOST_CPU == CPU_ARM64
 #include "adreno.h"
 #endif
@@ -1083,7 +1084,7 @@ void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& exten
 
 	// Adjust 'viewport.y', 'viewport.height', 'Offset2D.y', and 'Extent2D.height'
 	// to avoid framebuffer overlapping with the menu bar
-	int topInset = (int)ImGui::GetFrameHeight();
+	int topInset = getScaledTopInset();
 	int outheight = height - topInset;
 
 	int dx = 0;

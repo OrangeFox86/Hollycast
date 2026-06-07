@@ -18,6 +18,9 @@
 
 #include "types.h"
 #include "cfg/option.h"
+#ifndef LIBRETRO
+#include "imgui.h"
+#endif
 
 // VMUs
 extern u32 vmu_lcd_data[8][48 * 32];
@@ -26,6 +29,15 @@ extern u64 vmuLastChanged[8];
 
 void push_vmu_screen(int bus_id, int bus_port, u8* buffer);
 void reset_vmu_screen(int bus_id, int bus_port);
+
+static inline int getScaledTopInset()
+{
+#ifdef LIBRETRO
+	return 0;
+#else
+	return ImGui::GetFrameHeight();
+#endif
+}
 
 // Crosshair
 const u32 *getCrosshairTextureData();

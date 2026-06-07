@@ -4,7 +4,6 @@
 #include "quad.h"
 #include "rend/osd.h"
 #include "naomi2.h"
-#include "imgui.h"
 #ifdef LIBRETRO
 #include "postprocess.h"
 #include "vmu_xhair.h"
@@ -768,7 +767,7 @@ bool OpenGLRenderer::renderLastFrame()
 	
 	// Adjust 'glViewport(.., height)' and 'glBlitFramebuffer(.., dstY0, ..)' arguments
 	// to avoid framebuffer overlapping with the menu bar
-	int topInset = (int)ImGui::GetFrameHeight();
+	int topInset = getScaledTopInset();
 	int outheight = settings.display.height - topInset;
 
 	int dx = 0;
@@ -931,9 +930,7 @@ static void drawVmuTexture(u8 vmuIndex, int width, int height)
 	}
 	else
 	{
-		// Adjust 'y' for VMUs on the upper part of the screen to avoid overlapping with menu bar
-		// Note: we intentionally do not multiply by 'settings.display.uiScale' here
-		y = vmu_padding + ImGui::GetFrameHeight();
+		y = vmu_padding + getScaledTopInset();
 		if (vmuIndex & 1)
 			y += vmu_padding + h;
 	}

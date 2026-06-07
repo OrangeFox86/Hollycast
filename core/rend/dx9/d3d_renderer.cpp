@@ -22,9 +22,9 @@
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
 #include "rend/sorter.h"
+#include "rend/osd.h"
 #include "oslib/i18n.h"
 #include <glm/gtx/transform.hpp>
-#include "imgui.h"
 
 const u32 DstBlendGL[]
 {
@@ -1178,7 +1178,7 @@ void D3DRenderer::displayFramebuffer()
 	device->ColorFill(backbuffer, 0, D3DCOLOR_COLORVALUE(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f));
 
 	// Adjust 'rd.top', 'viewport.Y', and 'viewport.Height' to avoid framebuffer overlapping with the menu bar
-	int topInset = (int)ImGui::GetFrameHeight();
+	int topInset = getScaledTopInset();
 	int outheight = settings.display.height - topInset;
 
 	int dx = 0;

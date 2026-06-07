@@ -23,7 +23,7 @@
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
 #include "rend/sorter.h"
-#include "imgui.h"
+#include "rend/osd.h"
 
 #include <memory>
 
@@ -566,7 +566,7 @@ void DX11Renderer::displayFramebuffer()
 	}
 
 	// Adjust 'h' or 'w' to avoid overlapping with the menu bar
-	int topInset = (int)ImGui::GetFrameHeight();
+	int topInset = getScaledTopInset();
 	int leftInset = 0;
 	if (config::Rotate90)
 		std::swap(topInset, leftInset);
