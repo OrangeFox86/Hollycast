@@ -2066,9 +2066,7 @@ void renderGeneralTab()
 					"Arcade platforms typically use automatic region/language behavior."
 				)
 			);
-	}
 
-	{
 		const char* broadcast[] = { Tnop("NTSC"), Tnop("PAL"), Tnop("PAL/M"), Tnop("PAL/N"), T("Default") };
 		SettingsUI::PopupConfig broadcastCfg {};
 		broadcastCfg.type = SettingsUI::PopupType::Options;
@@ -2091,9 +2089,7 @@ void renderGeneralTab()
 					"NTSC is typically 60 Hz; PAL is typically 50 Hz.\n\n"
 					"If you see timing issues or a game expects a specific region video mode, try changing this."
 				));
-	}
 
-	{
 		const char* consoleRegion[] = { T("Japan"), T("USA"), T("Europe"), T("Default") };
 		const char* arcadeRegion[] = { T("Japan"), T("USA"), T("Export"), T("Korea") };
 		const char* const* region = settings.platform.isArcade() ? arcadeRegion : consoleRegion;
@@ -2118,9 +2114,7 @@ void renderGeneralTab()
 					"If a game refuses to boot or behaves like the wrong region, try changing this."
 				)
 			);
-	}
 
-	{
 		const char* cable[] = { T("VGA"), T("RGB Component"), T("TV Composite") };
 		const bool disabled = config::Cable.isReadOnly() || settings.platform.isArcade();
 
@@ -2415,9 +2409,7 @@ void renderGeneralTab()
 				"If readability is an issue, try High Contrast."
 			)
 		);
-	}
 
-	{
 		static bool showApplyButtonForUIScaling = false;
 		if (uiUserScaleUpdated && !showApplyButtonForUIScaling)
 			showApplyButtonForUIScaling = true;
@@ -2451,24 +2443,24 @@ void renderGeneralTab()
 				"After applying, the UI will reinitialize to apply the new scale."
 			)
 		);
-	}
 
-	RenderGeneralToggleSettingRow(
-		"HideLegacyNaomiRoms",
-		ICON_FA_LOCK,
-		T("Hide Legacy Naomi Roms"),
-		T("Hide legacy Naomi file types in the content browser."),
-		static_cast<bool>(config::HideLegacyNaomiRoms),
-		[](bool enabled) {
-			config::HideLegacyNaomiRoms = enabled;
-			scanner.refresh();
-		},
-		T(
-			"Hide Legacy Naomi ROMs\n"
-			"Hides `.bin`, `.dat`, and `.lst` files from the content browser.\n"
-			"Useful if you have mixed Naomi sets and only want to see launchable content."
-		)
-	);
+		RenderGeneralToggleSettingRow(
+			"HideLegacyNaomiRoms",
+			ICON_FA_LOCK,
+			T("Hide Legacy Naomi Roms"),
+			T("Hide legacy Naomi file types in the content browser."),
+			static_cast<bool>(config::HideLegacyNaomiRoms),
+			[](bool enabled) {
+				config::HideLegacyNaomiRoms = enabled;
+				scanner.refresh();
+			},
+			T(
+				"Hide Legacy Naomi ROMs\n"
+				"Hides `.bin`, `.dat`, and `.lst` files from the content browser.\n"
+				"Useful if you have mixed Naomi sets and only want to see launchable content."
+			)
+		);
+	}
 
 #ifdef __ANDROID__
 	RenderGeneralToggleSettingRow(
@@ -2522,9 +2514,7 @@ void renderGeneralTab()
 				"Use Custom Boxart if you maintain your own images, or Original/Physical depending on your preference."
 			)
 		);
-	}
 
-	{
 		ImGui::PushID("CustomBoxartFolderRow");
 			const bool rowActivated = BeginTwoLineSettingRow(
 				"##row",
@@ -2603,37 +2593,37 @@ void renderGeneralTab()
 		}
 		if (refreshPressed)
 			gui_refresh_custom_boxart(true);
+
+		RenderGeneralToggleSettingRow(
+			"BoxartDisplayMode",
+			ICON_FA_IMAGE,
+			T("Box Art Game List"),
+			T("Display game cover art in the game list."),
+			static_cast<bool>(config::BoxartDisplayMode),
+			[](bool enabled) { config::BoxartDisplayMode = enabled; },
+			T(
+				"Box Art Game List\n"
+				"Displays cover art tiles in the content list.\n"
+				"Disable if you prefer a faster, more compact list or want to reduce UI clutter."
+			)
+		);
+
+		const bool physicalOnly = config::BoxartSourceMode.get() == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly);
+		RenderGeneralToggleSettingRow(
+			"FetchBoxart",
+			ICON_FA_DOWNLOAD,
+			T("Fetch Box Art"),
+			T("Fetch cover images from TheGamesDB.net."),
+			static_cast<bool>(config::FetchBoxart),
+			[](bool enabled) { config::FetchBoxart = enabled; },
+			T(
+				"Fetch Box Art\n"
+				"Downloads cover images from TheGamesDB.net.\n"
+				"Disable if you only want physical media images, custom artwork, or to avoid network fetching."
+			),
+			physicalOnly
+		);
 	}
-
-	RenderGeneralToggleSettingRow(
-		"BoxartDisplayMode",
-		ICON_FA_IMAGE,
-		T("Box Art Game List"),
-		T("Display game cover art in the game list."),
-		static_cast<bool>(config::BoxartDisplayMode),
-		[](bool enabled) { config::BoxartDisplayMode = enabled; },
-		T(
-			"Box Art Game List\n"
-			"Displays cover art tiles in the content list.\n"
-			"Disable if you prefer a faster, more compact list or want to reduce UI clutter."
-		)
-	);
-
-	const bool physicalOnly = config::BoxartSourceMode.get() == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly);
-	RenderGeneralToggleSettingRow(
-		"FetchBoxart",
-		ICON_FA_DOWNLOAD,
-		T("Fetch Box Art"),
-		T("Fetch cover images from TheGamesDB.net."),
-		static_cast<bool>(config::FetchBoxart),
-		[](bool enabled) { config::FetchBoxart = enabled; },
-		T(
-			"Fetch Box Art\n"
-			"Downloads cover images from TheGamesDB.net.\n"
-			"Disable if you only want physical media images, custom artwork, or to avoid network fetching."
-		),
-		physicalOnly
-	);
 
 	// ========================================
 	// Automatic Save States Section
