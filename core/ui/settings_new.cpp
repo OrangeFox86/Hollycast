@@ -1036,7 +1036,7 @@ static constexpr const char *maple_expansion_device_types_src[] =
 	Tnop("Vibration Pack"),
 	Tnop("Microphone"),
 	Tnop("DreamPotato"),
-	Tnop("DreamLink"), // not shown unless a DreamLink controller is present
+	Tnop("Hardware Link"), // not shown unless a DreamLink controller is present
 };
 static const char *maple_expansion_device_types[std::size(maple_expansion_device_types_src)];
 
@@ -4517,7 +4517,7 @@ void renderControlsTab()
 #if defined(USE_DREAMLINK_DEVICES)
 				DreamLinkGamepad* dreamLinkGamepad = dynamic_cast<DreamLinkGamepad*>(gamepad.get());
 				if (dreamLinkGamepad != nullptr) {
-					ImGui::Text(T("DreamLink status: %s"), dreamLinkGamepad->dreamLinkStatus());
+					ImGui::Text(T("Hardware Link: %s"), dreamLinkGamepad->dreamLinkStatus());
 				}
 #endif
 
