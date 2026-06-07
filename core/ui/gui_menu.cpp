@@ -375,8 +375,8 @@ void toggleMenuVisibility()
 	menuVisible = !menuVisible;
 }
 
-// Check if menu is currently visible
-bool isMenuVisible()
+// Check if menu bar is currently visible
+bool isMenuBarVisible()
 {
 	return menuVisible;
 }

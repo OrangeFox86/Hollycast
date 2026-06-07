@@ -62,8 +62,8 @@ void setMenuVisible(bool visible);
 // Useful for keyboard shortcuts (e.g., Alt key)
 void toggleMenuVisibility();
 
-// Check if menu is currently visible
-bool isMenuVisible();
+// Check if menu bar is currently visible
+bool isMenuBarVisible();
 
 // Initialize menu system
 // Called during GUI initialization to set up menu state

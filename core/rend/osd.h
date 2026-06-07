@@ -20,6 +20,7 @@
 #include "cfg/option.h"
 #ifndef LIBRETRO
 #include "imgui.h"
+#include "ui/gui_menu.h"
 #endif
 
 // VMUs
@@ -35,7 +36,7 @@ static inline int getScaledTopInset()
 #ifdef LIBRETRO
 	return 0;
 #else
-	return ImGui::GetFrameHeight();
+	return GuiMenu::isMenuBarVisible() ? ImGui::GetFrameHeight() : 0;
 #endif
 }
 
