@@ -18,6 +18,9 @@
 #include "stdclass.h"
 #ifdef LIBRETRO
 #include "vmu_xhair.h"
+#else
+#include "imgui.h"
+#include "ui/gui_menu.h"
 #endif
 
 u32 vmu_lcd_data[8][48 * 32];
@@ -52,6 +55,15 @@ void reset_vmu_screen(int bus_id, int bus_port)
 	if (vmu_id < 0 || vmu_id >= (int)std::size(vmu_lcd_data))
 		return;
 	vmu_lcd_status[vmu_id] = false;
+#endif
+}
+
+int getScaledTopInset()
+{
+#ifdef LIBRETRO
+	return 0;
+#else
+	return GuiMenu::isMenuBarVisible() ? ImGui::GetFrameHeight() : 0;
 #endif
 }
 

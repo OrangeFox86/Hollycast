@@ -18,10 +18,6 @@
 
 #include "types.h"
 #include "cfg/option.h"
-#ifndef LIBRETRO
-#include "imgui.h"
-#include "ui/gui_menu.h"
-#endif
 
 // VMUs
 extern u32 vmu_lcd_data[8][48 * 32];
@@ -31,14 +27,7 @@ extern u64 vmuLastChanged[8];
 void push_vmu_screen(int bus_id, int bus_port, u8* buffer);
 void reset_vmu_screen(int bus_id, int bus_port);
 
-static inline int getScaledTopInset()
-{
-#ifdef LIBRETRO
-	return 0;
-#else
-	return GuiMenu::isMenuBarVisible() ? ImGui::GetFrameHeight() : 0;
-#endif
-}
+int getScaledTopInset();
 
 // Crosshair
 const u32 *getCrosshairTextureData();

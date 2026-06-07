@@ -22,7 +22,6 @@
 #ifdef LIBRETRO
 #include "vmu_xhair.h"
 #endif
-#include "imgui.h"
 
 void DX11Overlay::draw(u32 width, u32 height, bool vmu, bool crosshair)
 {
