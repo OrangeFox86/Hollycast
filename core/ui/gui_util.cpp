@@ -802,7 +802,8 @@ void ImguiVmuTexture::displayVmus(const ImVec2& pos)
 {
 	const ScaledVec2 size(VMU_WIDTH, VMU_HEIGHT);
 	const float padding = uiScaled(VMU_PADDING);
-	ImDrawList *dl = ImGui::GetForegroundDrawList();
+	assert((ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_ChildWindow) == 0);
+	ImDrawList *dl = ImGui::GetWindowDrawList();
 	ImVec2 cpos(pos + ScaledVec2(2.f, 0));	// 96 pixels wide + 2 * 2 -> 100
 	for (int i = 0; i < 8; i++)
 	{
