@@ -4716,7 +4716,7 @@ void renderControlsTab()
 				}
 			}
 
-			// Pseudo expansion device types
+			// Externally managed expansion device types
 			static constexpr int MDT_DreamPotato = MDT_Count;
 			static constexpr int MDT_DreamLink = MDT_Count + 1;
 

@@ -227,7 +227,7 @@ public:
 					WARN_LOG(
 						INPUT,
 						"DreamPicoPort[%s] API connect failed: device with serial \"%s\" uses version %i.%i.%i\n"
-						"Update DreamPicoPort firmware to version 1.2.1 or later to use Hardware Link",
+						"Update DreamPicoPort firmware to version 1.2.1 or later to enable peripheral connection",
 						getLocDesc().c_str(),
 						serial_number.c_str(),
 						static_cast<int>(ver[0]),
