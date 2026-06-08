@@ -25,7 +25,7 @@ enum MapleDeviceType
 	MDT_Dreameye                = 17,
 	MDT_SegaControllerXL        = 18,
 	MDT_DreamParaParaController = 19,
-	MDT_Count,
+	MDT_Count
 };
 
 enum PlainJoystickAxisId
