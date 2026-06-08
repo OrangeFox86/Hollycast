@@ -4716,6 +4716,10 @@ void renderControlsTab()
 				}
 			}
 
+			// Externally managed expansion device types
+			static constexpr int MDT_DreamPotato = MDT_Count;
+			static constexpr int MDT_DreamLink = MDT_Count + 1;
+
 			struct MapleExpansionDeviceDesc
 			{
 				int deviceType;

@@ -26,10 +26,6 @@ enum MapleDeviceType
 	MDT_SegaControllerXL        = 18,
 	MDT_DreamParaParaController = 19,
 	MDT_Count,
-
-	// Externally managed devices (100+)
-	MDT_DreamPotato = 100,
-	MDT_DreamLink = 101,
 };
 
 enum PlainJoystickAxisId
