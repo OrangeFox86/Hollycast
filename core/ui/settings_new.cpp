@@ -4687,19 +4687,34 @@ void renderControlsTab()
 		if (ImGui::BeginTable("dreamcastDevices", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings,
 				ImVec2(0, 0), uiScaled(8)))
 		{
+			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
+			float mainComboWidth = 0;
+			for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
+			{
+				mainComboWidth = std::max(
+					ImGui::CalcTextSize(maple_device_types[i]).x + comboWidthPadding,
+					mainComboWidth
+				);
+			}
+
 			// DreamLink device names for main device
 			const char* dream_link_names[MAPLE_PORTS]{};
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
 			{
 				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
 				if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				{
 					dream_link_names[bus] = link->dreamlink->getName();
+					mainComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
+						mainComboWidth
+					);
+				}
 				else
+				{
 					dream_link_names[bus] = "";
+				}
 			}
-
-			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
-			const float mainComboWidth = ImGui::CalcTextSize(T("Densha de Go! Controller")).x + comboWidthPadding;
 
 			// Pseudo expansion device types
 			static constexpr int MDT_DreamPotato = MDT_Count;
