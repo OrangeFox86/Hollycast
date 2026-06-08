@@ -4517,7 +4517,7 @@ void renderControlsTab()
 					for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
 					{
 						bool is_selected = gamepad->maple_port() == j;
-						if (ImGui::Selectable(kMaplePorts[j + 1]), &is_selected)
+						if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
 						{
 							gamepad->set_maple_port(j);
 							g_mapleDevicesChangedInSettings = true;
