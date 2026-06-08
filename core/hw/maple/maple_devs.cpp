@@ -70,7 +70,7 @@ bool maple_base::relayMapleLink()
 	{
 		// First word should give the function code for this message - ensure DreamLink has capability
 		u32 fnCode = inMsg->readData<u32>(0);
-		if (fnCode & link->dreamlink->getFunctionCode(bus_port))
+		if (fnCode & link->getFunctionCode())
 			return link->send(*inMsg);
 	}
 

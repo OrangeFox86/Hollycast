@@ -56,6 +56,11 @@ bool MapleLink::isConnected()
 	return dreamlink->isConnected();
 }
 
+u32 MapleLink::getFunctionCode() const
+{
+	return dreamlink->getFunctionCode(port);
+}
+
 std::shared_ptr<maple_device> MapleLink::createMapleDevice()
 {
 	return dreamlink->createMapleDevice(bus, port);
