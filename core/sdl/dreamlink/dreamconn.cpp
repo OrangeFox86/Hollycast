@@ -193,6 +193,17 @@ public:
 	const char* getName() const override {
 		return "DreamConn";
 	}
+
+	u32 getFunctionCode(int forPort) const override {
+		if (forPort < expansionDevs.size()) {
+			if (expansionDevs[forPort] == MDT_SegaVMU)
+				return (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock);
+			else if (expansionDevs[forPort] == MDT_PurupuruPack)
+				return MFID_8_Vibration;
+		}
+
+		return 0; // None
+	}
 };
 
 bool DreamConnGamepad::identify(int deviceIndex)

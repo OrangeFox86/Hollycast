@@ -85,6 +85,8 @@ public:
 	virtual void term() = 0;
 	//! @return the display name of this DreamLink
 	virtual const char* getName() const = 0;
+	//! @return the function code at the given port
+	virtual u32 getFunctionCode(int forPort) const = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test

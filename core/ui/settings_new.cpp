@@ -4688,7 +4688,7 @@ void renderControlsTab()
 				ImVec2(0, 0), uiScaled(8)))
 		{
 			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
-			float mainComboWidth = 0;
+			float mainComboWidth = comboWidthPadding;
 			for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
 			{
 				mainComboWidth = std::max(
@@ -4825,7 +4825,7 @@ void renderControlsTab()
 					{
 						for (const auto& devIter : maple_expansion_device_types)
 						{
-							bool is_selected = (subtype == devIter.deviceType);
+							bool is_selected = (selectedDevIter->deviceType == devIter.deviceType);
 							if (ImGui::Selectable(devIter.name, &is_selected))
 							{
 								subtype = devIter.deviceType;

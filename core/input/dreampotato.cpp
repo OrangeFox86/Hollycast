@@ -272,6 +272,10 @@ public:
 		return "DreamPotato";
 	}
 
+	u32 getFunctionCode(int forPort) const override {
+		return (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock);
+	}
+
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
 		return std::make_shared<DreamPotatoVmu>(MapleLink(shared_from_this(), bus, port));
 	}

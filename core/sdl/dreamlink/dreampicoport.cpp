@@ -538,7 +538,7 @@ public:
 		}
 	}
 
-    u32 getFunctionCode(int forPort) const {
+	u32 getFunctionCode(int forPort) const override {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		forPort = fcPortToDppPort(forPort);
