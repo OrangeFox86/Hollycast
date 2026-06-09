@@ -1571,8 +1571,10 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         const ImGuiID popupId = ImGui::GetID(cfg.popupID);
         static ImGuiID modePopupId = 0;
         static bool modeTextEntry = false;
+        static bool modeControllerSlider = false;
 
-        if (ImGui::IsWindowAppearing())
+        const bool popupAppearing = ImGui::IsWindowAppearing();
+        if (popupAppearing)
         {
             ImGuiContext& g = *GImGui;
             const bool controllerOpen = (g.NavInputSource == ImGuiInputSource_Gamepad);
@@ -1580,10 +1582,12 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             // Mouse/keyboard opens use direct text entry.
             // Controller opens use slider-only interaction.
             modeTextEntry = cfg.preferTextEntry || !controllerOpen;
+            modeControllerSlider = controllerOpen && !modeTextEntry;
         }
 
         const bool textEntryMode = (modePopupId == popupId) && modeTextEntry;
         bool requestFocusApply = false;
+        bool controllerAcceptValue = false;
 
         if (textEntryMode)
         {
@@ -1598,7 +1602,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             ));
             ImGui::SetNextItemWidth(inputWidth);
             ImGui::PushID("SliderTypedValue");
-            if (ImGui::IsWindowAppearing())
+            if (popupAppearing)
                 ImGui::SetKeyboardFocusHere();
             const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0);
             const bool accept = typedChanged || ImGui::IsItemDeactivatedAfterEdit();
@@ -1622,7 +1626,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         else
         {
             ImGui::SetNextItemWidth(sliderWidth);
-            if (ImGui::IsWindowAppearing())
+            if (popupAppearing)
                 ImGui::SetKeyboardFocusHere();
 
             int tempValue = *cfg.currentValue;
@@ -1639,6 +1643,11 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
             if (sliderFocused)
             {
+                controllerAcceptValue = modePopupId == popupId
+                    && modeControllerSlider
+                    && !popupAppearing
+                    && ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false);
+
                 int navDelta = 0;
                 if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, true)
                     || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadLeft, true)
@@ -1712,7 +1721,16 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         bool shouldShowApply = cfg.hasPendingChanges ||
                                (cfg.showApplyFlag && *cfg.showApplyFlag);
 
-        if (cfg.onApply && shouldShowApply) {
+        if (controllerAcceptValue) {
+            if (cfg.onApply) {
+                cfg.onApply();
+                cfg.hasPendingChanges = false;
+                if (cfg.showApplyFlag) {
+                    *cfg.showApplyFlag = false;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        } else if (cfg.onApply && shouldShowApply) {
             // Begin menu buttons container
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(8), uiScaled(8)));
 
