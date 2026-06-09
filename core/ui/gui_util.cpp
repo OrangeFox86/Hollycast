@@ -1056,9 +1056,28 @@ void SettingIcon(const char* icon, const ImVec2& size)
 	if (iconSize.x <= 0 || iconSize.y <= 0)
 		iconSize = ImVec2(settings.display.uiScale * 16, settings.display.uiScale * 16);
 
-	ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_Text]);
-	ImGui::Text("%s", icon);
-	ImGui::PopStyleColor();
+	const ImVec2 iconPos = ImGui::GetCursorScreenPos();
+	ImFont* font = ImGui::GetFont();
+	float fontSize = std::min(iconSize.x, iconSize.y);
+	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	if (textSize.x > iconSize.x && textSize.x > 0.0f)
+	{
+		fontSize *= iconSize.x / textSize.x;
+		textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	}
+
+	const ImVec2 textPos(
+		iconPos.x + (iconSize.x - textSize.x) * 0.5f,
+		iconPos.y + (iconSize.y - textSize.y) * 0.5f
+	);
+	ImGui::GetWindowDrawList()->AddText(
+		font,
+		fontSize,
+		textPos,
+		ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_Text]),
+		icon
+	);
+	ImGui::Dummy(iconSize);
 }
 
 void BeginSettingsRow(const SettingsRowParams& params)

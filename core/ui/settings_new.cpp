@@ -234,6 +234,38 @@ static float RightColumnX(float itemWidth, float rightPadding = 28.0f)
 	return rowRightX - itemWidth - uiScaled(rightPadding);
 }
 
+static void RenderScaledIconInRect(const char* icon, const ImVec2& min, const ImVec2& max)
+{
+	ImFont* font = ImGui::GetFont();
+	const ImVec2 iconSize(max.x - min.x, max.y - min.y);
+	float fontSize = std::min(iconSize.x, iconSize.y) * 0.72f;
+	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	if (textSize.x > iconSize.x && textSize.x > 0.0f)
+	{
+		fontSize *= iconSize.x / textSize.x;
+		textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	}
+
+	const ImVec2 textPos(
+		min.x + (iconSize.x - textSize.x) * 0.5f,
+		min.y + (iconSize.y - textSize.y) * 0.5f
+	);
+	ImGui::GetWindowDrawList()->AddText(
+		font,
+		fontSize,
+		textPos,
+		ImGui::GetColorU32(ImGuiCol_Text),
+		icon
+	);
+}
+
+static bool SettingsIconButton(const char* id, const char* icon, const ImVec2& size)
+{
+	const bool pressed = ImGui::Button(id, size);
+	RenderScaledIconInRect(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+	return pressed;
+}
+
 static const char* GetTabHelpText(SettingsTab tab)
 {
 	switch (tab)
@@ -1662,7 +1694,7 @@ static void manageSinglePath(const char* label, config::Option<std::string, fals
 		ImGui::SameLine(RightColumnX(buttonWidth));
 		ImVec2 buttonPos = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(buttonPos.x, buttonPos.y + verticalOffset));
-		if (ImGui::Button(ICON_FA_TRASH_CAN "##ClearPath", ImVec2(buttonWidth, buttonHeight)))
+		if (SettingsIconButton("##ClearPath", ICON_FA_TRASH_CAN, ImVec2(buttonWidth, buttonHeight)))
 		{
 			pathOption.get().clear();
 			openPopup = false;
@@ -1731,7 +1763,7 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		ImGui::SameLine(RightColumnX(buttonWidth));
 		ImVec2 buttonPos = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(buttonPos.x, buttonPos.y + verticalOffset));
-		if (ImGui::Button(ICON_FA_TRASH_CAN "##DeletePath", ImVec2(buttonWidth, buttonHeight)))
+		if (SettingsIconButton("##DeletePath", ICON_FA_TRASH_CAN, ImVec2(buttonWidth, buttonHeight)))
 			to_delete = static_cast<int>(i);
 
 		snprintf(buffer, sizeof(buffer), T("Additional %s path"), singularLabel.c_str());
@@ -2256,7 +2288,7 @@ void renderGeneralTab()
 			ImGui::SameLine(RightColumnX(buttonWidth));
 			ImVec2 buttonPos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(buttonPos.x, buttonPos.y + verticalOffset));
-			if (ImGui::Button(ICON_FA_TRASH_CAN "##DeleteContentPath", ImVec2(buttonWidth, buttonHeight)))
+			if (SettingsIconButton("##DeleteContentPath", ICON_FA_TRASH_CAN, ImVec2(buttonWidth, buttonHeight)))
 				to_delete = static_cast<int>(i);
 
 			const char* desc = (i == 0) ? T("The folders where your games are stored") : T("Additional content folder");
@@ -2294,7 +2326,7 @@ void renderGeneralTab()
 			ImGui::SameLine(RightColumnX(refreshButtonWidth));
 			ImVec2 refreshButtonPos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(refreshButtonPos.x, refreshButtonPos.y + refreshVerticalOffset));
-			const bool refreshPressed = ImGui::Button(ICON_FA_ARROWS_ROTATE "##RescanContentBtn", ImVec2(refreshButtonWidth, refreshButtonHeight));
+			const bool refreshPressed = SettingsIconButton("##RescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
 			if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 				SetSettingsFooterText(T("Refresh the current content library view."));
 
@@ -2409,7 +2441,7 @@ void renderGeneralTab()
 		ImGui::SameLine(RightColumnX(refreshButtonWidth));
 		ImVec2 refreshButtonPos = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(refreshButtonPos.x, refreshButtonPos.y + refreshVerticalOffset));
-		const bool refreshPressed = ImGui::Button(ICON_FA_ARROWS_ROTATE "##IphoneRescanContentBtn", ImVec2(refreshButtonWidth, refreshButtonHeight));
+		const bool refreshPressed = SettingsIconButton("##IphoneRescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
 		if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 			SetSettingsFooterText(T("Refresh the current content library view."));
 
@@ -2595,14 +2627,14 @@ void renderGeneralTab()
 			ImGui::SameLine(RightColumnX(buttonWidth * 2.0f + buttonSpacing));
 			ImVec2 buttonPos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(buttonPos.x, buttonPos.y + verticalOffset));
-			refreshPressed = ImGui::Button(ICON_FA_ARROWS_ROTATE "##BoxartRefreshBtn", ImVec2(buttonWidth, buttonHeight));
+			refreshPressed = SettingsIconButton("##BoxartRefreshBtn", ICON_FA_ARROWS_ROTATE, ImVec2(buttonWidth, buttonHeight));
 			if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 				SetSettingsFooterText(T("Refresh downloaded box art and rescan artwork sources."));
 
 			ImGui::SameLine(0, buttonSpacing);
 			ImVec2 deletePos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(deletePos.x, buttonPos.y + verticalOffset));
-			if (ImGui::Button(ICON_FA_TRASH_CAN "##ClearBoxartPath", ImVec2(buttonWidth, buttonHeight)))
+			if (SettingsIconButton("##ClearBoxartPath", ICON_FA_TRASH_CAN, ImVec2(buttonWidth, buttonHeight)))
 			{
 				config::BoxartPath.get().clear();
 				openPopup = false;
