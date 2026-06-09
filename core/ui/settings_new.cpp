@@ -117,6 +117,8 @@ static float g_twoLineRowSeparatorAlpha = 0.5f;
 static float g_twoLineRowExtraGapPx = 0.0f;
 static bool g_mapleDevicesChangedInSettings = false;
 static bool g_scrollToBoxArtSection = false;
+static bool g_focusSettingsNavigation = false;
+static bool g_focusSettingsContent = false;
 static std::string g_settingsFooterText;
 static constexpr float kSettingsFooterHeightPx = 152.0f;
 
@@ -249,6 +251,11 @@ static void SetSettingsFooterText(const char* text)
 {
 	if (text != nullptr && text[0] != '\0')
 		g_settingsFooterText = text;
+}
+
+static bool IsSettingsPaneNavPressed(ImGuiKey dpadKey, ImGuiKey stickKey)
+{
+	return ImGui::IsKeyPressed(dpadKey, false) || ImGui::IsKeyPressed(stickKey, false);
 }
 
 static void ShowFooterHelpMarker(const char* desc)
@@ -1835,10 +1842,14 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	const float navWidth = SettingsNavigationWidth();
 	const float footerGap = SettingsFooterGap();
 	const float footerHeight = SettingsFooterHeight();
+	const bool focusSelectedTab = g_focusSettingsNavigation;
 
 	// Left navigation rail: 225px wide child window
 	// Match the main content column height so the shared footer sits flush below both panels.
+	if (focusSelectedTab)
+		ImGui::SetNextWindowFocus();
 	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)), true);
+	g_focusSettingsNavigation = false;
 
 	IconButton backButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0));
 	if (backButton.realize())
@@ -1859,6 +1870,9 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 		// When selected, ImGui uses ImGuiCol_Header (from current theme)
 		bool isSelected = (g_state.currentTab == tab);
 
+		if (focusSelectedTab && isSelected)
+			ImGui::SetKeyboardFocusHere();
+
 		// Create selectable item that fills the navigation rail width
 		// Clicking changes the current tab
 		if (ImGui::Selectable(tabName, isSelected, ImGuiSelectableFlags_None, ImVec2(navWidth, 0)))
@@ -1870,6 +1884,9 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 			SetSettingsFooterText(GetTabHelpText(tab));
 	}
 
+	if (ImGui::IsWindowFocused() && IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight))
+		g_focusSettingsContent = true;
+
 	ImGui::EndChild();
 }
 
@@ -1879,12 +1896,19 @@ static void renderContentArea()
 {
 	const float footerGap = SettingsFooterGap();
 	const float footerHeight = SettingsFooterHeight();
+	const bool focusContent = g_focusSettingsContent;
 
 	// Right content area: fills remaining space
 	// ImGui::SameLine() positions this after the navigation rail
 	// No width specified means it takes all remaining space
+	if (focusContent)
+		ImGui::SetNextWindowFocus();
 	ImGui::BeginChild("ContentArea", ImVec2(0, -(footerHeight + footerGap)), true,
 	                  ImGuiWindowFlags_DragScrolling);
+	g_focusSettingsContent = false;
+
+	if (focusContent)
+		ImGui::SetKeyboardFocusHere();
 
 	// Call the appropriate tab renderer based on current selection
 	switch (g_state.currentTab)
@@ -1913,6 +1937,10 @@ static void renderContentArea()
 	default:
 		break;
 	}
+
+	if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
+		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft))
+		g_focusSettingsNavigation = true;
 
 	ImGui::EndChild();
 	ImGui::Dummy(ImVec2(0.0f, footerGap));
