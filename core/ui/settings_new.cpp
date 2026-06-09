@@ -205,17 +205,15 @@ static float TwoLineSettingContentHeight()
 {
 	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
 	ImFont* secondaryFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
-	const float primaryHeight = std::max(primaryFont->LegacySize, uiScaled(20.0f));
+	const float primaryHeight = primaryFont->LegacySize;
 	const float secondaryHeight = secondaryFont->LegacySize;
-	const float primaryAdvance = std::max(ImGui::GetTextLineHeight(), primaryHeight);
-	return primaryAdvance + secondaryHeight;
+	return primaryHeight + uiScaled(4.0f) + secondaryHeight;
 }
 
 static float TwoLineSettingSecondaryLineOffsetY()
 {
 	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
-	const float primaryHeight = std::max(primaryFont->LegacySize, uiScaled(20.0f));
-	return std::max(ImGui::GetTextLineHeight(), primaryHeight);
+	return primaryFont->LegacySize + uiScaled(4.0f);
 }
 
 static float TwoLineSettingRowHeight()
@@ -2050,7 +2048,7 @@ static bool RenderCollapsingHeader(
 void renderGeneralTab()
 {
 	using namespace SettingsUI;
-	ScopedTwoLineRowStyle generalRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle generalRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("General Configuration"));
 	ImGui::Separator();
@@ -2989,7 +2987,7 @@ void renderGeneralTab()
 
 void renderVideoTab()
 {
-	ScopedTwoLineRowStyle videoRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle videoRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Video Configuration"));
 	ImGui::Separator();
@@ -4166,7 +4164,7 @@ void renderVideoTab()
 
 void renderAudioTab()
 {
-	ScopedTwoLineRowStyle audioRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle audioRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Audio Configuration"));
 	ImGui::Separator();
@@ -4523,7 +4521,7 @@ void renderControlsTab()
 {
 	uiLanguageHandler.init();
 
-	ScopedTwoLineRowStyle controlsRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle controlsRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Controls Configuration"));
 	ImGui::Separator();
@@ -5124,7 +5122,7 @@ void renderControlsTab()
 
 void renderNetworkTab()
 {
-	ScopedTwoLineRowStyle networkRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle networkRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Network Configuration"));
 	ImGui::Separator();
@@ -5745,7 +5743,7 @@ void renderNetworkTab()
 
 void renderAdvancedTab()
 {
-	ScopedTwoLineRowStyle advancedRowStyle(20.0f, true, 0.5f);
+	ScopedTwoLineRowStyle advancedRowStyle(8.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Advanced Configuration"));
 	ImGui::Separator();

@@ -239,8 +239,7 @@ void gui_updateStyle()
 #if defined(__ANDROID__) || defined(TARGET_IPHONE) || defined(__SWITCH__)
 	ImGui::GetStyle().TouchExtraPadding = ImVec2(1, 1);	// from 0,0
 #endif
-	if (settings.display.uiScale > 1)
-		ImGui::GetStyle().ScaleAllSizes(settings.display.uiScale);
+	ImGui::GetStyle().ScaleAllSizes(settings.display.uiScale);
 
 	gui_loadFonts();
 
