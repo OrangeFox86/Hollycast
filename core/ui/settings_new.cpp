@@ -114,7 +114,8 @@ static std::shared_ptr<GamepadDevice> g_currentGamepadForSettings;
 static float g_twoLineRowExtraHeightPx = 0.0f;
 static bool g_twoLineRowSeparatorsEnabled = false;
 static float g_twoLineRowSeparatorAlpha = 0.5f;
-static float g_twoLineRowExtraGapPx = 0.0f;
+static float g_twoLineRowStartScreenX = 0.0f;
+static float g_twoLineRowEndScreenY = 0.0f;
 static bool g_mapleDevicesChangedInSettings = false;
 static bool g_scrollToBoxArtSection = false;
 static bool g_focusSettingsNavigation = false;
@@ -142,9 +143,12 @@ static float SettingsFooterGap()
 
 static float SettingsNavigationWidth()
 {
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+	const float minWidth = 136.0f;
+	const float maxWidth = std::min(310.0f, displaySize.x * 0.20f);
 	if (!UseCompactSettingsLayout())
-		return uiScaled(225.0f);
-	return std::clamp(ImGui::GetIO().DisplaySize.x * 0.24f, uiScaled(136.0f), uiScaled(180.0f));
+		return std::clamp(uiScaled(225.0f), minWidth, maxWidth);
+	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
 }
 
 // Visual-only toggle switch rendering (no interaction)
@@ -199,7 +203,19 @@ static void RenderToggleSwitchVisual(bool value)
 
 static float TwoLineSettingContentHeight()
 {
-	return ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
+	ImFont* secondaryFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	const float primaryHeight = std::max(primaryFont->LegacySize, uiScaled(20.0f));
+	const float secondaryHeight = secondaryFont->LegacySize;
+	const float primaryAdvance = std::max(ImGui::GetTextLineHeight(), primaryHeight);
+	return primaryAdvance + secondaryHeight;
+}
+
+static float TwoLineSettingSecondaryLineOffsetY()
+{
+	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
+	const float primaryHeight = std::max(primaryFont->LegacySize, uiScaled(20.0f));
+	return std::max(ImGui::GetTextLineHeight(), primaryHeight);
 }
 
 static float TwoLineSettingRowHeight()
@@ -256,6 +272,11 @@ static void SetSettingsFooterText(const char* text)
 static bool IsSettingsPaneNavPressed(ImGuiKey dpadKey, ImGuiKey stickKey)
 {
 	return ImGui::IsKeyPressed(dpadKey, false) || ImGui::IsKeyPressed(stickKey, false);
+}
+
+static bool IsAnySettingsPopupOpen()
+{
+	return ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
 }
 
 static void ShowFooterHelpMarker(const char* desc)
@@ -448,16 +469,14 @@ static void RenderSettingsFooterBar()
 class ScopedTwoLineRowStyle
 {
 public:
-	ScopedTwoLineRowStyle(float rowHeightExtraPx, bool drawSeparators, float separatorAlpha = 0.5f, float extraGapPx = 0.0f)
+	ScopedTwoLineRowStyle(float rowHeightExtraPx, bool drawSeparators, float separatorAlpha = 0.5f)
 		: m_prevRowHeightExtraPx(g_twoLineRowExtraHeightPx)
 		, m_prevDrawSeparators(g_twoLineRowSeparatorsEnabled)
 		, m_prevSeparatorAlpha(g_twoLineRowSeparatorAlpha)
-		, m_prevExtraGapPx(g_twoLineRowExtraGapPx)
 	{
 		g_twoLineRowExtraHeightPx = rowHeightExtraPx;
 		g_twoLineRowSeparatorsEnabled = drawSeparators;
 		g_twoLineRowSeparatorAlpha = separatorAlpha;
-		g_twoLineRowExtraGapPx = extraGapPx;
 	}
 
 	~ScopedTwoLineRowStyle()
@@ -465,14 +484,12 @@ public:
 		g_twoLineRowExtraHeightPx = m_prevRowHeightExtraPx;
 		g_twoLineRowSeparatorsEnabled = m_prevDrawSeparators;
 		g_twoLineRowSeparatorAlpha = m_prevSeparatorAlpha;
-		g_twoLineRowExtraGapPx = m_prevExtraGapPx;
 	}
 
 private:
 	float m_prevRowHeightExtraPx;
 	bool m_prevDrawSeparators;
 	float m_prevSeparatorAlpha;
-	float m_prevExtraGapPx;
 };
 
 static ImVec2 BeginTwoLineSettingRowContent()
@@ -492,6 +509,8 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 
 	ImguiStyleVar rowRounding(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
 	const bool clicked = ImGui::Selectable(rowId, false, rowFlags, ImVec2(0.0f, TwoLineSettingRowHeight()));
+	g_twoLineRowStartScreenX = ImGui::GetItemRectMin().x;
+	g_twoLineRowEndScreenY = ImGui::GetItemRectMax().y;
 	if (tooltip != nullptr && (ImGui::IsItemHovered() || ImGui::IsItemFocused()))
 		SetSettingsFooterText(tooltip);
 
@@ -511,6 +530,11 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 	}
 
 	return clicked && !disabled;
+}
+
+static void EndTwoLineSettingRow()
+{
+	ImGui::SetCursorScreenPos(ImVec2(g_twoLineRowStartScreenX, g_twoLineRowEndScreenY));
 }
 
 static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char* description)
@@ -547,7 +571,7 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 
 	ImGui::SetCursorPos(ImVec2(
 		line1Start.x + uiScaled(28.0f),
-		line1Start.y + ImGui::GetTextLineHeightWithSpacing()
+		line1Start.y + TwoLineSettingSecondaryLineOffsetY()
 	));
 	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 
@@ -667,10 +691,8 @@ static bool RenderGeneralPopupSettingRow(const char* id, const char* description
 		SettingsUI::SettingPopup(popupCfg);
 	}
 	RenderTwoLineSettingDescription(line1Start, description);
+	EndTwoLineSettingRow();
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 	return rowActivated;
 }
 
@@ -710,10 +732,8 @@ static bool RenderGeneralToggleSettingRow(const char* id, const char* icon, cons
 	}
 
 	RenderTwoLineSettingDescription(line1Start, description);
+	EndTwoLineSettingRow();
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 	return rowActivated;
 }
 
@@ -745,10 +765,8 @@ static void RenderGeneralTextInputSettingRow(const char* id, const char* icon, c
 	}
 
 	RenderTwoLineSettingDescription(line1Start, description);
+	EndTwoLineSettingRow();
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 }
 
 // Gamepad Settings Popup (ported from settings_controls.cpp)
@@ -1611,11 +1629,9 @@ static void RenderGeneralInfoRow(const char* id, const char* icon, const char* l
 	ImGui::PopFont();
 	RenderGeneralRightValue(value, 280.0f, 0.0f, disabledValue);
 	RenderTwoLineSettingDescription(line1Start, description);
+	EndTwoLineSettingRow();
 
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 }
 
 static void manageSinglePath(const char* label, config::Option<std::string, false>& pathOption, const char* helpText)
@@ -1658,10 +1674,8 @@ static void manageSinglePath(const char* label, config::Option<std::string, fals
 	}
 
 	RenderTwoLineSettingDescription(line1Start, helpText);
+	EndTwoLineSettingRow();
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 
 	const std::string popupName = std::string(T("Select ")) + label;
 	select_file_popup(popupName.c_str(), [&pathOption](bool cancelled, const std::string& selection) {
@@ -1724,10 +1738,8 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		const std::string additionalDesc = buffer;
 		const char* desc = (i == 0) ? helpText : additionalDesc.c_str();
 		RenderTwoLineSettingDescription(line1Start, desc);
+		EndTwoLineSettingRow();
 		ImGui::PopID();
-		ImGui::Spacing();
-		if (g_twoLineRowExtraGapPx > 0.0f)
-			ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 	}
 
 	ImGui::PushID("AddPathRow");
@@ -1742,12 +1754,10 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		ImGui::PopFont();
 		RenderGeneralRightValue(T("Select Path"), 280.0f, 0.0f, true);
 		RenderTwoLineSettingDescription(line1Start, addRowDescription.c_str());
+		EndTwoLineSettingRow();
 		openPopup = addRowActivated;
 	}
 	ImGui::PopID();
-	ImGui::Spacing();
-	if (g_twoLineRowExtraGapPx > 0.0f)
-		ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 
 	if (to_delete >= 0)
 	{
@@ -1835,11 +1845,30 @@ const char* getTabName(SettingsTab tab)
 	}
 }
 
+static float CalculateSettingsNavigationWidth(const char* exitLabel)
+{
+	ImFont* navFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	const std::string backLabel = strprintf("%s  %s", ICON_FA_ARROW_LEFT, exitLabel);
+	float minWidth = navFont->CalcTextSizeA(navFont->LegacySize, FLT_MAX, -1.0f, backLabel.c_str()).x;
+	for (int i = 0; i < (int)SettingsTab::Count; i++)
+	{
+		const char* tabName = getTabName((SettingsTab)i);
+		minWidth = std::max(minWidth, navFont->CalcTextSizeA(navFont->LegacySize, FLT_MAX, -1.0f, tabName).x);
+	}
+	const float maxWidth = std::max(136.0f, std::min(310.0f, ImGui::GetIO().DisplaySize.x * 0.20f));
+	return std::clamp(
+		std::max(SettingsNavigationWidth(), minWidth + ImGui::GetStyle().WindowPadding.x * 2.0f),
+		136.0f,
+		maxWidth
+	);
+}
+
 // Render left navigation rail with tab buttons (225px wide)
 // This creates the vertical strip on the left side with navigation items
 static void renderNavigationRail(const std::function<void()>& exitSettings, const char* exitLabel)
 {
-	const float navWidth = SettingsNavigationWidth();
+	IconButton backButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0));
+	const float navWidth = CalculateSettingsNavigationWidth(exitLabel);
 	const float footerGap = SettingsFooterGap();
 	const float footerHeight = SettingsFooterHeight();
 	const bool focusSelectedTab = g_focusSettingsNavigation;
@@ -1851,7 +1880,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)), true);
 	g_focusSettingsNavigation = false;
 
-	IconButton backButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0));
+	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 	if (backButton.realize())
 		exitSettings();
 	ImGui::Spacing();
@@ -1875,7 +1904,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 
 		// Create selectable item that fills the navigation rail width
 		// Clicking changes the current tab
-		if (ImGui::Selectable(tabName, isSelected, ImGuiSelectableFlags_None, ImVec2(navWidth, 0)))
+		if (ImGui::Selectable(tabName, isSelected, ImGuiSelectableFlags_None, ImVec2(ImGui::GetContentRegionAvail().x, 0)))
 		{
 			g_state.currentTab = tab;
 			ResetSettingsFooter();
@@ -1883,8 +1912,11 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 		if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 			SetSettingsFooterText(GetTabHelpText(tab));
 	}
+	ImGui::PopFont();
 
-	if (ImGui::IsWindowFocused() && IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight))
+	if (!IsAnySettingsPopupOpen()
+		&& ImGui::IsWindowFocused()
+		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight))
 		g_focusSettingsContent = true;
 
 	ImGui::EndChild();
@@ -1938,7 +1970,8 @@ static void renderContentArea()
 		break;
 	}
 
-	if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
+	if (!IsAnySettingsPopupOpen()
+		&& ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
 		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft))
 		g_focusSettingsNavigation = true;
 
@@ -1973,14 +2006,19 @@ static bool RenderCollapsingHeader(
 		labelStr += id;
 	}
 
-	return ImGui::CollapsingHeader(labelStr.c_str(), flags);
+	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(10.0f)));
+	bool open = ImGui::CollapsingHeader(labelStr.c_str(), flags);
+	ImGui::PopStyleVar();
+	ImGui::PopFont();
+	return open;
 }
 
 // Render General tab with all settings from settings_general.cpp
 void renderGeneralTab()
 {
 	using namespace SettingsUI;
-	ScopedTwoLineRowStyle generalRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle generalRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("General Configuration"));
 	ImGui::Separator();
@@ -2223,11 +2261,9 @@ void renderGeneralTab()
 
 			const char* desc = (i == 0) ? T("The folders where your games are stored") : T("Additional content folder");
 			RenderTwoLineSettingDescription(line1Start, desc);
+			EndTwoLineSettingRow();
 
 			ImGui::PopID();
-			ImGui::Spacing();
-			if (g_twoLineRowExtraGapPx > 0.0f)
-				ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 		}
 
 		{
@@ -2263,13 +2299,11 @@ void renderGeneralTab()
 				SetSettingsFooterText(T("Refresh the current content library view."));
 
 			RenderTwoLineSettingDescription(line1Start, T("Add another content folder"));
+			EndTwoLineSettingRow();
 			addContentRequested = addRowActivated;
 			if (refreshPressed)
 				scanner.refresh();
 			ImGui::PopID();
-			ImGui::Spacing();
-			if (g_twoLineRowExtraGapPx > 0.0f)
-				ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 		}
 
 		// Keep this call every frame so the popup can render while open.
@@ -2380,12 +2414,10 @@ void renderGeneralTab()
 			SetSettingsFooterText(T("Refresh the current content library view."));
 
 		RenderTwoLineSettingDescription(line1Start, T("Rescan all content folders"));
+		EndTwoLineSettingRow();
 		if (rescanRowActivated || refreshPressed)
 			scanner.refresh();
 		ImGui::PopID();
-		ImGui::Spacing();
-		if (g_twoLineRowExtraGapPx > 0.0f)
-			ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 	}
 #endif
 	ImGui::Spacing();
@@ -2582,10 +2614,8 @@ void renderGeneralTab()
 		}
 
 		RenderTwoLineSettingDescription(line1Start, T("Folder containing custom box art images (png/jpg). File names should match game names"));
+		EndTwoLineSettingRow();
 		ImGui::PopID();
-		ImGui::Spacing();
-		if (g_twoLineRowExtraGapPx > 0.0f)
-			ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 
 		const std::string popupName = T("Select Custom Boxart Folder");
 		select_file_popup(popupName.c_str(), [](bool cancelled, const std::string& selection) {
@@ -2927,7 +2957,7 @@ void renderGeneralTab()
 
 void renderVideoTab()
 {
-	ScopedTwoLineRowStyle videoRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle videoRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Video Configuration"));
 	ImGui::Separator();
@@ -3756,7 +3786,7 @@ void renderVideoTab()
 		}
 
 		// 2x height toggle rows for Performance settings
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(12.0f)));
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
 
 		// Shadows toggle
@@ -3796,7 +3826,7 @@ void renderVideoTab()
 		ImGui::Spacing();
 
 		// 2x height toggle rows for Advanced settings
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(12.0f)));
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
 
 		// Delay Frame Swapping
@@ -4078,8 +4108,8 @@ void renderVideoTab()
 			ImGui::PopFont();
 
 			RenderTwoLineSettingDescription(line1Start, T("Calculated size of the shared output texture."));
+			EndTwoLineSettingRow();
 			ImGui::PopID();
-			ImGui::Spacing();
 		}
 	}
 #endif
@@ -4104,7 +4134,7 @@ void renderVideoTab()
 
 void renderAudioTab()
 {
-	ScopedTwoLineRowStyle audioRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle audioRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Audio Configuration"));
 	ImGui::Separator();
@@ -4461,7 +4491,7 @@ void renderControlsTab()
 {
 	uiLanguageHandler.init();
 
-	ScopedTwoLineRowStyle controlsRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle controlsRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Controls Configuration"));
 	ImGui::Separator();
@@ -5062,7 +5092,7 @@ void renderControlsTab()
 
 void renderNetworkTab()
 {
-	ScopedTwoLineRowStyle networkRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle networkRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Network Configuration"));
 	ImGui::Separator();
@@ -5286,10 +5316,8 @@ void renderNetworkTab()
 									config::GGPOChatTimeout.set(atoi(chatTimeout));
 
 								RenderTwoLineSettingDescription(line1Start, T("Sets duration that chat window stays open after new message is received"));
+								EndTwoLineSettingRow();
 								ImGui::PopID();
-								ImGui::Spacing();
-								if (g_twoLineRowExtraGapPx > 0.0f)
-									ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 							}
 						}
 					}
@@ -5414,10 +5442,8 @@ void renderNetworkTab()
 							config::LocalPort.set(atoi(localPort));
 
 						RenderTwoLineSettingDescription(line1Start, T("The local UDP port to use"));
+						EndTwoLineSettingRow();
 						ImGui::PopID();
-						ImGui::Spacing();
-						if (g_twoLineRowExtraGapPx > 0.0f)
-							ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 					}
 				}
 			}
@@ -5542,10 +5568,8 @@ void renderNetworkTab()
 							config::LocalPort.set(atoi(localPort));
 
 						RenderTwoLineSettingDescription(line1Start, T("The local UDP port to use"));
+						EndTwoLineSettingRow();
 						ImGui::PopID();
-						ImGui::Spacing();
-						if (g_twoLineRowExtraGapPx > 0.0f)
-							ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 					}
 #ifdef USE_ICE
 					ImGui::EndTabItem();
@@ -5689,7 +5713,7 @@ void renderNetworkTab()
 
 void renderAdvancedTab()
 {
-	ScopedTwoLineRowStyle advancedRowStyle(20.0f, true, 0.5f, 8.0f);
+	ScopedTwoLineRowStyle advancedRowStyle(20.0f, true, 0.5f);
 
 	ImGui::TextDisabled("%s", T("Advanced Configuration"));
 	ImGui::Separator();
@@ -5991,10 +6015,8 @@ void renderAdvancedTab()
 					config::GDBPort = gdbport;
 
 				RenderTwoLineSettingDescription(line1Start, T("Default port is 3263"));
+				EndTwoLineSettingRow();
 				ImGui::PopID();
-				ImGui::Spacing();
-				if (g_twoLineRowExtraGapPx > 0.0f)
-					ImGui::Dummy(ImVec2(0.0f, uiScaled(g_twoLineRowExtraGapPx)));
 			}
 			ImGui::Unindent();
 		}
