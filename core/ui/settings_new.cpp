@@ -4686,12 +4686,14 @@ void renderControlsTab()
 
 			// DreamLink device names for main device
 			const char* dream_link_names[MAPLE_PORTS]{};
+			const char* dream_link_ext_labels[MAPLE_PORTS]{};
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
 			{
 				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
 				if (link && (link->dreamlink->getIssueDescription() == nullptr))
 				{
 					dream_link_names[bus] = link->dreamlink->getName();
+					dream_link_ext_labels[bus] = link->dreamlink->getExtensionDeviceLabel();
 					mainComboWidth = std::max(
 						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
 						mainComboWidth
@@ -4700,6 +4702,7 @@ void renderControlsTab()
 				else
 				{
 					dream_link_names[bus] = "";
+					dream_link_ext_labels[bus] = "";
 				}
 			}
 
@@ -4713,7 +4716,7 @@ void renderControlsTab()
 				const char* name;
 			};
 
-			std::list<MapleExpansionDeviceDesc> maple_expansion_device_types = {
+			const std::list<MapleExpansionDeviceDesc> static_maple_expansion_device_types = {
 				{MDT_None, T("None")},
 				{MDT_SegaVMU, T("Sega VMU")},
 				{MDT_PurupuruPack, T("Vibration Pack")},
@@ -4766,12 +4769,15 @@ void renderControlsTab()
 					ImGui::EndCombo();
 				}
 
+				std::list<MapleExpansionDeviceDesc> maple_expansion_device_types = static_maple_expansion_device_types;
 				int port_count = 0;
 				if (has_dream_link)
 				{
+					// Using real hardware for this - done with disable section
 					ImGui::EndDisabled();
+
 					port_count = 2;
-					maple_expansion_device_types.push_back({MDT_DreamLink, dream_link_name});
+					maple_expansion_device_types.push_back({MDT_DreamLink, dream_link_ext_labels[bus]});
 				}
 				else
 				{
