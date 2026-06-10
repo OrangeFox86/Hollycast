@@ -744,7 +744,6 @@ u32 maple_sega_vmu::dma(u32 cmd)
 						rptr(timebuf,8);
 						DEBUG_LOG(MAPLE, "VMU: CLOCK Write-> datetime is %04d/%02d/%02d ~ %02d:%02d:%02d! Nothing set tho ...",
 								timebuf[0]+timebuf[1]*256,timebuf[2],timebuf[3],timebuf[4],timebuf[5],timebuf[6]);
-						relayMapleLink();
 						return  MDRS_DeviceReply;//ok !
 					}
 
@@ -768,6 +767,7 @@ u32 maple_sega_vmu::dma(u32 cmd)
 				u8 ald = r8();
 				r16(); // Alarm 2
 				INFO_LOG(MAPLE, "BEEP: %d/%d", alw, ald);
+				relayMapleLink();
 				aica::sgc::vmuBeep(alw, ald);
 
 				return MDRS_DeviceReply;
