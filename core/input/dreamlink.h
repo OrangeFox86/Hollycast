@@ -90,7 +90,7 @@ public:
 		return getName();
 	}
 	//! @return the function code at the given port
-	virtual u32 getFunctionCode(int forPort) const = 0;
+	virtual u32 getFunctionCodesMask(int forPort) const = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test

@@ -272,7 +272,7 @@ public:
 		return "DreamPotato";
 	}
 
-	u32 getFunctionCode(int forPort) const override {
+	u32 getFunctionCodesMask(int forPort) const override {
 		return isPortDocked(forPort) ? (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock) : 0;
 	}
 

@@ -194,7 +194,7 @@ public:
 		return "DreamConn";
 	}
 
-	u32 getFunctionCode(int forPort) const override {
+	u32 getFunctionCodesMask(int forPort) const override {
 		if (forPort < expansionDevs.size()) {
 			if (expansionDevs[forPort] == MDT_SegaVMU)
 				return (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock);

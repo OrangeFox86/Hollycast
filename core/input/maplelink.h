@@ -62,7 +62,7 @@ public:
 	bool isConnected();
 
 	//! @return the function code for this MapleLink
-	u32 getFunctionCode() const;
+	u32 getFunctionCodesMask() const;
 
 	//! Create the maple device needed to interface this device to the emulator
 	std::shared_ptr<maple_device> createMapleDevice();
