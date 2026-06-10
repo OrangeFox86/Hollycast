@@ -2710,13 +2710,13 @@ void renderGeneralTab()
 			"AutoLoadState",
 			ICON_FA_FOLDER_OPEN,
 			T("Auto-Load on Start"),
-			T("Load the last saved state of the game when starting"),
+			T("Enables Auto-Load on game boot, loading the hidden Auto-Save slot."),
 			static_cast<bool>(config::AutoLoadState),
 			[](bool enabled) { config::AutoLoadState = enabled; },
 			T(
 				"Auto-Load on Start\n"
-				"Automatically loads the last saved state when starting a game.\n"
-				"Convenient, but can hide boot-time issues or break games that don't like savestates."
+				"When enabled, on game boot, if the hidden Auto-Save slot has an Auto-Save, "
+				"it will automatically load this slot on game boot."
 			)
 		);
 
@@ -2724,13 +2724,13 @@ void renderGeneralTab()
 			"AutoSaveState",
 			ICON_FA_FLOPPY_DISK,
 			T("Auto-Save on Exit"),
-			T("Save the state of the game when stopping"),
+			T("Enables Auto-Save on game exit, prompting if you wish to save the game to the hidden Auto-Save slot."),
 			static_cast<bool>(config::AutoSaveState),
 			[](bool enabled) { config::AutoSaveState = enabled; },
 			T(
 				"Auto-Save on Exit\n"
-				"Automatically saves a state when you stop a game.\n"
-				"Good for quick resume workflows. Disable if you prefer manual state management."
+				"When enabled, when leaving a game, you will be asked if you want to save, and this "
+				"populates your hidden Auto-Save slot for your Auto-Load."
 			)
 		);
 
