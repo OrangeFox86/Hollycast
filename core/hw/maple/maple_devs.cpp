@@ -63,7 +63,7 @@ maple_device::~maple_device()
 	}
 }
 
-bool maple_base::relayMapleLink()
+void maple_base::relayMapleLink()
 {
 	auto link = MapleLinkRegistry::GetMapleLink(bus_id, bus_port);
 	if (link && inMsg && inMsg->size >= 1)
@@ -71,10 +71,8 @@ bool maple_base::relayMapleLink()
 		// First word should give the function code for this message - ensure DreamLink has capability
 		u32 fnCode = inMsg->readData<u32>(0);
 		if (fnCode & link->getFunctionCodesMask())
-			return link->send(*inMsg);
+			link->send(*inMsg);
 	}
-
-	return true;
 }
 
 static inline void mutualExclusion(u32& keycode, u32 mask)

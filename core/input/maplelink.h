@@ -180,11 +180,8 @@ protected:
 	}
 
 	//! This is called by a virtual device when a feedback message relay is requested
-	//! @return true always
-	inline bool relayMapleLink() override
-	{
-		return true;
-	}
+	inline void relayMapleLink() override
+	{}
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
