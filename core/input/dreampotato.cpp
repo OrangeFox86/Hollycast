@@ -273,7 +273,7 @@ public:
 	}
 
 	u32 getFunctionCode(int forPort) const override {
-		return (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock);
+		return isPortDocked(forPort) ? (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock) : 0;
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
@@ -286,7 +286,7 @@ public:
 	void init(u32 ports);
 	void term() override;
 
-	bool isPortDocked(int port)
+	bool isPortDocked(int port) const
 	{
 		assert(port == 0 || port == 1);
 		return dockedPorts & (1 << port);
