@@ -120,6 +120,12 @@ protected:
 	//! @param[in] dev The device that the DreamLink created
 	//! @param[in] vmu The VMU containing LCD data (may or may not be the same as dev)
 	static void mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu& vmu);
+
+	//! Relays a maple message to the currently active physical DreamLink device on the given bus and port
+	//! @param[in] bus The target DreamLink bus
+	//! @param[in] port The target DreamLink port
+	//! @param[in] msg The message to send
+	static void relayPhysicalMapleLink(int bus, int port, const MapleMsg& msg);
 };
 
 //! Base class all maple link devices must inherit from
@@ -181,7 +187,11 @@ protected:
 
 	//! This is called by a virtual device when a feedback message relay is requested
 	inline void relayMapleLink() override
-	{}
+	{
+		if (inMsg) {
+			MapleLinkDevice::relayPhysicalMapleLink(bus_id, bus_port, *inMsg);
+		}
+	}
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink

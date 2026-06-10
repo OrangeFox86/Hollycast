@@ -182,6 +182,24 @@ void MapleLinkDevice::mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu
 	link.send(msg);
 }
 
+void MapleLinkDevice::relayPhysicalMapleLink(int bus, int port, const MapleMsg& msg)
+{
+	// Get the main device rather than the device at the port as this is the currently active physical device
+	auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX);
+
+	if (link && msg.size >= 1)
+	{
+		// Override the port to the desired port
+		link.emplace(MapleLink(std::move(link->dreamlink), bus, port));
+
+		// First word should give the function code for this message - ensure DreamLink has capability
+		u32 fnCode = msg.readData<u32>(0);
+		// Note: Accessing dreamlink directly because target port is overridden
+		if (fnCode & link->getFunctionCodesMask())
+			link->send(msg);
+	}
+}
+
 MapleLinkVmu::MapleLinkVmu(const MapleLink& link) : MapleLinkDeviceBase<maple_sega_vmu>(link)
 {}
 
