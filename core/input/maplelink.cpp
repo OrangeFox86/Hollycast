@@ -189,6 +189,13 @@ void MapleLinkDevice::relayPhysicalMapleLink(int bus, int port, const MapleMsg& 
 
 	if (link && msg.size >= 1)
 	{
+		auto localLink = MapleLinkRegistry::GetMapleLink(bus, port);
+		if (localLink && localLink->dreamlink.get() == link->dreamlink.get())
+		{
+			// There is no need to relay because this is the local link
+			return;
+		}
+
 		// Override the port to the desired port
 		link.emplace(MapleLink(std::move(link->dreamlink), bus, port));
 
