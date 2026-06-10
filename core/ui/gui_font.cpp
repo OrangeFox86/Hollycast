@@ -29,6 +29,7 @@ ImFont *largeFont;
 ImFont *settingsTitleFont;
 ImFont *settingsValueFont;
 ImFont *settingsRightValueFont;
+ImFont *settingsIconFont;
 
 namespace FontFace
 {
@@ -510,6 +511,15 @@ void gui_loadFonts()
 		settingsValueFont = largeFont;
 	if (settingsRightValueFont == nullptr)
 		settingsRightValueFont = largeFont;
+
+	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	if (data != nullptr)
+	{
+		static const ImWchar iconRanges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+		settingsIconFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, iconRanges);
+	}
+	if (settingsIconFont == nullptr)
+		settingsIconFont = regularFont;
 
 	// Font Awesome symbols
 	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);

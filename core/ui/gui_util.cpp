@@ -1039,7 +1039,11 @@ void SectionHeaderWithIcon(const char* icon, const char* text)
 
 	// Icon + text with highlighted color
 	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-	ImGui::Text("%s %s", icon, text);
+	ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
+	ImGui::Text("%s", icon);
+	ImGui::PopFont();
+	ImGui::SameLine();
+	ImGui::Text("%s", text);
 	ImGui::PopStyleColor();
 
 	// Separator line
@@ -1057,7 +1061,7 @@ void SettingIcon(const char* icon, const ImVec2& size)
 		iconSize = ImVec2(settings.display.uiScale * 16, settings.display.uiScale * 16);
 
 	const ImVec2 iconPos = ImGui::GetCursorScreenPos();
-	ImFont* font = ImGui::GetFont();
+	ImFont* font = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 	float fontSize = std::min(iconSize.x, iconSize.y);
 	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
 	if (textSize.x > iconSize.x && textSize.x > 0.0f)
@@ -1088,7 +1092,9 @@ void BeginSettingsRow(const SettingsRowParams& params)
 	// Draw icon if provided
 	if (params.icon != nullptr)
 	{
+		ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
 		ImGui::Text("%s", params.icon);
+		ImGui::PopFont();
 		ImGui::SameLine(0, settings.display.uiScale * 12);
 	}
 

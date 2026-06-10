@@ -63,6 +63,7 @@
 extern ImFont *largeFont;
 extern ImFont *settingsTitleFont;
 extern ImFont *settingsRightValueFont;
+extern ImFont *settingsIconFont;
 
 namespace SettingsNew {
 
@@ -239,7 +240,7 @@ static float RightColumnX(float itemWidth, float rightPadding = 28.0f)
 
 static void RenderScaledIconInRect(const char* icon, const ImVec2& min, const ImVec2& max)
 {
-	ImFont* font = ImGui::GetFont();
+	ImFont* font = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 	const ImVec2 iconSize(max.x - min.x, max.y - min.y);
 	float fontSize = std::min(iconSize.x, iconSize.y) * 0.72f;
 	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
@@ -1593,7 +1594,9 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 			}
 			else if (getButtonState(gamepad, systemMapping->key))
 			{
+				ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
 				ImGui::Text(ICON_FA_CIRCLE_DOT);
+				ImGui::PopFont();
 			}
 		}
 
@@ -2028,10 +2031,7 @@ static bool RenderCollapsingHeader(
 	labelStr.clear(); // Keeps the allocated capacity intact
 
 	if (labelIcon && *labelIcon != '\0')
-	{
-		labelStr += labelIcon;
-		labelStr += " ";
-	}
+		labelStr += "  ";
 
 	labelStr += labelText;
 
@@ -2044,6 +2044,24 @@ static bool RenderCollapsingHeader(
 	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(10.0f)));
 	bool open = ImGui::CollapsingHeader(labelStr.c_str(), flags);
+	if (labelIcon && *labelIcon != '\0')
+	{
+		ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+		const ImVec2 itemMin = ImGui::GetItemRectMin();
+		const ImVec2 itemMax = ImGui::GetItemRectMax();
+		const float iconFontSize = ImGui::GetFontSize();
+		const ImVec2 iconTextSize = iconFont->CalcTextSizeA(iconFontSize, FLT_MAX, -1.0f, labelIcon);
+		const ImVec2 iconPos(
+			itemMin.x + ImGui::GetTreeNodeToLabelSpacing(),
+			itemMin.y + (itemMax.y - itemMin.y - iconTextSize.y) * 0.5f
+		);
+		ImGui::GetWindowDrawList()->AddText(
+			iconFont,
+			iconFontSize,
+			iconPos,
+			ImGui::GetColorU32(ImGuiCol_Text),
+			labelIcon);
+	}
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
 	return open;
@@ -4225,8 +4243,8 @@ void renderAudioTab()
 			config::AudioVolume.calcDbPower();
 		};
 		volumeConfig.onValueChange = nullptr;
-		volumeConfig.iconSize = uiScaled(20.0f);
-		volumeConfig.iconSpacing = uiScaled(8.0f);
+		volumeConfig.iconSize = 20.0f;
+		volumeConfig.iconSpacing = 8.0f;
 		volumeConfig.valueWidth = 220.0f;
 		volumeConfig.sliderWidth = 320.0f;
 		volumeConfig.showApplyFlag = nullptr;
@@ -4295,8 +4313,8 @@ void renderAudioTab()
 		latencyConfig.onValueChange = []() {
 			config::AudioBufferSize.set((int)roundf(latencyTemp * 44100.f / 1000.f));
 		};
-		latencyConfig.iconSize = uiScaled(20.0f);
-		latencyConfig.iconSpacing = uiScaled(8.0f);
+		latencyConfig.iconSize = 20.0f;
+		latencyConfig.iconSpacing = 8.0f;
 		latencyConfig.valueWidth = 220.0f;
 		latencyConfig.sliderWidth = 320.0f;
 		latencyConfig.showApplyFlag = nullptr;
@@ -4370,8 +4388,8 @@ void renderAudioTab()
 			return true;
 		};
 		driverConfig.disabled = false;
-		driverConfig.iconSize = uiScaled(20.0f);
-		driverConfig.iconSpacing = uiScaled(8.0f);
+		driverConfig.iconSize = 20.0f;
+		driverConfig.iconSpacing = 8.0f;
 		driverConfig.valueWidth = 220.0f;
 
 		SettingsUI::PopupConfig driverPopupCfg {};
@@ -4533,19 +4551,27 @@ void renderControlsTab()
 
 	if (RenderCollapsingHeader("PhysicalDevicesSection", ICON_FA_GAMEPAD, T("Physical Devices"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		if (ImGui::BeginTable("physicalDevices", 6, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+		ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(4, 3));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 4));
+		ImVec4 deviceTableBorderColor = ImGui::GetStyleColorVec4(ImGuiCol_Border);
+		deviceTableBorderColor.w *= 0.35f;
+		ImGui::PushStyleColor(ImGuiCol_TableBorderLight, deviceTableBorderColor);
+		if (ImGui::BeginTable("physicalDevices", 5,
+				ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings
+				| ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersInnerV))
 		{
 			ImGui::TableSetupColumn(T("System"), ImGuiTableColumnFlags_WidthFixed);
 			ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
 			ImGui::TableSetupColumn(T("Status"), ImGuiTableColumnFlags_WidthFixed);
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn(T("Actions"), ImGuiTableColumnFlags_WidthFixed);
 			ImGui::TableSetupColumn(T("Port"), ImGuiTableColumnFlags_WidthFixed);
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
 
 			const float portComboWidth = ImGui::CalcTextSize("None").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
+			const ImVec2 deviceButtonSize(0.0f, uiScaled(24.0f));
 			const ImVec4 gray(0.5f, 0.5f, 0.5f, 1.f);
 
-			ImGui::TableNextRow();
+			ImGui::TableNextRow(ImGuiTableRowFlags_None, uiScaled(24.0f));
 			ImGui::TableSetColumnIndex(0);
 			ImGui::TextColored(gray, "%s", T("System"));
 
@@ -4554,6 +4580,9 @@ void renderControlsTab()
 
 			ImGui::TableSetColumnIndex(2);
 			ImGui::TextColored(gray, "%s", T("Status"));
+
+			ImGui::TableSetColumnIndex(3);
+			ImGui::TextColored(gray, "%s", T("Actions"));
 
 			ImGui::TableSetColumnIndex(4);
 			ImGui::TextColored(gray, "%s", T("Port"));
@@ -4569,7 +4598,7 @@ void renderControlsTab()
 				ImguiID gamepadRowId(gamepad_row_id);
 				(void)gamepadRowId;
 
-				ImGui::TableNextRow();
+				ImGui::TableNextRow(ImGuiTableRowFlags_None, uiScaled(24.0f));
 				ImGui::TableSetColumnIndex(0);
 				ImGui::Text("%s", gamepad->api_name().c_str());
 
@@ -4584,7 +4613,7 @@ void renderControlsTab()
 				}
 #endif
 
-				ImGui::TableSetColumnIndex(5);
+				ImGui::TableSetColumnIndex(4);
 				char port_name[32];
 				snprintf(port_name, sizeof(port_name), "##mapleport%d", i);
 				ImguiID _(port_name);
@@ -4608,11 +4637,11 @@ void renderControlsTab()
 					ImGui::EndCombo();
 				}
 
-				ImGui::TableSetColumnIndex(4);
-				ImGui::SameLine(0, 8.0f);
+				ImGui::TableSetColumnIndex(3);
+				ImGui::SameLine(0, uiScaled(8.0f));
 
 				// Map button for controller mapping
-				if (gamepad->remappable() && ImGui::Button(T("Map")))
+				if (gamepad->remappable() && ImGui::Button(T("Map"), deviceButtonSize))
 				{
 					ResetControllerMappingRuntime();
 					g_currentGamepadForMapping = gamepad;
@@ -4624,8 +4653,8 @@ void renderControlsTab()
 				// Settings button for rumble/deadzone/saturation
 				if (gamepad->is_rumble_enabled() || gamepad->has_analog_stick() || gamepad->is_virtual_gamepad())
 				{
-					ImGui::SameLine(0, 16.0f);
-					if (ImGui::Button(T("Settings")))
+					ImGui::SameLine(0, uiScaled(16.0f));
+					if (ImGui::Button(T("Settings"), deviceButtonSize))
 					{
 						g_currentGamepadForSettings = gamepad;
 						ImGui::OpenPopup(T("Gamepad Settings"));
@@ -4650,6 +4679,9 @@ void renderControlsTab()
 			}
 			ImGui::EndTable();
 		}
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(2);
+		ImGui::PopFont();
 	}
 
 	ImGui::Spacing();
@@ -4678,10 +4710,10 @@ void renderControlsTab()
 				config::MouseSensitivity.set(sensitivityTemp);
 			};
 			sensitivityConfig.onValueChange = nullptr;
-			sensitivityConfig.iconSize = uiScaled(20.0f);
-			sensitivityConfig.iconSpacing = uiScaled(8.0f);
-			sensitivityConfig.valueWidth = uiScaled(220.0f);
-			sensitivityConfig.sliderWidth = uiScaled(320.0f);
+			sensitivityConfig.iconSize = 20.0f;
+			sensitivityConfig.iconSpacing = 8.0f;
+			sensitivityConfig.valueWidth = 220.0f;
+			sensitivityConfig.sliderWidth = 320.0f;
 			sensitivityConfig.showApplyFlag = nullptr;
 			sensitivityConfig.hasPendingChanges = false;
 
@@ -4764,7 +4796,15 @@ void renderControlsTab()
 
 		bool is_there_any_xhair = false;
 
-		if (ImGui::BeginTable("dreamcastDevices", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings,
+		ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(4, 3));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 4));
+		ImVec4 deviceTableBorderColor = ImGui::GetStyleColorVec4(ImGuiCol_Border);
+		deviceTableBorderColor.w *= 0.35f;
+		ImGui::PushStyleColor(ImGuiCol_TableBorderLight, deviceTableBorderColor);
+		if (ImGui::BeginTable("dreamcastDevices", 4,
+				ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings
+				| ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersInnerV,
 				ImVec2(0, 0), uiScaled(8)))
 		{
 			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
@@ -4826,7 +4866,7 @@ void renderControlsTab()
 				else
 					selected_name = maple_device_name(config::MapleMainDevices[bus]);
 
-				ImGui::TableNextRow();
+				ImGui::TableNextRow(ImGuiTableRowFlags_None, uiScaled(24.0f));
 				ImGui::TableSetColumnIndex(0);
 				ImGui::Text(T("Port %c"), bus + 'A');
 
@@ -5021,6 +5061,9 @@ void renderControlsTab()
 			}
 			ImGui::EndTable();
 		}
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(2);
+		ImGui::PopFont();
 
 		// Setting 23: Crosshair Size (10-100)
 		{
@@ -5046,10 +5089,10 @@ void renderControlsTab()
 				config::CrosshairSize.set(crosshairSizeTemp);
 			};
 			crosshairConfig.onValueChange = nullptr;
-			crosshairConfig.iconSize = uiScaled(20.0f);
-			crosshairConfig.iconSpacing = uiScaled(8.0f);
-			crosshairConfig.valueWidth = uiScaled(220.0f);
-			crosshairConfig.sliderWidth = uiScaled(320.0f);
+			crosshairConfig.iconSize = 20.0f;
+			crosshairConfig.iconSpacing = 8.0f;
+			crosshairConfig.valueWidth = 220.0f;
+			crosshairConfig.sliderWidth = 320.0f;
 			crosshairConfig.showApplyFlag = nullptr;
 			crosshairConfig.hasPendingChanges = false;
 
@@ -5490,7 +5533,7 @@ void renderNetworkTab()
 			if (ImGui::BeginTabBar("battleMode", ImGuiTabBarFlags_NoTooltip))
 			{
 				// Match Code Tab
-				const std::string matchCodeTabLabel = std::string(ICON_FA_TAG " ") + T("Match Code") + "###Match Code";
+				const std::string matchCodeTabLabel = std::string(T("Match Code")) + "###Match Code";
 				if (ImGui::BeginTabItem(matchCodeTabLabel.c_str()))
 				{
 					ice::State state = ice::getState();
@@ -6448,7 +6491,7 @@ void renderAboutTab()
 	ImGui::Separator();
 
 	// Center content for better appearance
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ScaledVec2(20, 20));
 
 	// Logo/Title Section
 	ImGui::Spacing();
@@ -6524,15 +6567,15 @@ void renderAboutTab()
 
 	// Graphics Information
 	{
-		std::string graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics") + "##Section";
+		std::string graphicsTitle = T("Graphics");
 		if (isOpenGL(config::RendererType))
-			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - OpenGL") + "##Section";
+			graphicsTitle = T("Graphics - OpenGL");
 		else if (isVulkan(config::RendererType))
-			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - Vulkan") + "##Section";
+			graphicsTitle = T("Graphics - Vulkan");
 		else if (isDirectX(config::RendererType))
-			graphicsTitle = std::string(ICON_FA_DISPLAY " ") + T("Graphics - DirectX") + "##Section";
+			graphicsTitle = T("Graphics - DirectX");
 
-		if (ImGui::CollapsingHeader(graphicsTitle.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+		if (RenderCollapsingHeader("GraphicsSection", ICON_FA_DISPLAY, graphicsTitle.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text(T("Driver: %s"), GraphicsContext::Instance()->getDriverName().c_str());
 			ImGui::Text(T("Version: %s"), GraphicsContext::Instance()->getDriverVersion().c_str());
@@ -6639,6 +6682,10 @@ void renderSettingsNew()
 			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
 			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 	{
+		const bool pushedSettingsFont = settingsTitleFont != nullptr;
+		if (pushedSettingsFont)
+			ImGui::PushFont(settingsTitleFont);
+
 		const std::function<void()> exitSettings = [&]() {
 			dreampotato::update();
 			if (g_mapleDevicesChangedInSettings)
@@ -6668,6 +6715,9 @@ void renderSettingsNew()
 		renderNavigationRail(exitSettings, backLabel);
 		ImGui::SameLine();
 		renderContentArea();
+
+		if (pushedSettingsFont)
+			ImGui::PopFont();
 	}
 	ImGui::End();
 }

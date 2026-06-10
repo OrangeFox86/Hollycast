@@ -31,6 +31,7 @@
 
 // External game state flag from gui.cpp
 extern bool game_started;
+extern ImFont *settingsTitleFont;
 
 using namespace i18n;
 
@@ -61,6 +62,7 @@ void renderMainMenuBar()
 	// - Hover effects (ImGuiCol_HeaderHovered) and dropdown menus
 	// - Cross-platform native appearance
 	// Theme colors are already set by applyCurrentTheme().
+	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 	if (ImGui::BeginMainMenuBar())
 	{
 		renderFileMenu();
@@ -70,6 +72,7 @@ void renderMainMenuBar()
 		renderHelpMenu();
 		ImGui::EndMainMenuBar();
 	}
+	ImGui::PopFont();
 }
 
 // Render File menu
