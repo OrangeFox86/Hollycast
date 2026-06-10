@@ -566,8 +566,8 @@ static void render_exit_save_dialog()
 		ImGui::NewLine();
 
 		// Button styling (consistent with existing dialogs)
-		ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
-		ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(20), ImGui::GetStyle().ItemSpacing.y));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(10, 10));
 		const char *saveAndExit = T("Save & Exit");
 		const char *exitWithoutSaving = T("Exit Without Saving");
 		const char *cancelButton = T("Cancel");
@@ -627,6 +627,7 @@ static void render_exit_save_dialog()
 			ImGui::EndPopup();
 		}
 
+		ImGui::PopStyleVar(2);
 		ImGui::EndPopup();
 	}
 }

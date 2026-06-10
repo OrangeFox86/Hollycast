@@ -2049,9 +2049,7 @@ void renderGeneralTab()
 					"Arcade platforms typically use automatic region/language behavior."
 				)
 			);
-	}
 
-	{
 		const char* broadcast[] = { Tnop("NTSC"), Tnop("PAL"), Tnop("PAL/M"), Tnop("PAL/N"), T("Default") };
 		SettingsUI::PopupConfig broadcastCfg {};
 		broadcastCfg.type = SettingsUI::PopupType::Options;
@@ -2074,9 +2072,7 @@ void renderGeneralTab()
 					"NTSC is typically 60 Hz; PAL is typically 50 Hz.\n\n"
 					"If you see timing issues or a game expects a specific region video mode, try changing this."
 				));
-	}
 
-	{
 		const char* consoleRegion[] = { T("Japan"), T("USA"), T("Europe"), T("Default") };
 		const char* arcadeRegion[] = { T("Japan"), T("USA"), T("Export"), T("Korea") };
 		const char* const* region = settings.platform.isArcade() ? arcadeRegion : consoleRegion;
@@ -2101,9 +2097,7 @@ void renderGeneralTab()
 					"If a game refuses to boot or behaves like the wrong region, try changing this."
 				)
 			);
-	}
 
-	{
 		const char* cable[] = { T("VGA"), T("RGB Component"), T("TV Composite") };
 		const bool disabled = config::Cable.isReadOnly() || settings.platform.isArcade();
 
@@ -2398,9 +2392,7 @@ void renderGeneralTab()
 				"If readability is an issue, try High Contrast."
 			)
 		);
-	}
 
-	{
 		static bool showApplyButtonForUIScaling = false;
 		if (uiUserScaleUpdated && !showApplyButtonForUIScaling)
 			showApplyButtonForUIScaling = true;
@@ -2434,24 +2426,24 @@ void renderGeneralTab()
 				"After applying, the UI will reinitialize to apply the new scale."
 			)
 		);
-	}
 
-	RenderGeneralToggleSettingRow(
-		"HideLegacyNaomiRoms",
-		ICON_FA_LOCK,
-		T("Hide Legacy Naomi Roms"),
-		T("Hide legacy Naomi file types in the content browser."),
-		static_cast<bool>(config::HideLegacyNaomiRoms),
-		[](bool enabled) {
-			config::HideLegacyNaomiRoms = enabled;
-			scanner.refresh();
-		},
-		T(
-			"Hide Legacy Naomi ROMs\n"
-			"Hides `.bin`, `.dat`, and `.lst` files from the content browser.\n"
-			"Useful if you have mixed Naomi sets and only want to see launchable content."
-		)
-	);
+		RenderGeneralToggleSettingRow(
+			"HideLegacyNaomiRoms",
+			ICON_FA_LOCK,
+			T("Hide Legacy Naomi Roms"),
+			T("Hide legacy Naomi file types in the content browser."),
+			static_cast<bool>(config::HideLegacyNaomiRoms),
+			[](bool enabled) {
+				config::HideLegacyNaomiRoms = enabled;
+				scanner.refresh();
+			},
+			T(
+				"Hide Legacy Naomi ROMs\n"
+				"Hides `.bin`, `.dat`, and `.lst` files from the content browser.\n"
+				"Useful if you have mixed Naomi sets and only want to see launchable content."
+			)
+		);
+	}
 
 #ifdef __ANDROID__
 	RenderGeneralToggleSettingRow(
@@ -2505,9 +2497,7 @@ void renderGeneralTab()
 				"Use Custom Boxart if you maintain your own images, or Original/Physical depending on your preference."
 			)
 		);
-	}
 
-	{
 		ImGui::PushID("CustomBoxartFolderRow");
 			const bool rowActivated = BeginTwoLineSettingRow(
 				"##row",
@@ -2586,37 +2576,37 @@ void renderGeneralTab()
 		}
 		if (refreshPressed)
 			gui_refresh_custom_boxart(true);
+
+		RenderGeneralToggleSettingRow(
+			"BoxartDisplayMode",
+			ICON_FA_IMAGE,
+			T("Box Art Game List"),
+			T("Display game cover art in the game list."),
+			static_cast<bool>(config::BoxartDisplayMode),
+			[](bool enabled) { config::BoxartDisplayMode = enabled; },
+			T(
+				"Box Art Game List\n"
+				"Displays cover art tiles in the content list.\n"
+				"Disable if you prefer a faster, more compact list or want to reduce UI clutter."
+			)
+		);
+
+		const bool physicalOnly = config::BoxartSourceMode.get() == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly);
+		RenderGeneralToggleSettingRow(
+			"FetchBoxart",
+			ICON_FA_DOWNLOAD,
+			T("Fetch Box Art"),
+			T("Fetch cover images from TheGamesDB.net."),
+			static_cast<bool>(config::FetchBoxart),
+			[](bool enabled) { config::FetchBoxart = enabled; },
+			T(
+				"Fetch Box Art\n"
+				"Downloads cover images from TheGamesDB.net.\n"
+				"Disable if you only want physical media images, custom artwork, or to avoid network fetching."
+			),
+			physicalOnly
+		);
 	}
-
-	RenderGeneralToggleSettingRow(
-		"BoxartDisplayMode",
-		ICON_FA_IMAGE,
-		T("Box Art Game List"),
-		T("Display game cover art in the game list."),
-		static_cast<bool>(config::BoxartDisplayMode),
-		[](bool enabled) { config::BoxartDisplayMode = enabled; },
-		T(
-			"Box Art Game List\n"
-			"Displays cover art tiles in the content list.\n"
-			"Disable if you prefer a faster, more compact list or want to reduce UI clutter."
-		)
-	);
-
-	const bool physicalOnly = config::BoxartSourceMode.get() == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly);
-	RenderGeneralToggleSettingRow(
-		"FetchBoxart",
-		ICON_FA_DOWNLOAD,
-		T("Fetch Box Art"),
-		T("Fetch cover images from TheGamesDB.net."),
-		static_cast<bool>(config::FetchBoxart),
-		[](bool enabled) { config::FetchBoxart = enabled; },
-		T(
-			"Fetch Box Art\n"
-			"Downloads cover images from TheGamesDB.net.\n"
-			"Disable if you only want physical media images, custom artwork, or to avoid network fetching."
-		),
-		physicalOnly
-	);
 
 	// ========================================
 	// Automatic Save States Section
@@ -3178,912 +3168,909 @@ void renderVideoTab()
 				apiCfg
 			);
 		}
+	}
 
-		// Transparent Sorting section
-		if (RenderCollapsingHeader("TransparentSortingSection", ICON_FA_WAND_SPARKLES, T("Transparent Sorting"), ImGuiTreeNodeFlags_DefaultOpen))
+	// Transparent Sorting section
+	if (RenderCollapsingHeader("TransparentSortingSection", ICON_FA_WAND_SPARKLES, T("Transparent Sorting"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
 		{
+			const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
+			int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
+
+			std::array<const char*, 3> sortingLabels {};
+			std::array<int, 3> sortingValues {};
+			int sortingOptionCount = 0;
+			if (has_per_pixel)
 			{
-				const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
-				int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
-
-				std::array<const char*, 3> sortingLabels {};
-				std::array<int, 3> sortingValues {};
-				int sortingOptionCount = 0;
-				if (has_per_pixel)
-				{
-					sortingLabels[sortingOptionCount] = T("Per Pixel");
-					sortingValues[sortingOptionCount++] = 2;
-				}
-				sortingLabels[sortingOptionCount] = T("Per Triangle");
-				sortingValues[sortingOptionCount++] = 0;
-				sortingLabels[sortingOptionCount] = T("Per Strip");
-				sortingValues[sortingOptionCount++] = 1;
-
-				int sortingSelection = 0;
-				for (int i = 0; i < sortingOptionCount; i++)
-				{
-					if (sortingValues[i] == renderer)
-					{
-						sortingSelection = i;
-						break;
-					}
-				}
-
-				SettingsUI::PopupConfig sortingCfg {};
-				sortingCfg.type = SettingsUI::PopupType::Options;
-				sortingCfg.options.label = T("Sorting Method");
-				sortingCfg.options.icon = ICON_FA_WAND_SPARKLES;
-				sortingCfg.options.popupID = Tnop("TransparentSortingPopup");
-				sortingCfg.options.options = sortingLabels.data();
-				sortingCfg.options.optionCount = sortingOptionCount;
-				sortingCfg.options.currentValue = &sortingSelection;
-				sortingCfg.options.valueWidth = 220.0f;
-				sortingCfg.options.onOptionHighlight = [&](int selectedIndex, const char*) {
-					if (selectedIndex < 0 || selectedIndex >= sortingOptionCount)
-						return;
-					switch (sortingValues[selectedIndex])
-					{
-					case 2:
-						SetSettingsFooterText(
-							T(
-								"Per Pixel\n"
-								"Highest performance requirements. This matches the Dreamcast's sorting quality, but only about 15% of games need it and show a meaningful difference versus the middle sorting option.\n"
-								"Use only when needed (or if you have the resource overhead). It can almost double resource requirements.\n"
-								"If you need full speed at a target resolution, you may have to lower resolution when using Per Pixel sorting."
-							)
-						);
-						break;
-					case 0:
-						SetSettingsFooterText(
-							T(
-								"Per Triangle\n"
-								"Good enough for about 85% of games to play with no or only very brief flashes of incorrect sorting.\n"
-								"For most mid-range devices trying to reach 4K resolutions, you will likely spend your time here unless you must use Per Pixel.\n"
-								"This is the recommended option for most people, most of the time."
-							)
-						);
-						break;
-					case 1:
-						SetSettingsFooterText(
-							T(
-								"Per Strip\n"
-								"Introduces more graphics glitching than Per Triangle, but can sometimes reduce resource requirements further.\n"
-								"Not recommended unless you have to use it. Performance gains range from none to minimal, and may not be worth the quality tradeoff."
-							)
-						);
-						break;
-					default:
-						break;
-					}
-				};
-				sortingCfg.options.onChange = [&](int selectedIndex) {
-					if (selectedIndex < 0 || selectedIndex >= sortingOptionCount)
-						return false;
-					const int selectedRenderer = sortingValues[selectedIndex];
-					switch (selectedRenderer)
-					{
-					case 0:
-						perPixel = false;
-						config::PerStripSorting.set(false);
-						break;
-					case 1:
-						perPixel = false;
-						config::PerStripSorting.set(true);
-						break;
-					case 2:
-						perPixel = true;
-						config::PerStripSorting.set(false);
-						break;
-					default:
-						return false;
-					}
-					return true;
-				};
-
-				RenderGeneralPopupSettingRow(
-					Tnop("TransparentSortingSetting"),
-					T(
-						"Sorting Option\n"
-						"This controls how we sort transparent layers in games.\n"
-						"A handful of games will not render certain images correctly at all (example: Shenmue journal), or might have layering issues (example: the white of Sonic's eyes in Sonic Adventure), and a handful of others can show clipping or incorrect texture layering in some spots.\n\n"
-						"There are three options with very different resource usage. While the highest setting matches Dreamcast sorting quality, it is only needed in about 15% of games and carries a large speed penalty.\n"
-						"The middle tier allows just about all games to be played with a small amount of slight issues, but uses about half the resources of the top tier.\n"
-						"It is \"good enough\" almost all the time."
-					),
-					sortingCfg);
+				sortingLabels[sortingOptionCount] = T("Per Pixel");
+				sortingValues[sortingOptionCount++] = 2;
 			}
+			sortingLabels[sortingOptionCount] = T("Per Triangle");
+			sortingValues[sortingOptionCount++] = 0;
+			sortingLabels[sortingOptionCount] = T("Per Strip");
+			sortingValues[sortingOptionCount++] = 1;
+
+			int sortingSelection = 0;
+			for (int i = 0; i < sortingOptionCount; i++)
+			{
+				if (sortingValues[i] == renderer)
+				{
+					sortingSelection = i;
+					break;
+				}
+			}
+
+			SettingsUI::PopupConfig sortingCfg {};
+			sortingCfg.type = SettingsUI::PopupType::Options;
+			sortingCfg.options.label = T("Sorting Method");
+			sortingCfg.options.icon = ICON_FA_WAND_SPARKLES;
+			sortingCfg.options.popupID = Tnop("TransparentSortingPopup");
+			sortingCfg.options.options = sortingLabels.data();
+			sortingCfg.options.optionCount = sortingOptionCount;
+			sortingCfg.options.currentValue = &sortingSelection;
+			sortingCfg.options.valueWidth = 220.0f;
+			sortingCfg.options.onOptionHighlight = [&](int selectedIndex, const char*) {
+				if (selectedIndex < 0 || selectedIndex >= sortingOptionCount)
+					return;
+				switch (sortingValues[selectedIndex])
+				{
+				case 2:
+					SetSettingsFooterText(
+						T(
+							"Per Pixel\n"
+							"Highest performance requirements. This matches the Dreamcast's sorting quality, but only about 15% of games need it and show a meaningful difference versus the middle sorting option.\n"
+							"Use only when needed (or if you have the resource overhead). It can almost double resource requirements.\n"
+							"If you need full speed at a target resolution, you may have to lower resolution when using Per Pixel sorting."
+						)
+					);
+					break;
+				case 0:
+					SetSettingsFooterText(
+						T(
+							"Per Triangle\n"
+							"Good enough for about 85% of games to play with no or only very brief flashes of incorrect sorting.\n"
+							"For most mid-range devices trying to reach 4K resolutions, you will likely spend your time here unless you must use Per Pixel.\n"
+							"This is the recommended option for most people, most of the time."
+						)
+					);
+					break;
+				case 1:
+					SetSettingsFooterText(
+						T(
+							"Per Strip\n"
+							"Introduces more graphics glitching than Per Triangle, but can sometimes reduce resource requirements further.\n"
+							"Not recommended unless you have to use it. Performance gains range from none to minimal, and may not be worth the quality tradeoff."
+						)
+					);
+					break;
+				default:
+					break;
+				}
+			};
+			sortingCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= sortingOptionCount)
+					return false;
+				const int selectedRenderer = sortingValues[selectedIndex];
+				switch (selectedRenderer)
+				{
+				case 0:
+					perPixel = false;
+					config::PerStripSorting.set(false);
+					break;
+				case 1:
+					perPixel = false;
+					config::PerStripSorting.set(true);
+					break;
+				case 2:
+					perPixel = true;
+					config::PerStripSorting.set(false);
+					break;
+				default:
+					return false;
+				}
+				return true;
+			};
+
+			RenderGeneralPopupSettingRow(
+				Tnop("TransparentSortingSetting"),
+				T(
+					"Sorting Option\n"
+					"This controls how we sort transparent layers in games.\n"
+					"A handful of games will not render certain images correctly at all (example: Shenmue journal), or might have layering issues (example: the white of Sonic's eyes in Sonic Adventure), and a handful of others can show clipping or incorrect texture layering in some spots.\n\n"
+					"There are three options with very different resource usage. While the highest setting matches Dreamcast sorting quality, it is only needed in about 15% of games and carries a large speed penalty.\n"
+					"The middle tier allows just about all games to be played with a small amount of slight issues, but uses about half the resources of the top tier.\n"
+					"It is \"good enough\" almost all the time."
+				),
+				sortingCfg);
+		}
+	}
+
+	// Rendering Options section
+	if (RenderCollapsingHeader("RenderingOptionsSection", ICON_FA_SLIDERS, T("Rendering Options"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		// Internal Resolution
+		{
+			constexpr std::array<float, 20> scalings {
+				0.5f, 0.75f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 2.25f, 2.5f, 2.75f,
+				3.f, 3.5f, 4.f, 4.5f, 5.f, 5.5f, 6.f, 7.f, 8.f, 9.f
+			};
+			const std::array<const char*, 20> scalingNames {
+				T("Half"), "x0.75", T("Native"), "x1.25", "x1.5", "x1.75", "x2", "x2.25", "x2.5", "x2.75",
+				"x3", "x3.5", "x4", "x4.5", "x5", "x5.5", "x6", "x7", "x8", "x9"
+			};
+
+			std::array<int, scalings.size()> horizontalRes {};
+			std::array<std::string, scalings.size()> resolutionLabels {};
+			std::array<const char*, scalings.size()> resolutionLabelPtrs {};
+			int internalResSelection = 0;
+
+			for (size_t i = 0; i < scalings.size(); i++)
+			{
+				const int verticalRes = static_cast<int>(scalings[i] * 480.0f);
+				horizontalRes[i] = !config::Widescreen
+					? static_cast<int>(scalings[i] * 640.0f)
+					: static_cast<int>(scalings[i] * 480.0f * 16.0f / 9.0f);
+
+				if (horizontalRes[i] == config::RenderResolution.get())
+					internalResSelection = static_cast<int>(i);
+
+				resolutionLabels[i] = std::to_string(horizontalRes[i]) + "x" + std::to_string(verticalRes) + " (" + scalingNames[i] + ")";
+				resolutionLabelPtrs[i] = resolutionLabels[i].c_str();
+			}
+
+			SettingsUI::PopupConfig internalResCfg {};
+			internalResCfg.type = SettingsUI::PopupType::Options;
+			internalResCfg.options.label = T("Internal Resolution");
+			internalResCfg.options.icon = ICON_FA_DISPLAY;
+			internalResCfg.options.popupID = Tnop("InternalResPopup");
+			internalResCfg.options.options = resolutionLabelPtrs.data();
+			internalResCfg.options.optionCount = static_cast<int>(resolutionLabelPtrs.size());
+			internalResCfg.options.currentValue = &internalResSelection;
+			internalResCfg.options.valueWidth = 220.0f;
+			internalResCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(horizontalRes.size()))
+					return false;
+				config::RenderResolution.set(horizontalRes[selectedIndex]);
+				return true;
+			};
+
+			RenderGeneralPopupSettingRow(
+				Tnop("InternalResolutionSetting"),
+				T("Internal render resolution (the biggest performance lever)."),
+				internalResCfg,
+				T(
+					"Internal Resolution\n"
+					"This is the single biggest graphics performance setting.\n"
+					"Lower values reduce GPU load (faster). Higher values improve clarity, reduce shimmer/aliasing, and act as a form of supersampling.\n\n"
+					"If you are not holding a stable 30/60 FPS, reduce Internal Resolution first before turning off visual features."
+				)
+			);
 		}
 
-		// Rendering Options section
-		if (RenderCollapsingHeader("RenderingOptionsSection", ICON_FA_SLIDERS, T("Rendering Options"), ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			// Internal Resolution
-			{
-				constexpr std::array<float, 20> scalings {
-					0.5f, 0.75f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 2.25f, 2.5f, 2.75f,
-					3.f, 3.5f, 4.f, 4.5f, 5.f, 5.5f, 6.f, 7.f, 8.f, 9.f
-				};
-				const std::array<const char*, 20> scalingNames {
-					T("Half"), "x0.75", T("Native"), "x1.25", "x1.5", "x1.75", "x2", "x2.25", "x2.5", "x2.75",
-					"x3", "x3.5", "x4", "x4.5", "x5", "x5.5", "x6", "x7", "x8", "x9"
-				};
+		RenderGeneralToggleSettingRow(
+			"IntegerScaling",
+			ICON_FA_COMPRESS,
+			T("Integer Scaling"),
+			T("Pixel-perfect scaling using whole-number multiples."),
+			static_cast<bool>(config::IntegerScale),
+			[](bool enabled) { config::IntegerScale.set(enabled); },
+			T(
+				"Integer Scaling\n"
+				"Scales the output by the maximum whole-number multiple allowed by your display (1x, 2x, 3x, ...).\n"
+				"Best for pixel-art/2D content because it avoids uneven scaling artifacts.\n\n"
+				"Tip: for the crispest result, pair Integer Scaling with nearest-neighbor (disable Linear Interpolation)."
+			));
 
-				std::array<int, scalings.size()> horizontalRes {};
-				std::array<std::string, scalings.size()> resolutionLabels {};
-				std::array<const char*, scalings.size()> resolutionLabelPtrs {};
-				int internalResSelection = 0;
-
-				for (size_t i = 0; i < scalings.size(); i++)
-				{
-					const int verticalRes = static_cast<int>(scalings[i] * 480.0f);
-					horizontalRes[i] = !config::Widescreen
-						? static_cast<int>(scalings[i] * 640.0f)
-						: static_cast<int>(scalings[i] * 480.0f * 16.0f / 9.0f);
-
-					if (horizontalRes[i] == config::RenderResolution.get())
-						internalResSelection = static_cast<int>(i);
-
-					resolutionLabels[i] = std::to_string(horizontalRes[i]) + "x" + std::to_string(verticalRes) + " (" + scalingNames[i] + ")";
-					resolutionLabelPtrs[i] = resolutionLabels[i].c_str();
-				}
-
-				SettingsUI::PopupConfig internalResCfg {};
-				internalResCfg.type = SettingsUI::PopupType::Options;
-				internalResCfg.options.label = T("Internal Resolution");
-				internalResCfg.options.icon = ICON_FA_DISPLAY;
-				internalResCfg.options.popupID = Tnop("InternalResPopup");
-				internalResCfg.options.options = resolutionLabelPtrs.data();
-				internalResCfg.options.optionCount = static_cast<int>(resolutionLabelPtrs.size());
-				internalResCfg.options.currentValue = &internalResSelection;
-				internalResCfg.options.valueWidth = 220.0f;
-				internalResCfg.options.onChange = [&](int selectedIndex) {
-					if (selectedIndex < 0 || selectedIndex >= static_cast<int>(horizontalRes.size()))
-						return false;
-					config::RenderResolution.set(horizontalRes[selectedIndex]);
-					return true;
-				};
-
-				RenderGeneralPopupSettingRow(
-					Tnop("InternalResolutionSetting"),
-					T("Internal render resolution (the biggest performance lever)."),
-					internalResCfg,
-					T(
-						"Internal Resolution\n"
-						"This is the single biggest graphics performance setting.\n"
-						"Lower values reduce GPU load (faster). Higher values improve clarity, reduce shimmer/aliasing, and act as a form of supersampling.\n\n"
-						"If you are not holding a stable 30/60 FPS, reduce Internal Resolution first before turning off visual features."
-					)
-				);
-			}
-
-			RenderGeneralToggleSettingRow(
-				"IntegerScaling",
-				ICON_FA_COMPRESS,
-				T("Integer Scaling"),
-				T("Pixel-perfect scaling using whole-number multiples."),
-				static_cast<bool>(config::IntegerScale),
-				[](bool enabled) { config::IntegerScale.set(enabled); },
-				T(
-					"Integer Scaling\n"
-					"Scales the output by the maximum whole-number multiple allowed by your display (1x, 2x, 3x, ...).\n"
-					"Best for pixel-art/2D content because it avoids uneven scaling artifacts.\n\n"
-					"Tip: for the crispest result, pair Integer Scaling with nearest-neighbor (disable Linear Interpolation)."
-				));
-
-			RenderGeneralToggleSettingRow(
-				"LinearInterpolation",
-				ICON_FA_WAND_MAGIC,
-				T("Linear Interpolation"),
-				T("Smoother scaling (linear) vs. sharper pixels (nearest-neighbor)."),
-				static_cast<bool>(config::LinearInterpolation),
-				[](bool enabled) { config::LinearInterpolation.set(enabled); },
-				T(
-					"Linear Interpolation\n"
-					"Enabled: smoother scaling (can look blurrier).\n"
-					"Disabled: nearest-neighbor scaling (sharper, more pixelated).\n\n"
-					"If you enable Integer Scaling, many users prefer disabling Linear Interpolation for a pixel-perfect look."
-				));
+		RenderGeneralToggleSettingRow(
+			"LinearInterpolation",
+			ICON_FA_WAND_MAGIC,
+			T("Linear Interpolation"),
+			T("Smoother scaling (linear) vs. sharper pixels (nearest-neighbor)."),
+			static_cast<bool>(config::LinearInterpolation),
+			[](bool enabled) { config::LinearInterpolation.set(enabled); },
+			T(
+				"Linear Interpolation\n"
+				"Enabled: smoother scaling (can look blurrier).\n"
+				"Disabled: nearest-neighbor scaling (sharper, more pixelated).\n\n"
+				"If you enable Integer Scaling, many users prefer disabling Linear Interpolation for a pixel-perfect look."
+			));
 
 #ifndef TARGET_IPHONE
-			RenderGeneralToggleSettingRow(
-				"VSync",
-				ICON_FA_ARROWS_ROTATE,
-				T("VSync"),
-				T("Sync presentation to your display to reduce tearing."),
-				static_cast<bool>(config::VSync),
-				[](bool enabled) { config::VSync.set(enabled); },
-				T(
-					"VSync\n"
-					"Synchronizes frame presentation to your display refresh to reduce tearing and improve pacing.\n"
-					"On some setups it can add input latency, and if you cannot maintain full speed it can contribute to stutter.\n\n"
-					"Recommended for most users. If you notice unusual stutter or latency, try toggling it."
-				));
+		RenderGeneralToggleSettingRow(
+			"VSync",
+			ICON_FA_ARROWS_ROTATE,
+			T("VSync"),
+			T("Sync presentation to your display to reduce tearing."),
+			static_cast<bool>(config::VSync),
+			[](bool enabled) { config::VSync.set(enabled); },
+			T(
+				"VSync\n"
+				"Synchronizes frame presentation to your display refresh to reduce tearing and improve pacing.\n"
+				"On some setups it can add input latency, and if you cannot maintain full speed it can contribute to stutter.\n\n"
+				"Recommended for most users. If you notice unusual stutter or latency, try toggling it."
+			));
 
-			if (isVulkan(config::RendererType))
-			{
-				ImGui::Indent();
-					RenderGeneralToggleSettingRow(
-						"DuplicateFrames",
-						ICON_FA_CLONE,
-						T("Duplicate Frames"),
-						T("Improve pacing on high refresh-rate displays."),
-						static_cast<bool>(config::DupeFrames),
-						[](bool enabled) { config::DupeFrames.set(enabled); },
-						T(
-							"Duplicate Frames\n"
-							"Duplicates frames on high refresh-rate monitors (120 Hz and above) to improve perceived pacing.\n"
-							"Only available for Vulkan, and only when VSync is disabled."
-						),
-						!config::VSync);
-				ImGui::Unindent();
-			}
-#endif
-
-			RenderGeneralToggleSettingRow(
-				"ShowVMU",
-				ICON_FA_GAMEPAD,
-				T("Show VMU In-Game"),
-				T("Show VMU LCD screens during gameplay."),
-				static_cast<bool>(config::FloatVMUs),
-				[](bool enabled) { config::FloatVMUs.set(enabled); },
-				T(
-					"Show VMU In-Game\n"
-					"Displays the VMU LCD screens while in-game.\n"
-					"Useful for games that rely on VMU info (status, menus, minigames)."
-				));
-
-			RenderGeneralToggleSettingRow(
-				"Framebuffer",
-				ICON_FA_FILE,
-				T("Full Framebuffer Emulation"),
-				T("Accurate effects, but extremely expensive."),
-				static_cast<bool>(config::EmulateFramebuffer),
-				[](bool enabled) { config::EmulateFramebuffer.set(enabled); },
-				T(
-					"Full Framebuffer Emulation\n"
-					"Enables accurate VRAM framebuffer emulation. Required for some games' effects.\n"
-					"Very slow, and generally incompatible with upscaling and widescreen.\n\n"
-					"Only enable if a game needs it, and be prepared to lower Internal Resolution."
-				));
-
-			RenderGeneralToggleSettingRow(
-				"CustomTextures",
-				ICON_FA_IMAGE,
-				T("Load Custom Textures"),
-				T("Enable texture replacement packs."),
-				static_cast<bool>(config::CustomTextures),
-				[](bool enabled) { config::CustomTextures.set(enabled); },
-				T(
-					"Load Custom Textures\n"
-					"Loads custom/high-res textures from `data/textures/<game id>`.\n"
-					"Great for community texture packs, but can increase load time and memory usage.\n\n"
-					"If you see stutter from texture streaming, consider enabling Preload Custom Textures."
-				),
-				game_started);
-
+		if (isVulkan(config::RendererType))
+		{
 			ImGui::Indent();
-			RenderGeneralToggleSettingRow(
-				"PreloadTextures",
-				ICON_FA_DOWNLOAD,
-				T("Preload Custom Textures"),
-				T("Trade memory for fewer texture hitches."),
-				static_cast<bool>(config::PreloadCustomTextures),
-				[](bool enabled) { config::PreloadCustomTextures.set(enabled); },
-				T(
-					"Preload Custom Textures\n"
-					"Preloads custom textures at game start.\n"
-					"Can reduce runtime stutter at the cost of increased memory usage and longer initial load times."
-				),
-				!config::CustomTextures);
-			ImGui::Unindent();
-
-			// Aspect Ratio section
-			if (RenderCollapsingHeader("AspectRatioSection", ICON_FA_TV, T("Aspect Ratio"), ImGuiTreeNodeFlags_DefaultOpen))
-			{
 				RenderGeneralToggleSettingRow(
-					"Widescreen",
-					ICON_FA_TV,
-					T("Widescreen"),
-					T("Renders a wider view (may reveal glitches)."),
-					static_cast<bool>(config::Widescreen),
-					[](bool enabled) { config::Widescreen.set(enabled); },
+					"DuplicateFrames",
+					ICON_FA_CLONE,
+					T("Duplicate Frames"),
+					T("Improve pacing on high refresh-rate displays."),
+					static_cast<bool>(config::DupeFrames),
+					[](bool enabled) { config::DupeFrames.set(enabled); },
 					T(
-						"Widescreen\n"
-						"Draws geometry outside the normal 4:3 view to render a wider scene.\n"
-						"Some games were not authored for widescreen, so newly revealed areas can show visual glitches, missing geometry, or incorrect culling.\n\n"
-						"If a game looks broken in widescreen, disable this (or try Widescreen Game Cheats if supported)."
-					));
-
-				ImGui::Indent();
-				RenderGeneralToggleSettingRow(
-					"SuperWidescreen",
-					ICON_FA_EXPAND,
-					T("Super Widescreen"),
-					T("Fills ultra-wide displays (more likely to reveal issues)."),
-					static_cast<bool>(config::SuperWidescreen),
-					[](bool enabled) { config::SuperWidescreen.set(enabled); },
-					T(
-						"Super Widescreen\n"
-						"Uses the full width of the screen/window when the aspect ratio is wider than 16:9.\n"
-						"More likely to reveal out-of-bounds glitches than standard widescreen.\n\n"
-						"Not compatible with Integer Scaling."
+						"Duplicate Frames\n"
+						"Duplicates frames on high refresh-rate monitors (120 Hz and above) to improve perceived pacing.\n"
+						"Only available for Vulkan, and only when VSync is disabled."
 					),
-					!config::Widescreen || config::IntegerScale);
-				ImGui::Unindent();
+					!config::VSync);
+			ImGui::Unindent();
+		}
+#endif
 
-				RenderGeneralToggleSettingRow(
-					"WidescreenGameCheats",
-					ICON_FA_CODE,
-					T("Widescreen Game Cheats"),
-					T("Game-specific widescreen patches (when available)."),
-					static_cast<bool>(config::WidescreenGameHacks),
-					[](bool enabled) { config::WidescreenGameHacks.set(enabled); },
-					T(
-						"Widescreen Game Cheats\n"
-						"Modifies supported games to display in a 16:9 anamorphic format (game-specific patches).\n"
-						"Only some games are supported, but when it works it can be cleaner than geometry widescreen."
-					));
+		RenderGeneralToggleSettingRow(
+			"ShowVMU",
+			ICON_FA_GAMEPAD,
+			T("Show VMU In-Game"),
+			T("Show VMU LCD screens during gameplay."),
+			static_cast<bool>(config::FloatVMUs),
+			[](bool enabled) { config::FloatVMUs.set(enabled); },
+			T(
+				"Show VMU In-Game\n"
+				"Displays the VMU LCD screens while in-game.\n"
+				"Useful for games that rely on VMU info (status, menus, minigames)."
+			));
 
-				{
-					SettingsUI::PopupSliderConfig stretchCfg {};
-					stretchCfg.label = T("Horizontal Stretching");
-					stretchCfg.icon = ICON_FA_EXPAND;
-					stretchCfg.popupID = Tnop("HorizontalStretchPopup");
-					stretchCfg.description = T("Stretches the image sideways to fill your display. Use 132% for 16:9 correction.");
-					stretchCfg.currentValue = &config::ScreenStretching.get();
-					stretchCfg.minValue = 100;
-					stretchCfg.maxValue = 250;
-					stretchCfg.format = "%d%%";
-					stretchCfg.valueWidth = 220.0f;
-					stretchCfg.sliderWidth = 320.0f;
+		RenderGeneralToggleSettingRow(
+			"Framebuffer",
+			ICON_FA_FILE,
+			T("Full Framebuffer Emulation"),
+			T("Accurate effects, but extremely expensive."),
+			static_cast<bool>(config::EmulateFramebuffer),
+			[](bool enabled) { config::EmulateFramebuffer.set(enabled); },
+			T(
+				"Full Framebuffer Emulation\n"
+				"Enables accurate VRAM framebuffer emulation. Required for some games' effects.\n"
+				"Very slow, and generally incompatible with upscaling and widescreen.\n\n"
+				"Only enable if a game needs it, and be prepared to lower Internal Resolution."
+			));
 
-					SettingsUI::PopupConfig stretchPopupCfg {};
-					stretchPopupCfg.type = SettingsUI::PopupType::Slider;
-					stretchPopupCfg.slider = stretchCfg;
+		RenderGeneralToggleSettingRow(
+			"CustomTextures",
+			ICON_FA_IMAGE,
+			T("Load Custom Textures"),
+			T("Enable texture replacement packs."),
+			static_cast<bool>(config::CustomTextures),
+			[](bool enabled) { config::CustomTextures.set(enabled); },
+			T(
+				"Load Custom Textures\n"
+				"Loads custom/high-res textures from `data/textures/<game id>`.\n"
+				"Great for community texture packs, but can increase load time and memory usage.\n\n"
+				"If you see stutter from texture streaming, consider enabling Preload Custom Textures."
+			),
+			game_started);
 
-					RenderGeneralPopupSettingRow(
-						Tnop("HorizontalStretchingSetting"),
-						T("Fine-tune horizontal scaling (often 132% for 16:9 correction)."),
-						stretchPopupCfg,
-						T(
-							"Horizontal Stretching\n"
-							"Stretches the image sideways.\n"
-							"132% is a common value for 16:9 correction, but the best value depends on your display and personal preference."
-						)
-					);
-				}
+		ImGui::Indent();
+		RenderGeneralToggleSettingRow(
+			"PreloadTextures",
+			ICON_FA_DOWNLOAD,
+			T("Preload Custom Textures"),
+			T("Trade memory for fewer texture hitches."),
+			static_cast<bool>(config::PreloadCustomTextures),
+			[](bool enabled) { config::PreloadCustomTextures.set(enabled); },
+			T(
+				"Preload Custom Textures\n"
+				"Preloads custom textures at game start.\n"
+				"Can reduce runtime stutter at the cost of increased memory usage and longer initial load times."
+			),
+			!config::CustomTextures);
+		ImGui::Unindent();
+	}
 
-				RenderGeneralToggleSettingRow(
-					"RotateScreen",
-					ICON_FA_ROTATE_RIGHT,
-					T("Rotate Screen 90°"),
-					T("Rotate the entire output for rotated games."),
-					static_cast<bool>(config::Rotate90),
-					[](bool enabled) { config::Rotate90.set(enabled); },
-					T(
-						"Rotate Screen 90°\n"
-						"Rotates the screen 90 degrees counterclockwise.\n"
-						"Useful for games designed for rotated/vertical displays."
-					));
+	// Aspect Ratio section
+	if (RenderCollapsingHeader("AspectRatioSection", ICON_FA_TV, T("Aspect Ratio"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		RenderGeneralToggleSettingRow(
+			"Widescreen",
+			ICON_FA_TV,
+			T("Widescreen"),
+			T("Renders a wider view (may reveal glitches)."),
+			static_cast<bool>(config::Widescreen),
+			[](bool enabled) { config::Widescreen.set(enabled); },
+			T(
+				"Widescreen\n"
+				"Draws geometry outside the normal 4:3 view to render a wider scene.\n"
+				"Some games were not authored for widescreen, so newly revealed areas can show visual glitches, missing geometry, or incorrect culling.\n\n"
+				"If a game looks broken in widescreen, disable this (or try Widescreen Game Cheats if supported)."
+			));
 
-				// Per Pixel Settings (only shown when Per Pixel sorting is enabled)
-				if (perPixel && RenderCollapsingHeader("PerPixelSettingsSection", ICON_FA_IMAGE, T("Per Pixel Settings"), ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					const std::array<int64_t, 4> bufSizes{ 512_MB, 1_GB, 2_GB, 4_GB };
-					const std::array<const char*, 4> bufSizesText{ "512 MB", "1 GB", "2 GB", "4 GB" };
-					int pixelBufferSelection = 0;
-					for (int i = 0; i < static_cast<int>(bufSizes.size()); ++i)
-					{
-						if (bufSizes[i] == config::PixelBufferSize)
-						{
-							pixelBufferSelection = i;
-							break;
-						}
-					}
+		ImGui::Indent();
+		RenderGeneralToggleSettingRow(
+			"SuperWidescreen",
+			ICON_FA_EXPAND,
+			T("Super Widescreen"),
+			T("Fills ultra-wide displays (more likely to reveal issues)."),
+			static_cast<bool>(config::SuperWidescreen),
+			[](bool enabled) { config::SuperWidescreen.set(enabled); },
+			T(
+				"Super Widescreen\n"
+				"Uses the full width of the screen/window when the aspect ratio is wider than 16:9.\n"
+				"More likely to reveal out-of-bounds glitches than standard widescreen.\n\n"
+				"Not compatible with Integer Scaling."
+			),
+			!config::Widescreen || config::IntegerScale);
+		ImGui::Unindent();
 
-					SettingsUI::PopupConfig pixelBufferCfg {};
-					pixelBufferCfg.type = SettingsUI::PopupType::Options;
-					pixelBufferCfg.options.label = T("Pixel Buffer Size");
-					pixelBufferCfg.options.icon = ICON_FA_MEMORY;
-					pixelBufferCfg.options.popupID = Tnop("PixelBufferSizePopup");
-					pixelBufferCfg.options.options = bufSizesText.data();
-					pixelBufferCfg.options.optionCount = static_cast<int>(bufSizesText.size());
-					pixelBufferCfg.options.currentValue = &pixelBufferSelection;
-					pixelBufferCfg.options.valueWidth = 220.0f;
-					pixelBufferCfg.options.onOptionHighlight = [&](int selectedIndex, const char*) {
-						if (selectedIndex < 0 || selectedIndex >= static_cast<int>(bufSizes.size()))
-							return;
-						SetSettingsFooterText(
-							(selectedIndex == 0)
-								? T("Pixel Buffer Size\n512 MB reserves the least memory and is the fastest place to start. Use this if you want to minimize VRAM/RAM usage, but increase it if you see missing or incorrect transparency in heavier scenes.")
-								: (selectedIndex == 1)
-									? T("Pixel Buffer Size\n1 GB is a good middle ground if 512 MB is not enough. It gives Per-Pixel sorting more room for complex scenes without jumping straight to the larger memory costs.")
-									: (selectedIndex == 2)
-										? T("Pixel Buffer Size\n2 GB is useful for heavier scenes, higher internal resolutions, or games with lots of overlapping transparent effects. Use this if you still see transparency issues at 1 GB.")
-										: T("Pixel Buffer Size\n4 GB is the largest buffer and is mainly for very demanding setups. It gives the most headroom for Per-Pixel sorting, but uses the most memory and is usually unnecessary unless you are pushing quality hard."));
-					};
-					pixelBufferCfg.options.onChange = [&](int selectedIndex) {
-						if (selectedIndex < 0 || selectedIndex >= static_cast<int>(bufSizes.size()))
-							return false;
-						config::PixelBufferSize.set(bufSizes[selectedIndex]);
-						return true;
-					};
+		RenderGeneralToggleSettingRow(
+			"WidescreenGameCheats",
+			ICON_FA_CODE,
+			T("Widescreen Game Cheats"),
+			T("Game-specific widescreen patches (when available)."),
+			static_cast<bool>(config::WidescreenGameHacks),
+			[](bool enabled) { config::WidescreenGameHacks.set(enabled); },
+			T(
+				"Widescreen Game Cheats\n"
+				"Modifies supported games to display in a 16:9 anamorphic format (game-specific patches).\n"
+				"Only some games are supported, but when it works it can be cleaner than geometry widescreen."
+			));
 
-					RenderGeneralPopupSettingRow(
-						Tnop("PixelBufferSizeSetting"),
-						T("Reserved memory for Per-Pixel transparency rendering."),
-						pixelBufferCfg,
-						T(
-							"Pixel Buffer Size\n"
-							"Controls how much memory is reserved for Per-Pixel (OIT) transparency rendering.\n"
-							"If you increase Internal Resolution a lot or see missing or incorrect transparency in complex scenes, you may need a larger buffer.\n"
-							"Lower values reduce memory usage, but can limit transparency accuracy in heavier scenes."
-						)
-					);
+		{
+			SettingsUI::PopupSliderConfig stretchCfg {};
+			stretchCfg.label = T("Horizontal Stretching");
+			stretchCfg.icon = ICON_FA_EXPAND;
+			stretchCfg.popupID = Tnop("HorizontalStretchPopup");
+			stretchCfg.description = T("Stretches the image sideways to fill your display. Use 132% for 16:9 correction.");
+			stretchCfg.currentValue = &config::ScreenStretching.get();
+			stretchCfg.minValue = 100;
+			stretchCfg.maxValue = 250;
+			stretchCfg.format = "%d%%";
+			stretchCfg.valueWidth = 220.0f;
+			stretchCfg.sliderWidth = 320.0f;
 
-					static int perPixelLayersTemp = config::PerPixelLayers.get();
-					if (!ImGui::IsPopupOpen("PerPixelMaximumLayersPopup"))
-						perPixelLayersTemp = config::PerPixelLayers.get();
+			SettingsUI::PopupConfig stretchPopupCfg {};
+			stretchPopupCfg.type = SettingsUI::PopupType::Slider;
+			stretchPopupCfg.slider = stretchCfg;
 
-					SettingsUI::PopupSliderConfig perPixelLayersCfg {};
-					perPixelLayersCfg.label = T("Maximum Layers");
-					perPixelLayersCfg.icon = ICON_FA_LAYER_GROUP;
-					perPixelLayersCfg.popupID = Tnop("PerPixelMaximumLayersPopup");
-					perPixelLayersCfg.description =
-						T(
-							"Controls how many transparent layers can be resolved per pixel in complex scenes.\n"
-							"Increase this if you see missing transparency or incorrect layering.\n"
-							"Lower values reduce memory pressure and can improve performance."
-						);
-					perPixelLayersCfg.currentValue = &perPixelLayersTemp;
-					perPixelLayersCfg.minValue = 8;
-					perPixelLayersCfg.maxValue = 128;
-					perPixelLayersCfg.format = "%d";
-					perPixelLayersCfg.valueWidth = 220.0f;
-					perPixelLayersCfg.sliderWidth = 320.0f;
-					perPixelLayersCfg.onValueChange = [&]() {
-						config::PerPixelLayers.set(perPixelLayersTemp);
-					};
-
-					SettingsUI::PopupConfig perPixelLayersPopupCfg {};
-					perPixelLayersPopupCfg.type = SettingsUI::PopupType::Slider;
-					perPixelLayersPopupCfg.slider = perPixelLayersCfg;
-
-					RenderGeneralPopupSettingRow(
-						Tnop("PerPixelMaximumLayersSetting"),
-						T("Maximum transparent layers resolved per pixel."),
-						perPixelLayersPopupCfg,
-						T(
-							"Per-Pixel Maximum Layers\n"
-							"Limits how many transparent layers can be resolved per pixel in complex scenes.\n"
-							"Increase this if you see missing transparency or incorrect layering.\n"
-							"Decrease it to improve performance and reduce memory pressure."
-						)
-					);
-				}
-			}
-
-			// Performance section
-			if (RenderCollapsingHeader("PerformanceSection", ICON_FA_GAUGE_HIGH, T("Performance"), ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Spacing();
-
-				{
-					const std::array<const char*, 3> autoSkipLabels { T("Disabled"), T("Normal"), T("Maximum") };
-					int autoSkipSelection = config::AutoSkipFrame.get();
-					if (autoSkipSelection < 0 || autoSkipSelection >= static_cast<int>(autoSkipLabels.size()))
-						autoSkipSelection = 0;
-
-					SettingsUI::PopupConfig autoSkipCfg {};
-					autoSkipCfg.type = SettingsUI::PopupType::Options;
-					autoSkipCfg.options.label = T("Automatic Frame Skipping");
-					autoSkipCfg.options.icon = ICON_FA_FORWARD;
-					autoSkipCfg.options.popupID = Tnop("AutoFrameSkipPopup");
-					autoSkipCfg.options.options = autoSkipLabels.data();
-					autoSkipCfg.options.optionCount = static_cast<int>(autoSkipLabels.size());
-					autoSkipCfg.options.currentValue = &autoSkipSelection;
-					autoSkipCfg.options.valueWidth = 220.0f;
-					autoSkipCfg.options.onChange = [&](int selectedIndex) {
-						if (selectedIndex < 0 || selectedIndex >= static_cast<int>(autoSkipLabels.size()))
-							return false;
-						config::AutoSkipFrame.set(selectedIndex);
-						return true;
-					};
-
-					RenderGeneralPopupSettingRow(
-						Tnop("AutoFrameSkippingSetting"),
-						T("Auto-skip frames to maintain full-speed gameplay."),
-						autoSkipCfg,
-						T(
-							"Automatic Frame Skipping\n"
-							"Skips rendering frames when the emulator cannot keep up, to help maintain full-speed gameplay.\n\n"
-							"Disabled: never auto-skip.\n"
-							"Normal: skip when CPU and GPU are both slow.\n"
-							"Maximum: skip when the GPU is slow.\n\n"
-							"For best image quality, prefer lowering Internal Resolution before relying on heavy frame skipping."
-						)
-					);
-				}
-
-				{
-					SettingsUI::PopupSliderConfig frameSkipCfg {};
-					frameSkipCfg.label = T("Frame Skipping");
-					frameSkipCfg.icon = ICON_FA_FORWARD;
-					frameSkipCfg.popupID = Tnop("FrameSkipPopup");
-					frameSkipCfg.description = T("Set how many frames to skip between rendered frames.");
-					frameSkipCfg.currentValue = &config::SkipFrame.get();
-					frameSkipCfg.minValue = 0;
-					frameSkipCfg.maxValue = 6;
-					frameSkipCfg.format = "%d";
-					frameSkipCfg.valueWidth = 220.0f;
-					frameSkipCfg.sliderWidth = 320.0f;
-
-					SettingsUI::PopupConfig frameSkipPopupCfg {};
-					frameSkipPopupCfg.type = SettingsUI::PopupType::Slider;
-					frameSkipPopupCfg.slider = frameSkipCfg;
-
-					RenderGeneralPopupSettingRow(
-						Tnop("FrameSkippingSetting"),
-						T("Force a fixed number of skipped frames."),
-						frameSkipPopupCfg,
-						T(
-							"Frame Skipping\n"
-							"Forces a fixed number of frames to be skipped between rendered frames.\n"
-							"This is more aggressive and less adaptive than Automatic Frame Skipping.\n\n"
-							"Use only if you know a title benefits from it, or as a last resort when tuning for speed."
-						)
-					);
-				}
-
-				// 2x height toggle rows for Performance settings
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
-				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
-
-				// Shadows toggle
-				RenderGeneralToggleSettingRow(
-					"Shadows",
-					ICON_FA_MOON,
-					T("Shadows"),
-					T("Modifier volumes (often used for shadows)."),
-					static_cast<bool>(config::ModifierVolumes),
-					[](bool enabled) { config::ModifierVolumes.set(enabled); },
-					T(
-						"Shadows (Modifier Volumes)\n"
-						"Enables modifier volumes, which are usually used for shadowing and related effects.\n"
-						"Disable if a game shows shadow-related artifacts, or if you need a little extra performance."
-					));
-
-				// Fog toggle
-				RenderGeneralToggleSettingRow(
-					"Fog",
-					ICON_FA_CLOUD,
-					T("Fog"),
-					T("Atmospheric fog effects."),
-					static_cast<bool>(config::Fog),
-					[](bool enabled) { config::Fog.set(enabled); },
-					T(
-						"Fog\n"
-						"Enables atmospheric fog effects.\n"
-						"Disable if you see fog artifacts, or if you need extra performance in heavy scenes."
-					));
-
-				ImGui::PopStyleVar(2);
-			}
-
-			// Advanced section
-			if (RenderCollapsingHeader("AdvancedSection", ICON_FA_WAND_MAGIC, T("Advanced"), ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Spacing();
-
-				// 2x height toggle rows for Advanced settings
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
-				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
-
-				// Delay Frame Swapping
-				RenderGeneralToggleSettingRow(
-					"DelayFrameSwapping",
-					ICON_FA_CLOCK,
-					T("Delay Frame Swapping"),
-					T("Reduce flashing and glitchy video playback."),
-					static_cast<bool>(config::DelayFrameSwapping),
-					[](bool enabled) { config::DelayFrameSwapping = enabled; },
-					T(
-						"Delay Frame Swapping\n"
-						"Useful to avoid a flashing screen or glitchy videos in some titles.\n"
-						"Not recommended on slow platforms."
-					));
-
-				// Fix Upscale Bleeding Edge
-				RenderGeneralToggleSettingRow(
-					"FixUpscaleBleedingEdge",
-					ICON_FA_PLUG,
-					T("Fix Upscale Bleeding Edge"),
-					T("Reduce texture bleeding when upscaling."),
-					static_cast<bool>(config::FixUpscaleBleedingEdge),
-					[](bool enabled) { config::FixUpscaleBleedingEdge = enabled; },
-					T(
-						"Fix Upscale Bleeding Edge\n"
-						"Helps with texture bleeding when upscaling.\n"
-						"Disable if pixels warp in 2D games (MVC2, CVS, KOF, etc.)."
-					));
-
-				// Native Depth Interpolation
-				RenderGeneralToggleSettingRow(
-					"NativeDepthInterpolation",
-					ICON_FA_MICROCHIP,
-					T("Native Depth Interpolation"),
-					T("Fix depth/texture issues on some GPUs."),
-					static_cast<bool>(config::NativeDepthInterpolation),
-					[](bool enabled) { config::NativeDepthInterpolation = enabled; },
-					T(
-						"Native Depth Interpolation\n"
-						"Helps with texture corruption and depth issues on some GPUs (often AMD, sometimes Intel).\n"
-						"If you see depth-related flicker or corruption, try enabling this."
-					));
-
-				// Copy Rendered Textures to VRAM
-				RenderGeneralToggleSettingRow(
-					"RenderToTextureBuffer",
-					ICON_FA_COPY,
-					T("Copy Rendered Textures"),
-					T("Accuracy option for render-to-texture effects."),
-					static_cast<bool>(config::RenderToTextureBuffer),
-					[](bool enabled) { config::RenderToTextureBuffer = enabled; },
-					T(
-						"Copy Rendered Textures\n"
-						"Copies render-to-texture results back into VRAM.\n"
-						"Slower, but more accurate. Enable if a game has missing or incorrect render-to-texture effects."
-					));
-
-				ImGui::PopStyleVar(2);
-
-				// Anisotropic Filtering
-				{
-					const std::array<int, 5> anisoValues { 1, 2, 4, 8, 16 };
-					const std::array<const char*, 5> anisoLabels { T("Disabled"), "2x", "4x", "8x", "16x" };
-					int anisoSelection = 0;
-					for (size_t i = 0; i < anisoValues.size(); i++)
-					{
-						if (anisoValues[i] == config::AnisotropicFiltering.get())
-						{
-							anisoSelection = static_cast<int>(i);
-							break;
-						}
-					}
-
-					SettingsUI::PopupConfig anisoCfg {};
-					anisoCfg.type = SettingsUI::PopupType::Options;
-					anisoCfg.options.label = T("Anisotropic Filtering");
-					anisoCfg.options.icon = ICON_FA_GEM;
-					anisoCfg.options.popupID = Tnop("AnisotropicPopup");
-					anisoCfg.options.options = anisoLabels.data();
-					anisoCfg.options.optionCount = static_cast<int>(anisoLabels.size());
-					anisoCfg.options.currentValue = &anisoSelection;
-					anisoCfg.options.valueWidth = 220.0f;
-					anisoCfg.options.onChange = [&](int selectedIndex) {
-						if (selectedIndex < 0 || selectedIndex >= static_cast<int>(anisoValues.size()))
-							return false;
-						config::AnisotropicFiltering.set(anisoValues[selectedIndex]);
-						return true;
-					};
-
-					RenderGeneralPopupSettingRow(
-						Tnop("AnisotropicFilteringSetting"),
-						T("Sharper textures at steep angles (mipmapped textures only)."),
-						anisoCfg,
-						T(
-							"Anisotropic Filtering\n"
-							"Makes mipmapped textures viewed at sharp angles look cleaner (less shimmer).\n"
-							"Increases GPU cost.\n\n"
-							"Only affects mipmapped textures. If you want this to do anything, keep mipmaps enabled."
-						));
-				}
-			}
-
-			// Texture Filtering
-			if (RenderCollapsingHeader("TextureFilteringSection", ICON_FA_FILTER, T("Texture Filtering"), ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				const std::array<const char*, 3> textureFilterLabels {
-					T("Default"),
-					T("Force Nearest-Neighbor"),
-					T("Force Linear")
-				};
-				int textureFilteringSelection = config::TextureFiltering.get();
-				if (textureFilteringSelection < 0 || textureFilteringSelection >= static_cast<int>(textureFilterLabels.size()))
-					textureFilteringSelection = 0;
-
-				SettingsUI::PopupConfig textureFilterCfg {};
-				textureFilterCfg.type = SettingsUI::PopupType::Options;
-				textureFilterCfg.options.label = T("Filtering Mode");
-				textureFilterCfg.options.icon = ICON_FA_FILTER;
-				textureFilterCfg.options.popupID = Tnop("TextureFilteringPopup");
-				textureFilterCfg.options.options = textureFilterLabels.data();
-				textureFilterCfg.options.optionCount = static_cast<int>(textureFilterLabels.size());
-				textureFilterCfg.options.currentValue = &textureFilteringSelection;
-				textureFilterCfg.options.valueWidth = 220.0f;
-				textureFilterCfg.options.onChange = [&](int selectedIndex) {
-					if (selectedIndex < 0 || selectedIndex >= static_cast<int>(textureFilterLabels.size()))
-						return false;
-					config::TextureFiltering.set(selectedIndex);
-					return true;
-				};
-
-				RenderGeneralPopupSettingRow(
-					Tnop("TextureFilteringSetting"),
-					T("Override how textures are filtered (sampled)."),
-					textureFilterCfg,
-					T(
-						"Texture Filtering\n"
-						"Default: uses game behavior.\n"
-						"Force Nearest-Neighbor: crisp/pixelated look.\n"
-						"Force Linear: smoother/blurrier look.\n\n"
-						"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer."
-					));
-			}
-
-			// Show FPS Counter
-			RenderGeneralToggleSettingRow(
-				"ShowFPS",
-				ICON_FA_GAUGE_HIGH,
-				T("Show FPS Counter"),
-				T("Show FPS so you can tune for stable 30/60."),
-				static_cast<bool>(config::ShowFPS),
-				[](bool enabled) { config::ShowFPS.set(enabled); },
+			RenderGeneralPopupSettingRow(
+				Tnop("HorizontalStretchingSetting"),
+				T("Fine-tune horizontal scaling (often 132% for 16:9 correction)."),
+				stretchPopupCfg,
 				T(
-					"Show FPS Counter\n"
-					"Displays an on-screen frame rate counter.\n"
-					"Strongly recommended while tuning settings: aim for stable 30/60 FPS in real gameplay."
-				));
+					"Horizontal Stretching\n"
+					"Stretches the image sideways.\n"
+					"132% is a common value for 16:9 correction, but the best value depends on your display and personal preference."
+				)
+			);
+		}
 
-#ifdef VIDEO_ROUTING
-			// Video Routing section (platform-specific)
-#ifdef __APPLE__
-			if (RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Syphon)"), ImGuiTreeNodeFlags_DefaultOpen))
-#elif defined(_WIN32)
-			if (((renderApi == 0) || (renderApi == 3))
-				? RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Spout)"), ImGuiTreeNodeFlags_DefaultOpen)
-				: RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Only available with OpenGL or DirectX 11)"), ImGuiTreeNodeFlags_DefaultOpen))
-#else
-			if (RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing"), ImGuiTreeNodeFlags_DefaultOpen))
-#endif
+		RenderGeneralToggleSettingRow(
+			"RotateScreen",
+			ICON_FA_ROTATE_RIGHT,
+			T("Rotate Screen 90°"),
+			T("Rotate the entire output for rotated games."),
+			static_cast<bool>(config::Rotate90),
+			[](bool enabled) { config::Rotate90.set(enabled); },
+			T(
+				"Rotate Screen 90°\n"
+				"Rotates the screen 90 degrees counterclockwise.\n"
+				"Useful for games designed for rotated/vertical displays."
+			));
+	}
+
+	// Per Pixel Settings (only shown when Per Pixel sorting is enabled)
+	if (perPixel && RenderCollapsingHeader("PerPixelSettingsSection", ICON_FA_IMAGE, T("Per Pixel Settings"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		const std::array<int64_t, 4> bufSizes{ 512_MB, 1_GB, 2_GB, 4_GB };
+		const std::array<const char*, 4> bufSizesText{ "512 MB", "1 GB", "2 GB", "4 GB" };
+		int pixelBufferSelection = 0;
+		for (int i = 0; i < static_cast<int>(bufSizes.size()); ++i)
+		{
+			if (bufSizes[i] == config::PixelBufferSize)
 			{
-#ifdef _WIN32
-				DisabledScope routingScope(!((renderApi == 0) || (renderApi == 3)));
-#endif
-
-				// Send Video to Another Program
-				RenderGeneralToggleSettingRow(
-					"VideoRouting",
-					ICON_FA_SHARE_NODES,
-					T("Send Video to Another Program"),
-					T("Stream GPU texture directly to OBS Studio"),
-					static_cast<bool>(config::VideoRouting),
-					[](bool enabled) { config::VideoRouting.set(enabled); },
-					T(
-						"Video Routing\n"
-						"Routes a GPU texture directly to OBS Studio (or a compatible capture tool), avoiding CPU-intensive Display/Window Capture.\n"
-						"This can improve capture quality and reduce overhead compared to capturing the emulator window."
-					));
-
-				{
-					DisabledScope scope(!config::VideoRouting);
-
-					// Scale Down Before Sending (Indented)
-					ImGui::Indent();
-					{
-						RenderGeneralToggleSettingRow(
-							"VideoRoutingScale",
-							ICON_FA_COMPRESS,
-							T("Scale Down Before Sending"),
-							T("Share smaller texture for better performance"),
-							static_cast<bool>(config::VideoRoutingScale),
-							[](bool enabled) { config::VideoRoutingScale.set(enabled); },
-							T(
-								"Scale Down Before Sending\n"
-								"Shares a smaller texture to reduce capture bandwidth and GPU/CPU overhead.\n"
-								"Can improve performance on some systems, but results vary."
-							));
-					}
-
-					ImGui::Unindent();
-
-
-					{
-						static int vres = config::VideoRoutingVRes;
-						if (vres != config::VideoRoutingVRes)
-							vres = config::VideoRoutingVRes;
-
-						SettingsUI::PopupSliderConfig vresCfg {};
-						vresCfg.label = T("Output Vertical Resolution");
-						vresCfg.icon = ICON_FA_SLIDERS;
-						vresCfg.popupID = Tnop("VideoRoutingVResPopup");
-						vresCfg.description = T("Set the vertical resolution used for the shared OBS texture output.");
-						vresCfg.currentValue = &vres;
-						vresCfg.minValue = 120;
-						vresCfg.maxValue = 2160;
-						vresCfg.defaultValue = 720;
-						vresCfg.format = "%d px";
-						vresCfg.valueWidth = 220.0f;
-						vresCfg.sliderWidth = 320.0f;
-						vresCfg.onValueChange = [&]() {
-							config::VideoRoutingVRes = vres;
-						};
-
-						SettingsUI::PopupConfig vresPopupCfg {};
-						vresPopupCfg.type = SettingsUI::PopupType::Slider;
-						vresPopupCfg.slider = vresCfg;
-
-						RenderGeneralPopupSettingRow(
-							Tnop("VideoRoutingVResSetting"),
-							T("Set vertical resolution for the shared output texture."),
-							vresPopupCfg,
-							T(
-								"Output Vertical Resolution\n"
-								"Sets the vertical resolution used for the shared texture routing output.\n"
-								"Lower values reduce bandwidth and overhead. Higher values improve capture clarity."
-							),
-							!config::VideoRoutingScale);
-
-						config::VideoRoutingVRes = vres;
-					}
-
-					const int outputWidth = config::VideoRoutingScale
-						? config::VideoRoutingVRes * settings.display.width / settings.display.height
-						: settings.display.width;
-					const int outputHeight = config::VideoRoutingScale
-						? config::VideoRoutingVRes
-						: settings.display.height;
-					const std::string outputSizeText = std::to_string(outputWidth) + " x " + std::to_string(outputHeight);
-
-					ImGui::PushID("VideoRoutingOutputTextureSize");
-						BeginTwoLineSettingRow(
-							"##row",
-							T(
-								"Output Texture Size\n"
-								"Shows the calculated size of the shared output texture based on your routing settings."
-							),
-							true);
-					const ImVec2 line1Start = BeginTwoLineSettingRowContent();
-
-					SettingIcon(ICON_FA_EXPAND, ImVec2(uiScaled(20), uiScaled(20)));
-					ImGui::SameLine(0, uiScaled(8));
-					ImGui::PushFont(largeFont);
-					ImGui::TextUnformatted(T("Output Texture Size"));
-					ImGui::PopFont();
-
-					const float valueWidth = uiScaled(220.0f);
-					ImGui::SameLine(RightColumnX(valueWidth));
-					const float valueStartX = ImGui::GetCursorPosX();
-					const float valueTextWidth = ImGui::CalcTextSize(outputSizeText.c_str()).x;
-					ImGui::SetCursorPosX(valueStartX + std::max(0.0f, (valueWidth - valueTextWidth) * 0.5f));
-					ImGui::PushFont(largeFont);
-					ImGui::TextUnformatted(outputSizeText.c_str());
-					ImGui::PopFont();
-
-					RenderTwoLineSettingDescription(line1Start, T("Calculated size of the shared output texture."));
-					ImGui::PopID();
-					ImGui::Spacing();
-				}
-			}
-#endif
-
-			// Update renderer type based on selections
-			switch (renderApi)
-			{
-			case 0:
-				config::RendererType = perPixel ? RenderType::OpenGL_OIT : RenderType::OpenGL;
+				pixelBufferSelection = i;
 				break;
-			case 1:
-				config::RendererType = perPixel ? RenderType::Vulkan_OIT : RenderType::Vulkan;
-				break;
-			case 2:
-				config::RendererType = RenderType::DirectX9;
-				break;
-				case 3:
-					config::RendererType = perPixel ? RenderType::DirectX11_OIT : RenderType::DirectX11;
-					break;
 			}
 		}
+
+		SettingsUI::PopupConfig pixelBufferCfg {};
+		pixelBufferCfg.type = SettingsUI::PopupType::Options;
+		pixelBufferCfg.options.label = T("Pixel Buffer Size");
+		pixelBufferCfg.options.icon = ICON_FA_MEMORY;
+		pixelBufferCfg.options.popupID = Tnop("PixelBufferSizePopup");
+		pixelBufferCfg.options.options = bufSizesText.data();
+		pixelBufferCfg.options.optionCount = static_cast<int>(bufSizesText.size());
+		pixelBufferCfg.options.currentValue = &pixelBufferSelection;
+		pixelBufferCfg.options.valueWidth = 220.0f;
+		pixelBufferCfg.options.onOptionHighlight = [&](int selectedIndex, const char*) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(bufSizes.size()))
+				return;
+			SetSettingsFooterText(
+				(selectedIndex == 0)
+					? T("Pixel Buffer Size\n512 MB reserves the least memory and is the fastest place to start. Use this if you want to minimize VRAM/RAM usage, but increase it if you see missing or incorrect transparency in heavier scenes.")
+					: (selectedIndex == 1)
+						? T("Pixel Buffer Size\n1 GB is a good middle ground if 512 MB is not enough. It gives Per-Pixel sorting more room for complex scenes without jumping straight to the larger memory costs.")
+						: (selectedIndex == 2)
+							? T("Pixel Buffer Size\n2 GB is useful for heavier scenes, higher internal resolutions, or games with lots of overlapping transparent effects. Use this if you still see transparency issues at 1 GB.")
+							: T("Pixel Buffer Size\n4 GB is the largest buffer and is mainly for very demanding setups. It gives the most headroom for Per-Pixel sorting, but uses the most memory and is usually unnecessary unless you are pushing quality hard."));
+		};
+		pixelBufferCfg.options.onChange = [&](int selectedIndex) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(bufSizes.size()))
+				return false;
+			config::PixelBufferSize.set(bufSizes[selectedIndex]);
+			return true;
+		};
+
+		RenderGeneralPopupSettingRow(
+			Tnop("PixelBufferSizeSetting"),
+			T("Reserved memory for Per-Pixel transparency rendering."),
+			pixelBufferCfg,
+			T(
+				"Pixel Buffer Size\n"
+				"Controls how much memory is reserved for Per-Pixel (OIT) transparency rendering.\n"
+				"If you increase Internal Resolution a lot or see missing or incorrect transparency in complex scenes, you may need a larger buffer.\n"
+				"Lower values reduce memory usage, but can limit transparency accuracy in heavier scenes."
+			)
+		);
+
+		static int perPixelLayersTemp = config::PerPixelLayers.get();
+		if (!ImGui::IsPopupOpen("PerPixelMaximumLayersPopup"))
+			perPixelLayersTemp = config::PerPixelLayers.get();
+
+		SettingsUI::PopupSliderConfig perPixelLayersCfg {};
+		perPixelLayersCfg.label = T("Maximum Layers");
+		perPixelLayersCfg.icon = ICON_FA_LAYER_GROUP;
+		perPixelLayersCfg.popupID = Tnop("PerPixelMaximumLayersPopup");
+		perPixelLayersCfg.description =
+			T(
+				"Controls how many transparent layers can be resolved per pixel in complex scenes.\n"
+				"Increase this if you see missing transparency or incorrect layering.\n"
+				"Lower values reduce memory pressure and can improve performance."
+			);
+		perPixelLayersCfg.currentValue = &perPixelLayersTemp;
+		perPixelLayersCfg.minValue = 8;
+		perPixelLayersCfg.maxValue = 128;
+		perPixelLayersCfg.format = "%d";
+		perPixelLayersCfg.valueWidth = 220.0f;
+		perPixelLayersCfg.sliderWidth = 320.0f;
+		perPixelLayersCfg.onValueChange = [&]() {
+			config::PerPixelLayers.set(perPixelLayersTemp);
+		};
+
+		SettingsUI::PopupConfig perPixelLayersPopupCfg {};
+		perPixelLayersPopupCfg.type = SettingsUI::PopupType::Slider;
+		perPixelLayersPopupCfg.slider = perPixelLayersCfg;
+
+		RenderGeneralPopupSettingRow(
+			Tnop("PerPixelMaximumLayersSetting"),
+			T("Maximum transparent layers resolved per pixel."),
+			perPixelLayersPopupCfg,
+			T(
+				"Per-Pixel Maximum Layers\n"
+				"Limits how many transparent layers can be resolved per pixel in complex scenes.\n"
+				"Increase this if you see missing transparency or incorrect layering.\n"
+				"Decrease it to improve performance and reduce memory pressure."
+			)
+		);
+	}
+
+	// Performance section
+	if (RenderCollapsingHeader("PerformanceSection", ICON_FA_GAUGE_HIGH, T("Performance"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Spacing();
+
+		{
+			const std::array<const char*, 3> autoSkipLabels { T("Disabled"), T("Normal"), T("Maximum") };
+			int autoSkipSelection = config::AutoSkipFrame.get();
+			if (autoSkipSelection < 0 || autoSkipSelection >= static_cast<int>(autoSkipLabels.size()))
+				autoSkipSelection = 0;
+
+			SettingsUI::PopupConfig autoSkipCfg {};
+			autoSkipCfg.type = SettingsUI::PopupType::Options;
+			autoSkipCfg.options.label = T("Automatic Frame Skipping");
+			autoSkipCfg.options.icon = ICON_FA_FORWARD;
+			autoSkipCfg.options.popupID = Tnop("AutoFrameSkipPopup");
+			autoSkipCfg.options.options = autoSkipLabels.data();
+			autoSkipCfg.options.optionCount = static_cast<int>(autoSkipLabels.size());
+			autoSkipCfg.options.currentValue = &autoSkipSelection;
+			autoSkipCfg.options.valueWidth = 220.0f;
+			autoSkipCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(autoSkipLabels.size()))
+					return false;
+				config::AutoSkipFrame.set(selectedIndex);
+				return true;
+			};
+
+			RenderGeneralPopupSettingRow(
+				Tnop("AutoFrameSkippingSetting"),
+				T("Auto-skip frames to maintain full-speed gameplay."),
+				autoSkipCfg,
+				T(
+					"Automatic Frame Skipping\n"
+					"Skips rendering frames when the emulator cannot keep up, to help maintain full-speed gameplay.\n\n"
+					"Disabled: never auto-skip.\n"
+					"Normal: skip when CPU and GPU are both slow.\n"
+					"Maximum: skip when the GPU is slow.\n\n"
+					"For best image quality, prefer lowering Internal Resolution before relying on heavy frame skipping."
+				)
+			);
+		}
+
+		{
+			SettingsUI::PopupSliderConfig frameSkipCfg {};
+			frameSkipCfg.label = T("Frame Skipping");
+			frameSkipCfg.icon = ICON_FA_FORWARD;
+			frameSkipCfg.popupID = Tnop("FrameSkipPopup");
+			frameSkipCfg.description = T("Set how many frames to skip between rendered frames.");
+			frameSkipCfg.currentValue = &config::SkipFrame.get();
+			frameSkipCfg.minValue = 0;
+			frameSkipCfg.maxValue = 6;
+			frameSkipCfg.format = "%d";
+			frameSkipCfg.valueWidth = 220.0f;
+			frameSkipCfg.sliderWidth = 320.0f;
+
+			SettingsUI::PopupConfig frameSkipPopupCfg {};
+			frameSkipPopupCfg.type = SettingsUI::PopupType::Slider;
+			frameSkipPopupCfg.slider = frameSkipCfg;
+
+			RenderGeneralPopupSettingRow(
+				Tnop("FrameSkippingSetting"),
+				T("Force a fixed number of skipped frames."),
+				frameSkipPopupCfg,
+				T(
+					"Frame Skipping\n"
+					"Forces a fixed number of frames to be skipped between rendered frames.\n"
+					"This is more aggressive and less adaptive than Automatic Frame Skipping.\n\n"
+					"Use only if you know a title benefits from it, or as a last resort when tuning for speed."
+				)
+			);
+		}
+
+		// 2x height toggle rows for Performance settings
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
+
+		// Shadows toggle
+		RenderGeneralToggleSettingRow(
+			"Shadows",
+			ICON_FA_MOON,
+			T("Shadows"),
+			T("Modifier volumes (often used for shadows)."),
+			static_cast<bool>(config::ModifierVolumes),
+			[](bool enabled) { config::ModifierVolumes.set(enabled); },
+			T(
+				"Shadows (Modifier Volumes)\n"
+				"Enables modifier volumes, which are usually used for shadowing and related effects.\n"
+				"Disable if a game shows shadow-related artifacts, or if you need a little extra performance."
+			));
+
+		// Fog toggle
+		RenderGeneralToggleSettingRow(
+			"Fog",
+			ICON_FA_CLOUD,
+			T("Fog"),
+			T("Atmospheric fog effects."),
+			static_cast<bool>(config::Fog),
+			[](bool enabled) { config::Fog.set(enabled); },
+			T(
+				"Fog\n"
+				"Enables atmospheric fog effects.\n"
+				"Disable if you see fog artifacts, or if you need extra performance in heavy scenes."
+			));
+
+		ImGui::PopStyleVar(2);
+	}
+
+	// Advanced section
+	if (RenderCollapsingHeader("AdvancedSection", ICON_FA_WAND_MAGIC, T("Advanced"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Spacing();
+
+		// 2x height toggle rows for Advanced settings
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 12));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
+
+		// Delay Frame Swapping
+		RenderGeneralToggleSettingRow(
+			"DelayFrameSwapping",
+			ICON_FA_CLOCK,
+			T("Delay Frame Swapping"),
+			T("Reduce flashing and glitchy video playback."),
+			static_cast<bool>(config::DelayFrameSwapping),
+			[](bool enabled) { config::DelayFrameSwapping = enabled; },
+			T(
+				"Delay Frame Swapping\n"
+				"Useful to avoid a flashing screen or glitchy videos in some titles.\n"
+				"Not recommended on slow platforms."
+			));
+
+		// Fix Upscale Bleeding Edge
+		RenderGeneralToggleSettingRow(
+			"FixUpscaleBleedingEdge",
+			ICON_FA_PLUG,
+			T("Fix Upscale Bleeding Edge"),
+			T("Reduce texture bleeding when upscaling."),
+			static_cast<bool>(config::FixUpscaleBleedingEdge),
+			[](bool enabled) { config::FixUpscaleBleedingEdge = enabled; },
+			T(
+				"Fix Upscale Bleeding Edge\n"
+				"Helps with texture bleeding when upscaling.\n"
+				"Disable if pixels warp in 2D games (MVC2, CVS, KOF, etc.)."
+			));
+
+		// Native Depth Interpolation
+		RenderGeneralToggleSettingRow(
+			"NativeDepthInterpolation",
+			ICON_FA_MICROCHIP,
+			T("Native Depth Interpolation"),
+			T("Fix depth/texture issues on some GPUs."),
+			static_cast<bool>(config::NativeDepthInterpolation),
+			[](bool enabled) { config::NativeDepthInterpolation = enabled; },
+			T(
+				"Native Depth Interpolation\n"
+				"Helps with texture corruption and depth issues on some GPUs (often AMD, sometimes Intel).\n"
+				"If you see depth-related flicker or corruption, try enabling this."
+			));
+
+		// Copy Rendered Textures to VRAM
+		RenderGeneralToggleSettingRow(
+			"RenderToTextureBuffer",
+			ICON_FA_COPY,
+			T("Copy Rendered Textures"),
+			T("Accuracy option for render-to-texture effects."),
+			static_cast<bool>(config::RenderToTextureBuffer),
+			[](bool enabled) { config::RenderToTextureBuffer = enabled; },
+			T(
+				"Copy Rendered Textures\n"
+				"Copies render-to-texture results back into VRAM.\n"
+				"Slower, but more accurate. Enable if a game has missing or incorrect render-to-texture effects."
+			));
+
+		ImGui::PopStyleVar(2);
+
+		// Anisotropic Filtering
+		{
+			const std::array<int, 5> anisoValues { 1, 2, 4, 8, 16 };
+			const std::array<const char*, 5> anisoLabels { T("Disabled"), "2x", "4x", "8x", "16x" };
+			int anisoSelection = 0;
+			for (size_t i = 0; i < anisoValues.size(); i++)
+			{
+				if (anisoValues[i] == config::AnisotropicFiltering.get())
+				{
+					anisoSelection = static_cast<int>(i);
+					break;
+				}
+			}
+
+			SettingsUI::PopupConfig anisoCfg {};
+			anisoCfg.type = SettingsUI::PopupType::Options;
+			anisoCfg.options.label = T("Anisotropic Filtering");
+			anisoCfg.options.icon = ICON_FA_GEM;
+			anisoCfg.options.popupID = Tnop("AnisotropicPopup");
+			anisoCfg.options.options = anisoLabels.data();
+			anisoCfg.options.optionCount = static_cast<int>(anisoLabels.size());
+			anisoCfg.options.currentValue = &anisoSelection;
+			anisoCfg.options.valueWidth = 220.0f;
+			anisoCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(anisoValues.size()))
+					return false;
+				config::AnisotropicFiltering.set(anisoValues[selectedIndex]);
+				return true;
+			};
+
+			RenderGeneralPopupSettingRow(
+				Tnop("AnisotropicFilteringSetting"),
+				T("Sharper textures at steep angles (mipmapped textures only)."),
+				anisoCfg,
+				T(
+					"Anisotropic Filtering\n"
+					"Makes mipmapped textures viewed at sharp angles look cleaner (less shimmer).\n"
+					"Increases GPU cost.\n\n"
+					"Only affects mipmapped textures. If you want this to do anything, keep mipmaps enabled."
+				));
+		}
+
+		// Texture Filtering
+		const std::array<const char*, 3> textureFilterLabels {
+			T("Default"),
+			T("Force Nearest-Neighbor"),
+			T("Force Linear")
+		};
+		int textureFilteringSelection = config::TextureFiltering.get();
+		if (textureFilteringSelection < 0 || textureFilteringSelection >= static_cast<int>(textureFilterLabels.size()))
+			textureFilteringSelection = 0;
+
+		SettingsUI::PopupConfig textureFilterCfg {};
+		textureFilterCfg.type = SettingsUI::PopupType::Options;
+		textureFilterCfg.options.label = T("Filtering Mode");
+		textureFilterCfg.options.icon = ICON_FA_FILTER;
+		textureFilterCfg.options.popupID = Tnop("TextureFilteringPopup");
+		textureFilterCfg.options.options = textureFilterLabels.data();
+		textureFilterCfg.options.optionCount = static_cast<int>(textureFilterLabels.size());
+		textureFilterCfg.options.currentValue = &textureFilteringSelection;
+		textureFilterCfg.options.valueWidth = 220.0f;
+		textureFilterCfg.options.onChange = [&](int selectedIndex) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(textureFilterLabels.size()))
+				return false;
+			config::TextureFiltering.set(selectedIndex);
+			return true;
+		};
+
+		RenderGeneralPopupSettingRow(
+			Tnop("TextureFilteringSetting"),
+			T("Override how textures are filtered (sampled)."),
+			textureFilterCfg,
+			T(
+				"Texture Filtering\n"
+				"Default: uses game behavior.\n"
+				"Force Nearest-Neighbor: crisp/pixelated look.\n"
+				"Force Linear: smoother/blurrier look.\n\n"
+				"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer."
+			));
+
+		// Show FPS Counter
+		RenderGeneralToggleSettingRow(
+			"ShowFPS",
+			ICON_FA_GAUGE_HIGH,
+			T("Show FPS Counter"),
+			T("Show FPS so you can tune for stable 30/60."),
+			static_cast<bool>(config::ShowFPS),
+			[](bool enabled) { config::ShowFPS.set(enabled); },
+			T(
+				"Show FPS Counter\n"
+				"Displays an on-screen frame rate counter.\n"
+				"Strongly recommended while tuning settings: aim for stable 30/60 FPS in real gameplay."
+			));
+	}
+
+#ifdef VIDEO_ROUTING
+	// Video Routing section (platform-specific)
+#ifdef __APPLE__
+	if (RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Syphon)"), ImGuiTreeNodeFlags_DefaultOpen))
+#elif defined(_WIN32)
+	if (((renderApi == 0) || (renderApi == 3))
+		? RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Spout)"), ImGuiTreeNodeFlags_DefaultOpen)
+		: RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing (Only available with OpenGL or DirectX 11)"), ImGuiTreeNodeFlags_DefaultOpen))
+#else
+	if (RenderCollapsingHeader("VideoRoutingSection", ICON_FA_SHARE_NODES, T("Video Routing"), ImGuiTreeNodeFlags_DefaultOpen))
+#endif
+	{
+#ifdef _WIN32
+		DisabledScope routingScope(!((renderApi == 0) || (renderApi == 3)));
+#endif
+
+		// Send Video to Another Program
+		RenderGeneralToggleSettingRow(
+			"VideoRouting",
+			ICON_FA_SHARE_NODES,
+			T("Send Video to Another Program"),
+			T("Stream GPU texture directly to OBS Studio"),
+			static_cast<bool>(config::VideoRouting),
+			[](bool enabled) { config::VideoRouting.set(enabled); },
+			T(
+				"Video Routing\n"
+				"Routes a GPU texture directly to OBS Studio (or a compatible capture tool), avoiding CPU-intensive Display/Window Capture.\n"
+				"This can improve capture quality and reduce overhead compared to capturing the emulator window."
+			));
+
+		{
+			DisabledScope scope(!config::VideoRouting);
+
+			// Scale Down Before Sending (Indented)
+			ImGui::Indent();
+			{
+				RenderGeneralToggleSettingRow(
+					"VideoRoutingScale",
+					ICON_FA_COMPRESS,
+					T("Scale Down Before Sending"),
+					T("Share smaller texture for better performance"),
+					static_cast<bool>(config::VideoRoutingScale),
+					[](bool enabled) { config::VideoRoutingScale.set(enabled); },
+					T(
+						"Scale Down Before Sending\n"
+						"Shares a smaller texture to reduce capture bandwidth and GPU/CPU overhead.\n"
+						"Can improve performance on some systems, but results vary."
+					));
+			}
+
+			ImGui::Unindent();
+
+
+			{
+				static int vres = config::VideoRoutingVRes;
+				if (vres != config::VideoRoutingVRes)
+					vres = config::VideoRoutingVRes;
+
+				SettingsUI::PopupSliderConfig vresCfg {};
+				vresCfg.label = T("Output Vertical Resolution");
+				vresCfg.icon = ICON_FA_SLIDERS;
+				vresCfg.popupID = Tnop("VideoRoutingVResPopup");
+				vresCfg.description = T("Set the vertical resolution used for the shared OBS texture output.");
+				vresCfg.currentValue = &vres;
+				vresCfg.minValue = 120;
+				vresCfg.maxValue = 2160;
+				vresCfg.defaultValue = 720;
+				vresCfg.format = "%d px";
+				vresCfg.valueWidth = 220.0f;
+				vresCfg.sliderWidth = 320.0f;
+				vresCfg.onValueChange = [&]() {
+					config::VideoRoutingVRes = vres;
+				};
+
+				SettingsUI::PopupConfig vresPopupCfg {};
+				vresPopupCfg.type = SettingsUI::PopupType::Slider;
+				vresPopupCfg.slider = vresCfg;
+
+				RenderGeneralPopupSettingRow(
+					Tnop("VideoRoutingVResSetting"),
+					T("Set vertical resolution for the shared output texture."),
+					vresPopupCfg,
+					T(
+						"Output Vertical Resolution\n"
+						"Sets the vertical resolution used for the shared texture routing output.\n"
+						"Lower values reduce bandwidth and overhead. Higher values improve capture clarity."
+					),
+					!config::VideoRoutingScale);
+
+				config::VideoRoutingVRes = vres;
+			}
+
+			const int outputWidth = config::VideoRoutingScale
+				? config::VideoRoutingVRes * settings.display.width / settings.display.height
+				: settings.display.width;
+			const int outputHeight = config::VideoRoutingScale
+				? config::VideoRoutingVRes
+				: settings.display.height;
+			const std::string outputSizeText = std::to_string(outputWidth) + " x " + std::to_string(outputHeight);
+
+			ImGui::PushID("VideoRoutingOutputTextureSize");
+				BeginTwoLineSettingRow(
+					"##row",
+					T(
+						"Output Texture Size\n"
+						"Shows the calculated size of the shared output texture based on your routing settings."
+					),
+					true);
+			const ImVec2 line1Start = BeginTwoLineSettingRowContent();
+
+			SettingIcon(ICON_FA_EXPAND, ImVec2(uiScaled(20), uiScaled(20)));
+			ImGui::SameLine(0, uiScaled(8));
+			ImGui::PushFont(largeFont);
+			ImGui::TextUnformatted(T("Output Texture Size"));
+			ImGui::PopFont();
+
+			const float valueWidth = uiScaled(220.0f);
+			ImGui::SameLine(RightColumnX(valueWidth));
+			const float valueStartX = ImGui::GetCursorPosX();
+			const float valueTextWidth = ImGui::CalcTextSize(outputSizeText.c_str()).x;
+			ImGui::SetCursorPosX(valueStartX + std::max(0.0f, (valueWidth - valueTextWidth) * 0.5f));
+			ImGui::PushFont(largeFont);
+			ImGui::TextUnformatted(outputSizeText.c_str());
+			ImGui::PopFont();
+
+			RenderTwoLineSettingDescription(line1Start, T("Calculated size of the shared output texture."));
+			ImGui::PopID();
+			ImGui::Spacing();
+		}
+	}
+#endif
+
+	// Update renderer type based on selections
+	switch (renderApi)
+	{
+	case 0:
+		config::RendererType = perPixel ? RenderType::OpenGL_OIT : RenderType::OpenGL;
+		break;
+	case 1:
+		config::RendererType = perPixel ? RenderType::Vulkan_OIT : RenderType::Vulkan;
+		break;
+	case 2:
+		config::RendererType = RenderType::DirectX9;
+		break;
+		case 3:
+			config::RendererType = perPixel ? RenderType::DirectX11_OIT : RenderType::DirectX11;
+			break;
 	}
 }
 
@@ -4517,7 +4504,7 @@ void renderControlsTab()
 					for (int j = -1; j < IM_ARRAYSIZE(kMaplePorts) - 1; j++)
 					{
 						bool is_selected = gamepad->maple_port() == j;
-						if (ImGui::Selectable(kMaplePorts[j + 1]), &is_selected)
+						if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
 						{
 							gamepad->set_maple_port(j);
 							g_mapleDevicesChangedInSettings = true;
@@ -4977,71 +4964,71 @@ void renderControlsTab()
 			crosshairPopupCfg.type = SettingsUI::PopupType::Slider;
 			crosshairPopupCfg.slider = crosshairConfig;
 
-				RenderGeneralPopupSettingRow(
-					Tnop("CrosshairSizeSetting"),
-					T("Crosshair size for light guns."),
-					crosshairPopupCfg,
-					T(
-						"Crosshair Size\n"
-						"Adjusts the size of the on-screen crosshair for light guns.\n"
-						"Only available when a light gun device is connected.\n\n"
-						"Choose a size that is visible without covering targets."
-					),
-					!is_there_any_xhair);
-		}
-
-		ImGui::Spacing();
-		if (RenderCollapsingHeader("VMUSettingsSection", ICON_FA_MICROCHIP, T("VMU Settings"), ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			RenderGeneralToggleSettingRow(
-				"PerGameVmu",
-				ICON_FA_MICROCHIP,
-				T("Per Game VMU A1"),
-				T("When enabled, each game has its own VMU on port 1 of controller A"),
-				static_cast<bool>(config::PerGameVmu),
-				[](bool enabled) { config::PerGameVmu.set(enabled); },
+			RenderGeneralPopupSettingRow(
+				Tnop("CrosshairSizeSetting"),
+				T("Crosshair size for light guns."),
+				crosshairPopupCfg,
 				T(
-					"Per Game VMU\n"
-					"When enabled, each game has its own VMU on port 1 of controller A.\n"
-					"Useful to prevent save-file conflicts between games."
-				));
+					"Crosshair Size\n"
+					"Adjusts the size of the on-screen crosshair for light guns.\n"
+					"Only available when a light gun device is connected.\n\n"
+					"Choose a size that is visible without covering targets."
+				),
+				!is_there_any_xhair);
+		}
+	}
+
+	ImGui::Spacing();
+	if (RenderCollapsingHeader("VMUSettingsSection", ICON_FA_MICROCHIP, T("VMU Settings"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		RenderGeneralToggleSettingRow(
+			"PerGameVmu",
+			ICON_FA_MICROCHIP,
+			T("Per Game VMU A1"),
+			T("When enabled, each game has its own VMU on port 1 of controller A"),
+			static_cast<bool>(config::PerGameVmu),
+			[](bool enabled) { config::PerGameVmu.set(enabled); },
+			T(
+				"Per Game VMU\n"
+				"When enabled, each game has its own VMU on port 1 of controller A.\n"
+				"Useful to prevent save-file conflicts between games."
+			));
 
 #ifdef USE_DREAMLINK_DEVICES
-			RenderGeneralToggleSettingRow(
-				"UsePhysicalVmuMemory",
-				ICON_FA_MEMORY,
-				T("Use External VMU Storage"),
-				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-					"VMUs may appear to reconnect after loading state."),
-				static_cast<bool>(config::UsePhysicalVmuMemory),
-				[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
-				T("Use External VMU Storage\n"
-				"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
-					"VMUs may appear to reconnect after loading state."),
-				game_started);
+		RenderGeneralToggleSettingRow(
+			"UsePhysicalVmuMemory",
+			ICON_FA_MEMORY,
+			T("Use External VMU Storage"),
+			T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+				"VMUs may appear to reconnect after loading state."),
+			static_cast<bool>(config::UsePhysicalVmuMemory),
+			[](bool enabled) { config::UsePhysicalVmuMemory.set(enabled); },
+			T("Use External VMU Storage\n"
+			"Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+				"VMUs may appear to reconnect after loading state."),
+			game_started);
 #endif
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
-			RenderGeneralToggleSettingRow(
-				"DreamPotatoIntegratedMode",
-				ICON_FA_PLUG,
-				T("DreamPotato Integrated Mode"),
-				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
-				static_cast<bool>(config::DreamPotatoIntegratedMode),
-				[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
-				T("DreamPotato Integrated Mode\n"
-					"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
-					"Applies to all slots which use a DreamPotato device.\n"
-					"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
-				game_started);
+		RenderGeneralToggleSettingRow(
+			"DreamPotatoIntegratedMode",
+			ICON_FA_PLUG,
+			T("DreamPotato Integrated Mode"),
+			T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."),
+			static_cast<bool>(config::DreamPotatoIntegratedMode),
+			[](bool enabled) { config::DreamPotatoIntegratedMode.set(enabled); },
+			T("DreamPotato Integrated Mode\n"
+				"Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot.\n"
+				"Applies to all slots which use a DreamPotato device.\n"
+				"When this is disabled, DreamPotato devices will connect to a manually-launched standalone instance instead."),
+			game_started);
 
-			if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
-			{
-				ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
-				ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
-			}
-#endif
+		if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
+		{
+			ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+			ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
 		}
+#endif
 	}
 }
 
