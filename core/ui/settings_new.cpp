@@ -4684,28 +4684,6 @@ void renderControlsTab()
 				);
 			}
 
-			// DreamLink device names for main device
-			const char* dream_link_names[MAPLE_PORTS]{};
-			const char* dream_link_ext_labels[MAPLE_PORTS]{};
-			for (int bus = 0; bus < MAPLE_PORTS; bus++)
-			{
-				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
-				if (link && (link->dreamlink->getIssueDescription() == nullptr))
-				{
-					dream_link_names[bus] = link->dreamlink->getName();
-					dream_link_ext_labels[bus] = link->dreamlink->getExtensionDeviceLabel();
-					mainComboWidth = std::max(
-						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
-						mainComboWidth
-					);
-				}
-				else
-				{
-					dream_link_names[bus] = "";
-					dream_link_ext_labels[bus] = "";
-				}
-			}
-
 			// Externally managed expansion device types
 			static constexpr int MDT_DreamPotato = MDT_Count;
 			static constexpr int MDT_DreamLink = MDT_Count + 1;
@@ -4723,6 +4701,42 @@ void renderControlsTab()
 				{MDT_Microphone, T("Microphone")},
 				{MDT_DreamPotato, T("DreamPotato")},
 			};
+
+			float expComboWidth = comboWidthPadding;
+			for (const auto& devIter : static_maple_expansion_device_types)
+			{
+				expComboWidth = std::max(
+					ImGui::CalcTextSize(devIter.name).x + comboWidthPadding,
+					expComboWidth
+				);
+			}
+
+			// DreamLink device names for main device
+			const char* dream_link_names[MAPLE_PORTS]{};
+			const char* dream_link_ext_labels[MAPLE_PORTS]{};
+			for (int bus = 0; bus < MAPLE_PORTS; bus++)
+			{
+				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
+				if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				{
+					dream_link_names[bus] = link->dreamlink->getName();
+					mainComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
+						mainComboWidth
+					);
+
+					dream_link_ext_labels[bus] = link->dreamlink->getExtensionDeviceLabel();
+					expComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_ext_labels[bus]).x + comboWidthPadding,
+						expComboWidth
+					);
+				}
+				else
+				{
+					dream_link_names[bus] = "";
+					dream_link_ext_labels[bus] = "";
+				}
+			}
 
 			// Settings 3-22: Dreamcast Device Ports (4 ports x device + expansion)
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
@@ -4782,12 +4796,6 @@ void renderControlsTab()
 				else
 				{
 					port_count = maple_getPortCount(config::MapleMainDevices[bus]);
-				}
-
-				float expComboWidth = comboWidthPadding;
-				for (const auto& devIter : maple_expansion_device_types)
-				{
-					expComboWidth = std::max(ImGui::CalcTextSize(devIter.name).x + comboWidthPadding, expComboWidth);
 				}
 
 				for (int port = 0; port < port_count; port++)
