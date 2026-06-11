@@ -115,6 +115,10 @@ struct DppVirtualVmu : public maple_sega_vmu
 		loaded_us_since_write = std::numeric_limits<u64>::max();
 		fullSaveNeeded = false;
 	}
+
+	//! MapleLink relay is disabled for this virtual VMU
+	inline void relayMapleLink() override
+	{}
 };
 
 static std::string getBusDescription(int software_bus, int hardware_bus) {
