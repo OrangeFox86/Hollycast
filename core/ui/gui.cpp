@@ -1837,6 +1837,21 @@ void gui_refresh_custom_boxart(bool force)
 	boxart.refreshCustomBoxartIndex(force);
 }
 
+void gui_refresh_boxart_cache()
+{
+	boxart.refreshCache();
+	scanner.fetch_game_list_sync();
+	std::vector<GameMedia> games;
+	{
+		std::lock_guard<std::mutex> guard(scanner.get_mutex());
+		games = scanner.get_game_list();
+	}
+	for (const GameMedia& game : games)
+		if (!game.device)
+			boxart.queueBoxart(game);
+	boxart.startFetch();
+}
+
 void gui_runOnUiThread(std::function<void()> function) {
 	uiThreadRunner.runOnThread(function);
 }

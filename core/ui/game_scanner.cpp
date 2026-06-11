@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -170,4 +171,13 @@ void GameScanner::fetch_game_list()
 				scan_done = true;
 			running = false;
 		});
+}
+
+void GameScanner::fetch_game_list_sync()
+{
+	refresh();
+	fetch_game_list();
+	LockGuard _(threadMutex);
+	if (scan_thread && scan_thread->joinable())
+		scan_thread->join();
 }

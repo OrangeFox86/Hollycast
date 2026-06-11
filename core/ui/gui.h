@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -54,6 +55,7 @@ void gui_saveState(bool stopRestart = true, bool inRam = false);
 void gui_cycleSaveStateSlot(int step);
 void gui_togglePause();
 std::string gui_getCurGameBoxartUrl();
+void gui_refresh_boxart_cache();
 void gui_refresh_custom_boxart(bool force = true);
 void gui_takeScreenshot();
 void gui_runOnUiThread(std::function<void()> function);

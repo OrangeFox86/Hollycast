@@ -1,5 +1,6 @@
 /*
 	Copyright 2022 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -26,6 +27,7 @@
 #include "reios/reios.h"
 #include "pvrparser.h"
 #include <stb_image_write.h>
+#include <mutex>
 #include <random>
 
 json GameBoxart::to_json(const std::string& baseArtPath) const
@@ -111,7 +113,9 @@ std::string Scraper::makeUniqueFilename(const std::string& url)
 	static std::random_device randomDev;
 	static std::mt19937 mt(randomDev());
 	static std::uniform_int_distribution<int> dist(1, 1000000000);
+	static std::mutex filenameMutex;
 
+	std::lock_guard<std::mutex> guard(filenameMutex);
 	std::string extension = get_file_extension(url);
 	std::string path;
 	do {
@@ -130,9 +134,10 @@ void OfflineScraper::scrape(GameBoxart& item)
 	{
 		if (item.gamePath.empty())
 		{
-			// Dreamcast BIOS
+			WARN_LOG(COMMON, "Skipping physical boxart for %s: missing game path", item.fileName.c_str());
 			item.uniqueId.clear();
-			item.searchName.clear();
+			if (item.searchName.empty())
+				item.searchName = item.name;
 			return;
 		}
 		Disc *disc = nullptr;
@@ -149,10 +154,10 @@ void OfflineScraper::scrape(GameBoxart& item)
 		}
 		if (disc == nullptr)
 		{
-			// No need to retry if the disk is invalid/corrupted
-			item.scraped = true;
+			// Physical media failed, but online boxart may still be available.
 			item.uniqueId.clear();
-			item.searchName.clear();
+			if (item.searchName.empty())
+				item.searchName = item.name;
 			return;
 		}
 
@@ -165,9 +170,9 @@ void OfflineScraper::scrape(GameBoxart& item)
 				|| memcmp(diskId.maker_id, "SEGA ENTERPRISES", sizeof(diskId.maker_id)))
 		{
 			WARN_LOG(COMMON, "Invalid IP META for disk %s", item.gamePath.c_str());
-			item.scraped = true;
 			item.uniqueId.clear();
-			item.searchName.clear();
+			if (item.searchName.empty())
+				item.searchName = item.name;
 			delete disc;
 			return;
 		}
@@ -205,7 +210,19 @@ void OfflineScraper::scrape(GameBoxart& item)
 						};
 						stbi_write_png_to_func(savefunc, (void *)item.boxartPath.c_str(), w, h, 4, out.data(), 0);
 					}
+					else
+					{
+						WARN_LOG(COMMON, "Physical boxart PVR parse failed for %s", item.gamePath.c_str());
+					}
 				}
+				else
+				{
+					WARN_LOG(COMMON, "Physical boxart file 0GDTEX.PVR not found for %s", item.gamePath.c_str());
+				}
+			}
+			else
+			{
+				WARN_LOG(COMMON, "Physical boxart ISO root not found for %s", item.gamePath.c_str());
 			}
 		}
 		delete disc;

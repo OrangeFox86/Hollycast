@@ -2688,6 +2688,29 @@ void renderGeneralTab()
 		if (refreshPressed)
 			gui_refresh_custom_boxart(true);
 
+		ImGui::PushID("BoxartDatabaseReviewRow");
+		const bool refreshCacheRowActivated = BeginTwoLineSettingRow(
+			"##row",
+			T(
+				"Boxart Database Review\n"
+				"Checks the boxart database and artwork files without deleting your artwork."
+			)
+		);
+		const ImVec2 refreshCacheLine1Start = BeginTwoLineSettingRowContent();
+
+		SettingIcon(ICON_FA_ARROWS_ROTATE, ImVec2(uiScaled(20), uiScaled(20)));
+		ImGui::SameLine(0, uiScaled(8));
+		ImGui::PushFont(largeFont);
+		ImGui::TextUnformatted(T("Boxart Database Review"));
+		ImGui::PopFont();
+
+		RenderTwoLineSettingDescription(refreshCacheLine1Start, T("Verifies every DB entry has a usable artwork file, then rebuilds from existing JSON and image files."));
+		EndTwoLineSettingRow();
+		ImGui::PopID();
+
+		if (refreshCacheRowActivated)
+			gui_refresh_boxart_cache();
+
 		RenderGeneralToggleSettingRow(
 			"BoxartDisplayMode",
 			ICON_FA_IMAGE,
