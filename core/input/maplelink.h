@@ -26,6 +26,7 @@
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <chrono>
 
 //! A MapleLink puts bus/port context onto a DreamLink and allows for creation of a maple_device
 class MapleLink
@@ -146,6 +147,12 @@ struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 	//! @param[in] link The link to set
 	explicit inline MapleLinkDeviceBase(const MapleLink& link) : link(link) {}
 
+	//! @return true iff this device is currently present
+	bool linkStatus() override
+	{
+		return (MapleDeviceBase::linkStatus() && link.isConnected() && (link.getFunctionCodesMask() != 0));
+	}
+
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice, defined when the MapleDeviceBase is a maple_sega_vmu
 	//! @param deser The deserializer to pull data from
@@ -212,6 +219,18 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	using maple_sega_vmu::serialize;
 	//! Performs deserialization and writes deserialized LCD
 	void deserialize(Deserializer& deser) override;
+
+	//! @return true iff this device is currently present
+	bool linkStatus() override
+	{
+		if (!MapleLinkDeviceBase<maple_sega_vmu>::linkStatus())
+			return false;
+
+		if (link.storageEnabled())
+			return link.isConnected();
+		else
+			return true; // local storage means this must always remain "linked"
+	}
 
 	//! Send a read request to the external VMU memory
 	//! @param[in] dest Destination address

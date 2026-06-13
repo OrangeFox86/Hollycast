@@ -4725,7 +4725,7 @@ void renderControlsTab()
 						mainComboWidth
 					);
 
-					dream_link_ext_labels[bus] = link->dreamlink->getExtensionDeviceLabel();
+					dream_link_ext_labels[bus] = link->dreamlink->getExpansionDeviceLabel();
 					expComboWidth = std::max(
 						ImGui::CalcTextSize(dream_link_ext_labels[bus]).x + comboWidthPadding,
 						expComboWidth

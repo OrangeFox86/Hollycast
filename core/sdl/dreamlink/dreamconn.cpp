@@ -97,8 +97,8 @@ public:
 		return true;
 	}
 
-    bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override
-    {
+	bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) override
+	{
 		if (!send(txMsg))
 			return false;
 
@@ -159,6 +159,9 @@ public:
 		if (!sendReceive(msg, rxMsg))
 			return;
 		iostream.expires_from_now(std::chrono::duration<u32>::max());	// don't use a 64-bit based duration to avoid overflow
+
+		expansionDevs[0] = rxMsg.originAP & 1 ? MDT_SegaVMU : MDT_None;
+		expansionDevs[1] = rxMsg.originAP & 2 ? MDT_PurupuruPack : MDT_None;
 
 		NOTICE_LOG(INPUT, "Connected to DreamConn[%d]: Slot 1: %s, Slot 2: %s", bus,
 				deviceDescription(expansionDevs[0]), deviceDescription(expansionDevs[1]));
