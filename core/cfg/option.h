@@ -366,6 +366,7 @@ extern Option<int> Language;	// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -
 extern OptionString UILanguage;
 extern Option<bool> AutoLoadState;
 extern Option<bool> AutoSaveState;
+extern Option<bool> SaveProtection;
 extern Option<int, false> SavestateSlot;
 extern Option<bool> ForceFreePlay;
 extern Option<bool, false> FetchBoxart;

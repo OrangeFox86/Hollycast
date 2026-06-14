@@ -47,7 +47,7 @@ void renderSystemMenu();
 void renderToolsMenu();
 
 // Settings Menu - configuration
-// Items: Graphics, Audio, Input, About
+// Items: General, Video, Audio, Controls, Network, Advanced
 void renderSettingsMenu();
 
 // Help Menu - documentation and support

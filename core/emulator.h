@@ -124,7 +124,7 @@ public:
 	 * Reset the emulator in order to load another game. After calling this method, only loadGame() and term() can be called.
 	 * Does nothing if no game is loaded.
 	 */
-	void unloadGame();
+	void unloadGame(bool allowAutoSave = true);
 	/**
 	 * Run the emulator in the calling thread until a frame is rendered. A game must be loaded and start() must be called
 	 * prior to calling this method.

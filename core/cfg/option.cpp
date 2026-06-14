@@ -39,6 +39,7 @@ Option<int> Language("Dreamcast.Language", 1);		// English
 OptionString UILanguage("UILanguage", "");
 Option<bool> AutoLoadState("Dreamcast.AutoLoadState");
 Option<bool> AutoSaveState("Dreamcast.AutoSaveState");
+Option<bool> SaveProtection("Dreamcast.SaveProtection", true);
 Option<int, false> SavestateSlot("Dreamcast.SavestateSlot");
 Option<bool> ForceFreePlay("ForceFreePlay", true);
 Option<bool, false> FetchBoxart("FetchBoxart", true);

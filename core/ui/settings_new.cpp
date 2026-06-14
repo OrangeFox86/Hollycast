@@ -1316,8 +1316,13 @@ static void displayMappedControl(const std::shared_ptr<GamepadDevice>& gamepad, 
 
 	if (combo.inputs.size() > 1)
 	{
-		if (ImGui::Checkbox(T("Sequential"), &(combo.sequential)))
-			input_mapping->set_button(g_gamepad_port_for_mapping, key, combo);
+		{
+			ImguiStyleVar checkboxBorder(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImguiStyleColor checkboxBorderColor(ImGuiCol_Border, ImGui::GetStyleColorVec4(ImGuiCol_Text));
+			ImguiStyleColor checkboxCheckColor(ImGuiCol_CheckMark, ImGui::GetStyleColorVec4(ImGuiCol_Text));
+			if (ImGui::Checkbox(T("Sequential"), &(combo.sequential)))
+				input_mapping->set_button(g_gamepad_port_for_mapping, key, combo);
+		}
 		ImGui::SameLine();
 		ShowFooterHelpMarker(T(
 			"When checked, this combo will only activate when all keys are pressed in the given sequence.\n"
@@ -2753,7 +2758,7 @@ void renderGeneralTab()
 			"AutoLoadState",
 			ICON_FA_FOLDER_OPEN,
 			T("Auto-Load on Start"),
-			T("Enables Auto-Load on game boot, loading the hidden Auto-Save slot."),
+			T("Automatically loads the hidden Auto-Save slot on game boot."),
 			static_cast<bool>(config::AutoLoadState),
 			[](bool enabled) { config::AutoLoadState = enabled; },
 			T(
@@ -2767,13 +2772,26 @@ void renderGeneralTab()
 			"AutoSaveState",
 			ICON_FA_FLOPPY_DISK,
 			T("Auto-Save on Exit"),
-			T("Enables Auto-Save on game exit, prompting if you wish to save the game to the hidden Auto-Save slot."),
+			T("Automatically saves to the hidden Auto-Save slot on game exit."),
 			static_cast<bool>(config::AutoSaveState),
 			[](bool enabled) { config::AutoSaveState = enabled; },
 			T(
 				"Auto-Save on Exit\n"
-				"When enabled, when leaving a game, you will be asked if you want to save, and this "
-				"populates your hidden Auto-Save slot for your Auto-Load."
+				"When enabled, leaving a game saves to the hidden Auto-Save slot without asking first."
+			)
+		);
+
+		RenderGeneralToggleSettingRow(
+			"SaveProtection",
+			ICON_FA_SHIELD_HALVED,
+			T("Save Protection"),
+			T("CAREFUL, TURNING THIS OFF CAN CAUSE ACCIDENTAL PROGRESS LOSS."),
+			static_cast<bool>(config::SaveProtection),
+			[](bool enabled) { config::SaveProtection = enabled; },
+			T(
+				"Save Protection\n"
+				"This is the assurance that you will never be able to leave a game without being prompted "
+				"to save right then, ensuring you do not accidentally leave without saving your data."
 			)
 		);
 
@@ -4267,7 +4285,10 @@ void renderAudioTab()
 			config::AudioVolume.set(volumeTemp);
 			config::AudioVolume.calcDbPower();
 		};
-		volumeConfig.onValueChange = nullptr;
+		volumeConfig.onValueChange = []() {
+			config::AudioVolume.set(volumeTemp);
+			config::AudioVolume.calcDbPower();
+		};
 		volumeConfig.iconSize = 20.0f;
 		volumeConfig.iconSpacing = 8.0f;
 		volumeConfig.valueWidth = 220.0f;

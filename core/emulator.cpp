@@ -686,8 +686,6 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 #ifndef LIBRETRO
 			if (config::GGPOEnable)
 				dc_loadstate(-1);
-			else if (config::AutoLoadState && !naomiNetworkSupported() && !settings.naomi.multiboard)
-				dc_loadstate(config::SavestateSlot);
 #endif
 		}
 
@@ -747,7 +745,7 @@ void Emulator::runInternal()
 	}
 }
 
-void Emulator::unloadGame()
+void Emulator::unloadGame(bool allowAutoSave)
 {
 	try {
 		stop();
@@ -755,7 +753,7 @@ void Emulator::unloadGame()
 	if (state == Loaded || state == Error)
 	{
 #ifndef LIBRETRO
-		if (state == Loaded && config::AutoSaveState && !settings.content.path.empty()
+		if (allowAutoSave && state == Loaded && config::AutoSaveState && !settings.content.path.empty()
 				&& !settings.naomi.multiboard && !config::GGPOEnable && !naomiNetworkSupported())
 			gui_saveState(false);
 #endif

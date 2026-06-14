@@ -138,10 +138,10 @@ void renderFileMenu()
 
 		ImGui::Separator();
 
-		// Exit Game
-		if (ImGui::MenuItem(T("Exit Game"), nullptr, false, ::game_started))
+		// Exit Emulator
+		if (ImGui::MenuItem(T("Exit Emulator"), nullptr, false, true))
 		{
-			showExitSaveDialog = true; // Trigger dialog instead of immediate exit
+			gui_request_exit_emulator();
 		}
 
 		ImGui::EndMenu();
@@ -277,8 +277,8 @@ void renderSettingsMenu()
 			gui_setState(GuiState::Settings);
 		}
 
-		// Input/Controls
-		if (ImGui::MenuItem(T("Input"), nullptr, false, true))
+		// Controls
+		if (ImGui::MenuItem(T("Controls"), nullptr, false, true))
 		{
 			gui_prepare_settings_tab(GuiSettingsTab::Controls);
 			gui_setState(GuiState::Settings);
@@ -295,24 +295,6 @@ void renderSettingsMenu()
 		if (ImGui::MenuItem(T("Advanced"), nullptr, false, true))
 		{
 			gui_prepare_settings_tab(GuiSettingsTab::Advanced);
-			gui_setState(GuiState::Settings);
-		}
-
-		ImGui::Separator();
-
-		// Open full settings (defaults to current tab state; reset to general here)
-		if (ImGui::MenuItem(T("All Settings"), nullptr, false, true))
-		{
-			gui_reset_settings_view();
-			gui_setState(GuiState::Settings);
-		}
-
-		ImGui::Separator();
-
-		// About tab
-		if (ImGui::MenuItem(T("About"), nullptr, false, true))
-		{
-			gui_prepare_settings_tab(GuiSettingsTab::About);
 			gui_setState(GuiState::Settings);
 		}
 

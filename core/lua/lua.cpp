@@ -141,6 +141,7 @@ CONFIG_ACCESSORS(Broadcast);
 CONFIG_ACCESSORS(Language);
 CONFIG_ACCESSORS(AutoLoadState);
 CONFIG_ACCESSORS(AutoSaveState);
+CONFIG_ACCESSORS(SaveProtection);
 CONFIG_ACCESSORS(SavestateSlot);
 // TODO Option<std::vector<std::string>, false> ContentPath;
 CONFIG_ACCESSORS(HideLegacyNaomiRoms)
@@ -469,6 +470,7 @@ static void luaRegister(lua_State *L)
 					CONFIG_PROPERTY(Language, int)
 					CONFIG_PROPERTY(AutoLoadState, bool)
 					CONFIG_PROPERTY(AutoSaveState, bool)
+					CONFIG_PROPERTY(SaveProtection, bool)
 					CONFIG_PROPERTY(SavestateSlot, int)
 					CONFIG_PROPERTY(HideLegacyNaomiRoms, bool)
 				.endNamespace()
