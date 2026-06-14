@@ -570,7 +570,9 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 
 static void EndTwoLineSettingRow()
 {
-	ImGui::SetCursorScreenPos(ImVec2(g_twoLineRowStartScreenX, g_twoLineRowEndScreenY + TwoLineSettingRowGap()));
+	ImGui::SetCursorScreenPos(ImVec2(g_twoLineRowStartScreenX, g_twoLineRowEndScreenY));
+	ImguiStyleVar rowGapSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+	ImGui::Dummy(ImVec2(0.0f, TwoLineSettingRowGap()));
 }
 
 static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char* description)
