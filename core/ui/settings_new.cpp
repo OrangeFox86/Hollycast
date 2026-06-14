@@ -2011,7 +2011,9 @@ static void renderContentArea()
 	if (!IsAnySettingsPopupOpen()
 		&& ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
 		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft))
+	{
 		g_focusSettingsNavigation = true;
+	}
 
 	ImGui::EndChild();
 	ImGui::Dummy(ImVec2(0.0f, footerGap));
