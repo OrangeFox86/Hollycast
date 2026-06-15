@@ -265,7 +265,9 @@ static void RenderScaledIconInRect(const char* icon, const ImVec2& min, const Im
 
 static bool SettingsIconButton(const char* id, const char* icon, const ImVec2& size)
 {
+	ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
 	const bool pressed = ImGui::Button(id, size);
+	ImGui::PopItemFlag();
 	RenderScaledIconInRect(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
 	return pressed;
 }
@@ -544,6 +546,8 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 		rowFlags |= ImGuiSelectableFlags_Disabled;
 
 	ImguiStyleVar rowRounding(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
+	const ImVec2 itemSpacing = ImGui::GetStyle().ItemSpacing;
+	ImguiStyleVar rowItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing.x, 0.0f));
 	const bool clicked = ImGui::Selectable(rowId, false, rowFlags, ImVec2(0.0f, TwoLineSettingRowHeight()));
 	g_twoLineRowStartScreenX = ImGui::GetItemRectMin().x;
 	g_twoLineRowEndScreenY = ImGui::GetItemRectMax().y;
