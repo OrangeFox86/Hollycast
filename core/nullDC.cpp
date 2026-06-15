@@ -417,4 +417,9 @@ void dc_getStateScreenshot(int index, std::vector<u8>& pngData)
 	delete f;
 }
 
+int dc_getAutoSaveSlot()
+{
+	return NUM_SAVE_SLOTS;
+}
+
 #endif

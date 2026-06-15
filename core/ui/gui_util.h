@@ -267,6 +267,7 @@ private:
 class ImguiStateTexture : public ImguiTexture
 {
 public:
+	ImguiStateTexture(int slot = config::SavestateSlot) : slot(slot) {}
 	ImTextureID getId() override;
 
 	bool exists();
@@ -279,6 +280,7 @@ private:
 		int width;
 		int height;
 	};
+	int slot;
 	static std::future<LoadedPic> asyncLoad;
 };
 

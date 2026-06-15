@@ -101,7 +101,6 @@ static Boxart boxart;
 static Chat chat;
 static std::recursive_mutex guiMutex;
 using LockGuard = std::lock_guard<std::recursive_mutex>;
-static constexpr int NUM_SAVE_SLOTS = 10;
 
 static Toast toast;
 static ScheduledThreadRunner<std::chrono::steady_clock::time_point> uiThreadRunner;
@@ -516,6 +515,7 @@ void gui_stop_game(const std::string& message, bool allowAutoSave)
 }
 
 static void savestate();
+static void savestate(int slot);
 
 static void save_auto_state_before_exit()
 {
@@ -525,7 +525,8 @@ static void save_auto_state_before_exit()
 	try {
 		if (gui_state == GuiState::Closed)
 			emu.stop();
-		savestate();
+		savestate(dc_getAutoSaveSlot());
+		dc_skipAutoSaveOnNextUnload();
 	} catch (const FlycastException& e) {
 		WARN_LOG(COMMON, "save_auto_state_before_exit: %s", e.what());
 	}
@@ -583,8 +584,9 @@ void gui_request_exit_emulator()
 
 void gui_request_initial_auto_load()
 {
+	const int autoSaveSlot = dc_getAutoSaveSlot();
 	if (!dc_savestateAllowed() || settings.raHardcoreMode
-			|| dc_getStateCreationDate(config::SavestateSlot) == 0)
+			|| dc_getStateCreationDate(autoSaveSlot) == 0)
 	{
 		gui_setState(GuiState::Closed);
 		return;
@@ -592,7 +594,7 @@ void gui_request_initial_auto_load()
 
 	if (config::AutoLoadState)
 	{
-		dc_loadstate(config::SavestateSlot);
+		dc_loadstate(autoSaveSlot);
 		gui_setState(GuiState::Closed);
 		return;
 	}
@@ -619,14 +621,19 @@ static void getScreenshot(std::vector<u8>& data, int width = 0)
 	stbi_write_png_to_func(appendVectorData, &data, width, height, 3, &rawData[0], 0);
 }
 
-static void savestate()
+static void savestate(int slot)
 {
 	// Potential optimization: move screenshot/state compression/write off the UI thread.
 	std::vector<u8> pngData;
 	getScreenshot(pngData, 640);
-	dc_savestate(config::SavestateSlot, pngData.empty() ? nullptr : &pngData[0], pngData.size());
-	ImguiStateTexture savestatePic;
+	dc_savestate(slot, pngData.empty() ? nullptr : &pngData[0], pngData.size());
+	ImguiStateTexture savestatePic(slot);
 	savestatePic.invalidate();
+}
+
+static void savestate()
+{
+	savestate(config::SavestateSlot);
 }
 
 static void render_exit_save_dialog()
@@ -754,12 +761,13 @@ static void render_auto_load_dialog()
 	{
 		ImGui::TextUnformatted(T("A hidden Auto-Save was found for this game."));
 		ImGui::TextUnformatted(T("Do you want to load it?"));
-		const time_t savestateDate = dc_getStateCreationDate(config::SavestateSlot);
+		const int autoSaveSlot = dc_getAutoSaveSlot();
+		const time_t savestateDate = dc_getStateCreationDate(autoSaveSlot);
 		if (savestateDate != 0)
 			ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.75f, 1.f), "%s", timeToShortDateTimeString(savestateDate).c_str());
 
 		ImGui::Spacing();
-		ImguiStateTexture savestatePic;
+		ImguiStateTexture savestatePic(autoSaveSlot);
 		savestatePic.draw(ScaledVec2(320.f, 0.f));
 		ImGui::Spacing();
 
@@ -772,7 +780,7 @@ static void render_auto_load_dialog()
 
 		if (ImGui::Button(yesButton, ImVec2(buttonWidth, 0)))
 		{
-			dc_loadstate(config::SavestateSlot);
+			dc_loadstate(autoSaveSlot);
 			ImGui::CloseCurrentPopup();
 			showAutoLoadDialog = false;
 			gui_setState(GuiState::Closed);
@@ -1880,7 +1888,7 @@ void gui_error(const std::string& what) {
 	error_msg = what;
 }
 
-void gui_loadState(bool inRam)
+void gui_loadState(int slot)
 {
 	const LockGuard lock(guiMutex);
 
@@ -1894,10 +1902,7 @@ void gui_loadState(bool inRam)
 			}
 
 			emu.stop();
-			if (inRam)
-				dc_loadstate(-2);  // special slot used for inRam states
-			else
-				dc_loadstate(config::SavestateSlot);
+			dc_loadstate(slot);
 			emu.start();
 		} catch (const FlycastException& e) {
 			gui_stop_game(e.what());
@@ -1912,7 +1917,12 @@ void gui_loadState(bool inRam)
 	}
 }
 
-void gui_saveState(bool stopRestart, bool inRam)
+void gui_loadState(bool inRam)
+{
+	gui_loadState(inRam ? -2 : config::SavestateSlot);
+}
+
+void gui_saveState(int slot, bool stopRestart)
 {
 	const LockGuard lock(guiMutex);
 	if ((gui_state == GuiState::Closed || !stopRestart) && dc_savestateAllowed())
@@ -1921,10 +1931,7 @@ void gui_saveState(bool stopRestart, bool inRam)
 			if (stopRestart)
 				emu.stop();
 
-			if (inRam)
-				dc_savestate(-2);
-			else
-				savestate();
+			savestate(slot);
 
 			if (stopRestart)
 				emu.start();
@@ -1935,6 +1942,31 @@ void gui_saveState(bool stopRestart, bool inRam)
 				WARN_LOG(COMMON, "gui_saveState: %s", e.what());
 		}
 	}
+}
+
+void gui_saveState(bool stopRestart, bool inRam)
+{
+	if (inRam)
+	{
+		const LockGuard lock(guiMutex);
+		if ((gui_state == GuiState::Closed || !stopRestart) && dc_savestateAllowed())
+		{
+			try {
+				if (stopRestart)
+					emu.stop();
+				dc_savestate(-2);
+				if (stopRestart)
+					emu.start();
+			} catch (const FlycastException& e) {
+				if (stopRestart)
+					gui_stop_game(e.what());
+				else
+					WARN_LOG(COMMON, "gui_saveState: %s", e.what());
+			}
+		}
+		return;
+	}
+	gui_saveState(config::SavestateSlot, stopRestart);
 }
 
 void gui_cycleSaveStateSlot(int step)

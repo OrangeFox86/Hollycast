@@ -723,13 +723,14 @@ std::future<ImguiStateTexture::LoadedPic> ImguiStateTexture::asyncLoad;
 
 bool ImguiStateTexture::exists()
 {
-	std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+	std::string path = hostfs::getSavestatePath(slot, false);
 	return hostfs::storage().exists(path);
 }
 
 ImTextureID ImguiStateTexture::getId()
 {
-	std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+	const int stateSlot = slot;
+	std::string path = hostfs::getSavestatePath(stateSlot, false);
 	ImTextureID texid = imguiDriver->getTexture(path);
 	if (texid != ImTextureID())
 		return texid;
@@ -749,11 +750,11 @@ ImTextureID ImguiStateTexture::getId()
 		}
 		return texid;
 	}
-	asyncLoad = std::async(std::launch::async, []() {
+	asyncLoad = std::async(std::launch::async, [stateSlot]() {
 		LoadedPic loadedPic{};
 		// load savestate info
 		std::vector<u8> pngData;
-		dc_getStateScreenshot(config::SavestateSlot, pngData);
+		dc_getStateScreenshot(stateSlot, pngData);
 		if (pngData.empty())
 			return loadedPic;
 
@@ -770,7 +771,7 @@ void ImguiStateTexture::invalidate()
 {
 	if (imguiDriver)
 	{
-		std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+		std::string path = hostfs::getSavestatePath(slot, false);
 		imguiDriver->deleteTexture(path);
 	}
 }
