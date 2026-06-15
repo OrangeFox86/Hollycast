@@ -1040,7 +1040,7 @@ void SectionHeaderWithIcon(const char* icon, const char* text)
 
 	// Icon + text with highlighted color
 	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-	ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
+	ImGui::PushFont(settingsIconFont);
 	ImGui::Text("%s", icon);
 	ImGui::PopFont();
 	ImGui::SameLine();
