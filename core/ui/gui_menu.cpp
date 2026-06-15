@@ -62,7 +62,7 @@ void renderMainMenuBar()
 	// - Hover effects (ImGuiCol_HeaderHovered) and dropdown menus
 	// - Cross-platform native appearance
 	// Theme colors are already set by applyCurrentTheme().
-	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+	ImGui::PushFont(settingsTitleFont);
 	if (ImGui::BeginMainMenuBar())
 	{
 		renderFileMenu();
