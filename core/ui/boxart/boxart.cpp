@@ -26,6 +26,7 @@
 #include "arcade_scraper.h"
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <unordered_set>
 
 namespace {
@@ -246,10 +247,6 @@ GameBoxart Boxart::getBoxartAndQueue(const GameMedia& media, bool startFetch)
 	if (sourceMode == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly))
 		return getPhysicalBoxart(media);
 
-	std::string customPath;
-	if (sourceMode == static_cast<int>(BoxartSourceMode::CustomThenScraped))
-		customPath = getCustomBoxartPath(media);
-
 	GameBoxart boxart;
 	{
 		std::lock_guard<std::mutex> guard(mutex);
@@ -292,6 +289,7 @@ GameBoxart Boxart::getBoxartAndQueue(const GameMedia& media, bool startFetch)
 
 	if (sourceMode == static_cast<int>(BoxartSourceMode::CustomThenScraped))
 	{
+		std::string customPath = getCustomBoxartPath(media);
 		if (!customPath.empty())
 		{
 			boxart.boxartPath = customPath;
@@ -673,23 +671,12 @@ void Boxart::recoverDatabases(const std::string& saveDir)
 	std::unordered_set<std::string> processedDatabasePaths;
 	for (const std::string& dbPath : databasePaths)
 	{
-		FILE *f = nowide::fopen(dbPath.c_str(), "rt");
+		std::unique_ptr<FILE, decltype(&fclose)> f(nowide::fopen(dbPath.c_str(), "rt"), &fclose);
 		if (f == nullptr)
 			continue;
 
-		std::string allData;
-		char buf[4096];
-		while (true)
-		{
-			int s = fread(buf, 1, sizeof(buf), f);
-			if (s <= 0)
-				break;
-			allData.append(buf, s);
-		}
-		fclose(f);
-
 		try {
-			json v = json::parse(allData);
+			json v = json::parse(f.get());
 			if (!v.is_array())
 				continue;
 			processedDatabasePaths.insert(normalizePath(dbPath));
@@ -765,7 +752,7 @@ void Boxart::loadDatabase()
 		make_directory(save_dir);
 	recoverDatabases(save_dir);
 	std::string db_name = save_dir + DB_NAME;
-	FILE *f = nowide::fopen(db_name.c_str(), "rt");
+	std::unique_ptr<FILE, decltype(&fclose)> f(nowide::fopen(db_name.c_str(), "rt"), &fclose);
 	if (f == nullptr)
 	{
 		refreshCustomBoxartIndex(false);
@@ -773,20 +760,10 @@ void Boxart::loadDatabase()
 	}
 
 	DEBUG_LOG(COMMON, "Loading boxart database from %s", db_name.c_str());
-	std::string all_data;
-	char buf[4096];
-	while (true)
-	{
-		int s = fread(buf, 1, sizeof(buf), f);
-		if (s <= 0)
-			break;
-		all_data.append(buf, s);
-	}
-	fclose(f);
 	try {
 		std::lock_guard<std::mutex> guard(mutex);
 
-		json v = json::parse(all_data);
+		json v = json::parse(f.get());
 		for (const auto& o : v)
 		{
 			GameBoxart game(o, save_dir);
