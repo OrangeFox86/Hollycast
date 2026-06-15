@@ -1598,6 +1598,8 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         static ImGuiID modePopupId = 0;
         static bool modeTextEntry = false;
         static bool modeControllerSlider = false;
+        static bool modeFocusTextEntry = false;
+        static int modeTypedValue = 0;
 
         const bool popupAppearing = ImGui::IsWindowAppearing();
         if (popupAppearing)
@@ -1605,22 +1607,42 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             ImGuiContext& g = *GImGui;
             const bool controllerOpen = (g.NavInputSource == ImGuiInputSource_Gamepad);
             modePopupId = popupId;
-            // Mouse/keyboard opens use direct text entry.
-            // Controller opens use slider-only interaction.
-            modeTextEntry = cfg.preferTextEntry || !controllerOpen;
+            // Mouse opens use the draggable slider. Controller opens use slider-only
+            // interaction and accepts with A. Typing switches mouse/keyboard to text entry.
+            modeTextEntry = cfg.preferTextEntry;
             modeControllerSlider = controllerOpen && !modeTextEntry;
+            modeFocusTextEntry = modeTextEntry;
+            modeTypedValue = *cfg.currentValue;
+        }
+
+        const auto hasTextInput = [] {
+            ImGuiIO& io = ImGui::GetIO();
+            for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+            {
+                const ImWchar c = io.InputQueueCharacters[i];
+                if ((c >= '0' && c <= '9') || c == '-' || c == '+')
+                    return true;
+            }
+            return false;
+        };
+
+        if (modePopupId == popupId && !modeControllerSlider && !modeTextEntry && hasTextInput())
+        {
+            modeTextEntry = true;
+            modeFocusTextEntry = true;
+            modeTypedValue = *cfg.currentValue;
         }
 
         const bool textEntryMode = (modePopupId == popupId) && modeTextEntry;
         bool requestFocusApply = false;
         bool controllerAcceptValue = false;
+        bool keyboardAcceptValue = false;
 
         if (textEntryMode)
         {
             char sliderValueText[32];
-            formatValueText(*cfg.currentValue, sliderValueText, sizeof(sliderValueText));
+            formatValueText(modeTypedValue, sliderValueText, sizeof(sliderValueText));
             const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
-            int typedValue = *cfg.currentValue;
             const float inputWidth = std::max(uiScaled(84.0f), valueTextSize.x + uiScaled(18.0f));
             ImGui::SetCursorScreenPos(ImVec2(
                 sliderPos.x + (sliderWidth - inputWidth) * 0.5f,
@@ -1628,25 +1650,30 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             ));
             ImGui::SetNextItemWidth(inputWidth);
             ImGui::PushID("SliderTypedValue");
-            if (popupAppearing)
+            if (modeFocusTextEntry)
+            {
                 ImGui::SetKeyboardFocusHere();
-            const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0);
-            const bool accept = typedChanged || ImGui::IsItemDeactivatedAfterEdit();
+                modeFocusTextEntry = false;
+            }
+            const bool accept = ImGui::InputInt("##TypedValue", &modeTypedValue, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
             ImGui::PopID();
 
             if (accept)
             {
-                typedValue = std::clamp(typedValue, cfg.minValue, cfg.maxValue);
-                if (typedValue != *cfg.currentValue)
+                modeTypedValue = std::clamp(modeTypedValue, cfg.minValue, cfg.maxValue);
+                if (modeTypedValue != *cfg.currentValue)
                 {
-                    *cfg.currentValue = typedValue;
+                    *cfg.currentValue = modeTypedValue;
                     valueChanged = true;
-                    if (cfg.showApplyFlag)
-                        *cfg.showApplyFlag = true;
-                    cfg.hasPendingChanges = true;
                     if (cfg.onValueChange)
                         cfg.onValueChange();
                 }
+                if (cfg.onApply)
+                    cfg.onApply();
+                cfg.hasPendingChanges = false;
+                if (cfg.showApplyFlag)
+                    *cfg.showApplyFlag = false;
+                ImGui::CloseCurrentPopup();
             }
         }
         else
@@ -1666,6 +1693,8 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             );
             const bool sliderFocused = ImGui::IsItemFocused();
             const bool sliderActive = ImGui::IsItemActive();
+            if (modeControllerSlider && (ImGui::IsItemHovered() || sliderActive) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                modeControllerSlider = false;
 
             if (sliderFocused)
             {
@@ -1691,7 +1720,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                     {
                         *cfg.currentValue = tempValue;
                         valueChanged = true;
-                        if (cfg.showApplyFlag)
+                        if (!modeControllerSlider && cfg.showApplyFlag)
                             *cfg.showApplyFlag = true;
                         cfg.hasPendingChanges = true;
                         if (cfg.onValueChange)
@@ -1717,7 +1746,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                 valueChanged = true;
 
                 // Update state tracking
-                if (cfg.showApplyFlag) {
+                if (!modeControllerSlider && cfg.showApplyFlag) {
                     *cfg.showApplyFlag = true;
                 }
                 cfg.hasPendingChanges = true;
@@ -1726,6 +1755,9 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                     cfg.onValueChange();
                 }
             }
+            keyboardAcceptValue = !modeControllerSlider
+                && (cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag))
+                && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
 
             char sliderValueText[32];
             formatValueText(*cfg.currentValue, sliderValueText, sizeof(sliderValueText));
@@ -1744,10 +1776,19 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         ImGui::Spacing();
 
         // DuckStation-style button layout (right-aligned)
-        bool shouldShowApply = cfg.hasPendingChanges ||
-                               (cfg.showApplyFlag && *cfg.showApplyFlag);
+        bool shouldShowApply = !modeControllerSlider &&
+                               (cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag));
 
         if (controllerAcceptValue) {
+            if (cfg.onApply) {
+                cfg.onApply();
+                cfg.hasPendingChanges = false;
+                if (cfg.showApplyFlag) {
+                    *cfg.showApplyFlag = false;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        } else if (keyboardAcceptValue) {
             if (cfg.onApply) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false;
