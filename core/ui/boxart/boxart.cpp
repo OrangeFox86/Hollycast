@@ -202,10 +202,6 @@ GameBoxart Boxart::getBoxart(const GameMedia& media)
 	if (sourceMode == static_cast<int>(BoxartSourceMode::PhysicalMediaOnly))
 		return getPhysicalBoxart(media);
 
-	std::string customPath;
-	if (sourceMode == static_cast<int>(BoxartSourceMode::CustomThenScraped))
-		customPath = getCustomBoxartPath(media);
-
 	GameBoxart boxart;
 	{
 		std::lock_guard<std::mutex> guard(mutex);
@@ -220,6 +216,7 @@ GameBoxart Boxart::getBoxart(const GameMedia& media)
 
 	if (sourceMode == static_cast<int>(BoxartSourceMode::CustomThenScraped))
 	{
+		std::string customPath = getCustomBoxartPath(media);
 		if (!customPath.empty())
 			boxart.boxartPath = customPath;
 	}
