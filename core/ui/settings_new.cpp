@@ -312,9 +312,27 @@ static bool IsSettingsPaneNavPressed(ImGuiKey dpadKey, ImGuiKey stickKey)
 	return ImGui::IsKeyPressed(dpadKey, false) || ImGui::IsKeyPressed(stickKey, false);
 }
 
+static bool IsSettingsPaneNavPressed(ImGuiKey keyboardKey, ImGuiKey dpadKey, ImGuiKey stickKey)
+{
+	return ImGui::IsKeyPressed(keyboardKey, false) || IsSettingsPaneNavPressed(dpadKey, stickKey);
+}
+
 static bool IsAnySettingsPopupOpen()
 {
 	return ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
+}
+
+static bool RenderSettingsPaneTransferAnchor(const char* id)
+{
+	ImguiID _(id);
+	ImguiStyleVar framePadding(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+	ImguiStyleVar itemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+	ImguiStyleColor text(ImGuiCol_Text, ImVec4(0, 0, 0, 0));
+	ImguiStyleColor header(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+	ImguiStyleColor headerHovered(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+	ImguiStyleColor headerActive(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+	ImGui::Selectable("##pane_transfer_anchor", false, ImGuiSelectableFlags_None, ImVec2(0.0f, 1.0f));
+	return ImGui::IsItemFocused();
 }
 
 static void ShowFooterHelpMarker(const char* desc)
@@ -1436,7 +1454,7 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 			for (u32 j = 0; j < MAPLE_PORTS; j++)
 			{
 				bool is_selected = g_gamepad_port_for_mapping == j;
-				if (ImGui::Selectable(kMaplePorts[j + 1]), &is_selected)
+				if (ImGui::Selectable(kMaplePorts[j + 1], &is_selected))
 					g_gamepad_port_for_mapping = j;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -1558,7 +1576,7 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 
 	char key_id[32];
 	ImGui::BeginChild(ImGui::GetID("buttons"), ImVec2(0, 0),
-		ImGuiChildFlags_FrameStyle | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
+		ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_DragScrolling);
 	for (; systemMapping->name != nullptr; systemMapping++)
 	{
 		if (systemMapping->key == EMU_BTN_NONE)
@@ -1928,6 +1946,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 		ImGui::SetNextWindowFocus();
 	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)), true);
 	g_focusSettingsNavigation = false;
+	const bool navAnchorFocused = RenderSettingsPaneTransferAnchor("NavigationPaneAnchor");
 
 	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 	if (backButton.realize())
@@ -1964,8 +1983,8 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	ImGui::PopFont();
 
 	if (!IsAnySettingsPopupOpen()
-		&& ImGui::IsWindowFocused()
-		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight))
+		&& navAnchorFocused
+		&& IsSettingsPaneNavPressed(ImGuiKey_UpArrow, ImGuiKey_GamepadDpadUp, ImGuiKey_GamepadLStickUp))
 		g_focusSettingsContent = true;
 
 	ImGui::EndChild();
@@ -1987,6 +2006,7 @@ static void renderContentArea()
 	ImGui::BeginChild("ContentArea", ImVec2(0, -(footerHeight + footerGap)), true,
 	                  ImGuiWindowFlags_DragScrolling);
 	g_focusSettingsContent = false;
+	const bool contentAnchorFocused = RenderSettingsPaneTransferAnchor("ContentPaneAnchor");
 
 	if (focusContent)
 		ImGui::SetKeyboardFocusHere();
@@ -2020,8 +2040,8 @@ static void renderContentArea()
 	}
 
 	if (!IsAnySettingsPopupOpen()
-		&& ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
-		&& IsSettingsPaneNavPressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft))
+		&& contentAnchorFocused
+		&& IsSettingsPaneNavPressed(ImGuiKey_UpArrow, ImGuiKey_GamepadDpadUp, ImGuiKey_GamepadLStickUp))
 	{
 		g_focusSettingsNavigation = true;
 	}
