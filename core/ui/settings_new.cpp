@@ -322,17 +322,17 @@ static bool IsAnySettingsPopupOpen()
 	return ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
 }
 
-static bool RenderSettingsPaneTransferAnchor(const char* id)
+static void FocusCurrentSettingsItem()
 {
-	ImguiID _(id);
-	ImguiStyleVar framePadding(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-	ImguiStyleVar itemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
-	ImguiStyleColor text(ImGuiCol_Text, ImVec4(0, 0, 0, 0));
-	ImguiStyleColor header(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-	ImguiStyleColor headerHovered(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-	ImguiStyleColor headerActive(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-	ImGui::Selectable("##pane_transfer_anchor", false, ImGuiSelectableFlags_None, ImVec2(0.0f, 1.0f));
-	return ImGui::IsItemFocused();
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	ImGuiContext& g = *GImGui;
+	ImGui::FocusWindow(window, ImGuiFocusRequestFlags_RestoreFocusedChild);
+	ImGui::SetNavID(
+		ImGui::GetItemID(),
+		window->DC.NavLayerCurrent,
+		g.CurrentFocusScopeId,
+		ImGui::WindowRectAbsToRel(window, ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()))
+	);
 }
 
 static void ShowFooterHelpMarker(const char* desc)
@@ -1942,11 +1942,9 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 
 	// Left navigation rail: 225px wide child window
 	// Match the main content column height so the shared footer sits flush below both panels.
-	if (focusSelectedTab)
-		ImGui::SetNextWindowFocus();
-	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)), true);
+	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)),
+	                  ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
 	g_focusSettingsNavigation = false;
-	const bool navAnchorFocused = RenderSettingsPaneTransferAnchor("NavigationPaneAnchor");
 
 	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
 	if (backButton.realize())
@@ -1967,9 +1965,6 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 		// When selected, ImGui uses ImGuiCol_Header (from current theme)
 		bool isSelected = (g_state.currentTab == tab);
 
-		if (focusSelectedTab && isSelected)
-			ImGui::SetKeyboardFocusHere();
-
 		// Create selectable item that fills the navigation rail width
 		// Clicking changes the current tab
 		if (ImGui::Selectable(tabName, isSelected, ImGuiSelectableFlags_None, ImVec2(ImGui::GetContentRegionAvail().x, 0)))
@@ -1977,15 +1972,23 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 			g_state.currentTab = tab;
 			ResetSettingsFooter();
 		}
+		if (focusSelectedTab && isSelected)
+			FocusCurrentSettingsItem();
 		if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 			SetSettingsFooterText(GetTabHelpText(tab));
+
+		if (!IsAnySettingsPopupOpen()
+			&& ImGui::IsItemFocused()
+			&& (ImGui::IsKeyPressed(ImGuiKey_Enter, false)
+				|| ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)
+				|| ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false)))
+		{
+			g_state.currentTab = tab;
+			g_focusSettingsContent = true;
+			ResetSettingsFooter();
+		}
 	}
 	ImGui::PopFont();
-
-	if (!IsAnySettingsPopupOpen()
-		&& navAnchorFocused
-		&& IsSettingsPaneNavPressed(ImGuiKey_UpArrow, ImGuiKey_GamepadDpadUp, ImGuiKey_GamepadLStickUp))
-		g_focusSettingsContent = true;
 
 	ImGui::EndChild();
 }
@@ -2003,10 +2006,10 @@ static void renderContentArea()
 	// No width specified means it takes all remaining space
 	if (focusContent)
 		ImGui::SetNextWindowFocus();
-	ImGui::BeginChild("ContentArea", ImVec2(0, -(footerHeight + footerGap)), true,
+	ImGui::BeginChild("ContentArea", ImVec2(0, -(footerHeight + footerGap)),
+	                  ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened,
 	                  ImGuiWindowFlags_DragScrolling);
 	g_focusSettingsContent = false;
-	const bool contentAnchorFocused = RenderSettingsPaneTransferAnchor("ContentPaneAnchor");
 
 	if (focusContent)
 		ImGui::SetKeyboardFocusHere();
@@ -2040,8 +2043,9 @@ static void renderContentArea()
 	}
 
 	if (!IsAnySettingsPopupOpen()
-		&& contentAnchorFocused
-		&& IsSettingsPaneNavPressed(ImGuiKey_UpArrow, ImGuiKey_GamepadDpadUp, ImGuiKey_GamepadLStickUp))
+		&& ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
+		&& (ImGui::IsKeyPressed(ImGuiKey_Escape, false)
+			|| ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)))
 	{
 		g_focusSettingsNavigation = true;
 	}
