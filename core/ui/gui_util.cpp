@@ -1599,6 +1599,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         static bool modeTextEntry = false;
         static bool modeControllerSlider = false;
         static bool modeFocusTextEntry = false;
+        static bool modePendingChanges = false;
         static int modeTypedValue = 0;
 
         const bool popupAppearing = ImGui::IsWindowAppearing();
@@ -1612,6 +1613,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             modeTextEntry = cfg.preferTextEntry;
             modeControllerSlider = controllerOpen && !modeTextEntry;
             modeFocusTextEntry = modeTextEntry;
+            modePendingChanges = cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag);
             modeTypedValue = *cfg.currentValue;
         }
 
@@ -1671,6 +1673,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                 if (cfg.onApply)
                     cfg.onApply();
                 cfg.hasPendingChanges = false;
+                modePendingChanges = false;
                 if (cfg.showApplyFlag)
                     *cfg.showApplyFlag = false;
                 ImGui::CloseCurrentPopup();
@@ -1723,6 +1726,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                         if (!modeControllerSlider && cfg.showApplyFlag)
                             *cfg.showApplyFlag = true;
                         cfg.hasPendingChanges = true;
+                        modePendingChanges = true;
                         if (cfg.onValueChange)
                             cfg.onValueChange();
                     }
@@ -1750,13 +1754,14 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                     *cfg.showApplyFlag = true;
                 }
                 cfg.hasPendingChanges = true;
+                modePendingChanges = true;
 
                 if (cfg.onValueChange) {
                     cfg.onValueChange();
                 }
             }
             keyboardAcceptValue = !modeControllerSlider
-                && (cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag))
+                && (cfg.hasPendingChanges || modePendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag))
                 && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
 
             char sliderValueText[32];
@@ -1777,12 +1782,13 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
         // DuckStation-style button layout (right-aligned)
         bool shouldShowApply = !modeControllerSlider &&
-                               (cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag));
+                               (cfg.hasPendingChanges || modePendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag));
 
         if (controllerAcceptValue) {
             if (cfg.onApply) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false;
+                modePendingChanges = false;
                 if (cfg.showApplyFlag) {
                     *cfg.showApplyFlag = false;
                 }
@@ -1792,6 +1798,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             if (cfg.onApply) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false;
+                modePendingChanges = false;
                 if (cfg.showApplyFlag) {
                     *cfg.showApplyFlag = false;
                 }
@@ -1818,6 +1825,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             if (ImGui::Button(cfg.applyButtonText, ImVec2(buttonWidth, buttonHeight))) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false; // Reset state
+                modePendingChanges = false;
                 if (cfg.showApplyFlag) {
                     *cfg.showApplyFlag = false; // Reset external flag
                 }
