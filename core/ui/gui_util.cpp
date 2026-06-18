@@ -22,6 +22,9 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <cctype>
+#include <ctime>
 
 #include "types.h"
 #include "stdclass.h"
@@ -35,6 +38,7 @@
 #include "imgui_internal.h"
 #include "imgui_stdlib.h"
 #include "gui_font.h"
+#include "IconsFontAwesome6.h"
 #include "stdclass.h"
 #include "rend/osd.h"
 #include <stb_image.h>
@@ -45,6 +49,13 @@ static std::string select_current_directory = "**home**";
 static std::vector<hostfs::FileInfo> subfolders;
 static std::vector<hostfs::FileInfo> folderFiles;
 bool subfolders_read;
+static char fileInputText[1024] = {};
+static bool fileInputIsDirectory;
+static char filePathText[1024] = {};
+static char fileSearchText[128] = {};
+static std::vector<std::string> select_back_history;
+static std::vector<std::string> select_forward_history;
+static bool select_pathbox_text_mode;
 static std::mutex g_storageCallbackMutex;
 static StringCallback g_storageCallback;
 
@@ -101,11 +112,91 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		if (select_current_directory == "**home**")
 			select_current_directory = hostfs::storage().getDefaultDirectory();
 
+		auto setInputText = [](const std::string& text) {
+			std::strncpy(fileInputText, text.c_str(), sizeof(fileInputText) - 1);
+			fileInputText[sizeof(fileInputText) - 1] = '\0';
+		};
+
+		auto setPathText = []() {
+			std::strncpy(filePathText, select_current_directory.c_str(), sizeof(filePathText) - 1);
+			filePathText[sizeof(filePathText) - 1] = '\0';
+		};
+
+		auto setCurrentFolderInput = [&]() {
+			if (selectFile)
+				fileInputText[0] = '\0';
+			else
+				setInputText(select_current_directory);
+			fileInputIsDirectory = false;
+			setPathText();
+		};
+
+		auto navigateToDirectory = [&](const std::string& path, bool addToHistory) {
+			if (path.empty() || path == select_current_directory)
+				return;
+			if (addToHistory && !select_current_directory.empty())
+			{
+				select_back_history.push_back(select_current_directory);
+				select_forward_history.clear();
+			}
+			select_current_directory = path;
+			subfolders_read = false;
+			setCurrentFolderInput();
+		};
+
+		if (ImGui::IsWindowAppearing())
+		{
+			fileSearchText[0] = '\0';
+			select_back_history.clear();
+			select_forward_history.clear();
+			select_pathbox_text_mode = false;
+			setCurrentFolderInput();
+		}
+
+		auto finalizeSelection = [&](const std::string& selection) {
+			bool success = false;
+			if (selectFile)
+			{
+				if (!selection.empty())
+				{
+					const std::string path = isAbsolutePath(selection)
+							? selection : hostfs::storage().getSubPath(select_current_directory, selection);
+					if (!fileInputIsDirectory)
+						success = callback && callback(false, path);
+				}
+			}
+			else
+			{
+				std::string path = select_current_directory;
+				if (!selection.empty())
+					path = isAbsolutePath(selection)
+							? selection : hostfs::storage().getSubPath(select_current_directory, selection);
+				success = callback && callback(false, path);
+			}
+
+#ifdef _WIN32
+			if (!success)
+				MessageBeep(MB_ICONERROR);
+#endif
+			if (success)
+			{
+				subfolders_read = false;
+				ImGui::CloseCurrentPopup();
+			}
+		};
+
 		if (!subfolders_read)
 		{
 			subfolders.clear();
             folderFiles.clear();
 			error_message.clear();
+
+			auto isSupportedGameExtension = [](const std::string& extension) {
+				return extension == "zip" || extension == "7z" || extension == "chd"
+						|| extension == "gdi" || extension == "cdi" || extension == "cue"
+						|| (!config::HideLegacyNaomiRoms
+								&& (extension == "bin" || extension == "lst" || extension == "dat"));
+			};
 
 			try {
 				for (const hostfs::FileInfo& entry : hostfs::storage().listContent(select_current_directory))
@@ -119,13 +210,11 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						std::string extension = get_file_extension(entry.name);
 						if (selectFile)
 						{
-							if (extension == selectExtension)
+							if ((selectExtension.empty() && isSupportedGameExtension(extension))
+									|| extension == selectExtension)
 								folderFiles.push_back(entry);
 						}
-						else if (extension == "zip" || extension == "7z" || extension == "chd"
-								|| extension == "gdi" || extension == "cdi" || extension == "cue"
-								|| (!config::HideLegacyNaomiRoms
-										&& (extension == "bin" || extension == "lst" || extension == "dat")))
+						else if (isSupportedGameExtension(extension))
 							folderFiles.push_back(entry);
 					}
 				}
@@ -146,71 +235,351 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::PopFont();
 			ImGui::EndDisabled();
 		}
-		std::string title;
-		if (!error_message.empty())
-			title = error_message;
-		else if (select_current_directory.empty())
-			title = T("Storage");
-		else
-			title = select_current_directory;
+		auto matchesSearch = [](const std::string& name) {
+			if (fileSearchText[0] == '\0')
+				return true;
 
-		ImGui::Text("%s", title.c_str());
-		ImGui::BeginChild(ImGui::GetID("dir_list"), ImVec2(0, - uiScaled(30) - ImGui::GetStyle().ItemSpacing.y),
-				ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
-		{
-			ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 20));
+			std::string haystack = name;
+			std::string needle = fileSearchText;
+			std::transform(haystack.begin(), haystack.end(), haystack.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			std::transform(needle.begin(), needle.end(), needle.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return haystack.find(needle) != std::string::npos;
+		};
 
-			if (!select_current_directory.empty() && select_current_directory != "/")
+		const bool showError = !error_message.empty();
+		if (showError)
+			ImGui::TextUnformatted(error_message.c_str());
+
+		auto getPathLeaf = [](const std::string& path) {
+			if (path.empty())
+				return std::string("/");
+			std::string normalized = path;
+			while (normalized.size() > 1 && (normalized.back() == '/' || normalized.back() == '\\'))
+				normalized.pop_back();
+			auto pos = normalized.find_last_of("/\\");
+			if (pos == std::string::npos)
+				return normalized;
+			return normalized.substr(pos + 1);
+		};
+
+		auto getNavigationChain = [](const std::string& startPath) {
+			std::vector<std::string> chain;
+			if (startPath.empty())
+				return chain;
+
+			std::string cursor = startPath;
+			for (int guard = 0; guard < 64 && !cursor.empty(); ++guard)
 			{
-				if (ImGui::Selectable(T(".. Up to Parent Folder")))
+				if (chain.empty() || chain.back() != cursor)
+					chain.push_back(cursor);
+
+				std::string parent = hostfs::storage().getParentPath(cursor);
+				if (parent.empty() || parent == cursor)
+					break;
+				cursor = parent;
+			}
+			std::reverse(chain.begin(), chain.end());
+			return chain;
+		};
+
+		const float navSize = ImGui::GetFrameHeight();
+		auto formatTimestamp = [](u64 updateTime) {
+			if (updateTime == 0)
+				return std::string("---");
+			std::time_t rawTime = static_cast<std::time_t>(updateTime);
+			std::tm timeInfo {};
+#ifdef _WIN32
+			if (localtime_s(&timeInfo, &rawTime) != 0)
+				return std::string("---");
+#else
+			if (localtime_r(&rawTime, &timeInfo) == nullptr)
+				return std::string("---");
+#endif
+			char buffer[32];
+			std::strftime(buffer, sizeof(buffer), "%m/%d/%Y %H:%M", &timeInfo);
+			return std::string(buffer);
+		};
+
+		auto FavoriteButton = [&](bool enabled) {
+			ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+			if (!enabled)
+			{
+				ImGui::BeginDisabled(true);
+				ImGui::PushFont(iconFont);
+				ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
+				ImGui::PopFont();
+				ImGui::EndDisabled();
+				return false;
+			}
+			ImGui::PushFont(iconFont);
+			const bool pressed = ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
+			ImGui::PopFont();
+			return pressed;
+		};
+
+		auto PathBox = [&](bool* editMode) {
+			if (*editMode)
+			{
+				const bool submitted = ImGui::InputTextEx("##pathbox", T("Path"), filePathText, sizeof(filePathText),
+						ImVec2(-uiScaled(220), navSize), ImGuiInputTextFlags_EnterReturnsTrue);
+				if (submitted)
 				{
-					subfolders_read = false;
-					select_current_directory = hostfs::storage().getParentPath(select_current_directory);
+					navigateToDirectory(filePathText, true);
+					*editMode = false;
 				}
+				else if (ImGui::IsItemDeactivated())
+					*editMode = false;
+				return;
 			}
 
-			for (const auto& entry : subfolders)
+			ImGui::BeginChild("##pathbox", ImVec2(-uiScaled(220), navSize),
+					ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 			{
-				if (ImGui::Selectable(entry.name.c_str()))
+				const std::vector<std::string> chain = getNavigationChain(select_current_directory);
+				bool first = true;
+				for (size_t i = 0; i < chain.size(); ++i)
 				{
-					subfolders_read = false;
-					select_current_directory = entry.path;
-				}
-			}
-			ImguiStyleColor _1(ImGuiCol_Text, { 1, 1, 1, selectFile ? 1.f : 0.3f });
-			for (const auto& entry : folderFiles)
-			{
-				if (selectFile)
-				{
-					if (ImGui::Selectable(entry.name.c_str()))
+					const std::string leaf = chain[i] == "/" ? "/" : getPathLeaf(chain[i]);
+					if (!first)
 					{
-						subfolders_read = false;
-						if (callback && callback(false, entry.path))
-							ImGui::CloseCurrentPopup();
+						ImGui::SameLine(0.0f, 2.0f);
+						ImGui::Text(">");
+						ImGui::SameLine(0.0f, 2.0f);
 					}
-				}
-				else
-				{
-					ImGui::Text("%s", entry.name.c_str());
+					first = false;
+
+					const bool isCurrent = chain[i] == select_current_directory;
+					if (ImGui::SmallButton(leaf.c_str()))
+					{
+						setInputText(chain[i]);
+						fileInputIsDirectory = true;
+					}
+					if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+						navigateToDirectory(chain[i], true);
+					if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+						*editMode = true;
 				}
 			}
-			scrollWhenDraggingOnVoid();
-			windowDragScroll();
-		}
-		ImGui::EndChild();
-		if (!selectFile)
-		{
-			if (ImGui::Button(T("Select Current Folder"), ScaledVec2(0, 30)))
+			ImGui::EndChild();
+		};
+
+		auto drawBrowserItemLabel = [&](const char* icon, const std::string& name, const ImVec2& pos, bool disabled = false) {
+			ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+			ImFont* textFont = ImGui::GetFont();
+			ImGuiStyle& style = ImGui::GetStyle();
+			const float textHeight = ImGui::GetTextLineHeight();
+			const float iconSize = ImGui::GetFontSize();
+			const float iconWidth = uiScaled(18.0f);
+			const ImU32 color = ImGui::GetColorU32(disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+			const ImVec2 iconPos(pos.x + style.FramePadding.x, pos.y + style.FramePadding.y);
+			const ImVec2 textPos(pos.x + style.FramePadding.x + iconWidth, pos.y + style.FramePadding.y);
+
+			ImGui::GetWindowDrawList()->AddText(iconFont, iconSize, iconPos, color, icon);
+			ImGui::GetWindowDrawList()->AddText(textFont, textHeight, textPos, color, name.c_str());
+		};
+
+		auto FolderNode = [&](const hostfs::FileInfo& entry, bool inContentPane) {
+			const bool selected = fileInputIsDirectory && std::strcmp(fileInputText, entry.path.c_str()) == 0;
+			const char* icon = selected ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
+			const ImVec2 rowSize(0.0f, ImGui::GetTextLineHeightWithSpacing());
+			if (inContentPane)
+				ImGui::TableNextRow();
+			if (inContentPane)
+				ImGui::TableSetColumnIndex(0);
+			ImGui::PushID(entry.path.c_str());
+			const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+			if (ImGui::Selectable("##folder", selected,
+					inContentPane
+							? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)
+							: ImGuiSelectableFlags_AllowDoubleClick,
+					rowSize))
 			{
-				if (callback && callback(false, select_current_directory))
-				{
-					subfolders_read = false;
-					ImGui::CloseCurrentPopup();
-				}
+				setInputText(entry.path);
+				fileInputIsDirectory = true;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					navigateToDirectory(entry.path, true);
 			}
-			ImGui::SameLine();
+			drawBrowserItemLabel(icon, entry.name, rowPos);
+			ImGui::PopID();
+			if (inContentPane)
+			{
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+
+				ImGui::TableSetColumnIndex(2);
+				ImGui::TextUnformatted("");
+			}
+		};
+
+		auto FileNode = [&](const hostfs::FileInfo& entry) {
+			const bool selected = !fileInputIsDirectory && std::strcmp(fileInputText, entry.name.c_str()) == 0;
+			const ImVec2 rowSize(0.0f, ImGui::GetTextLineHeightWithSpacing());
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::PushID(entry.name.c_str());
+			const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+			if (ImGui::Selectable("##file", selected,
+					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick,
+					rowSize))
+			{
+				setInputText(entry.name);
+				fileInputIsDirectory = false;
+			}
+			drawBrowserItemLabel(ICON_FA_FILE, entry.name, rowPos);
+			ImGui::PopID();
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::Text("%.3f KiB", entry.size / 1024.0f);
+		};
+
+		ImGui::Separator();
+		ImguiStyleColor navButtonColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		const bool canGoBack = !select_back_history.empty();
+		if (!canGoBack)
+			ImGui::BeginDisabled(true);
+		if (ImGui::ArrowButton("##back", ImGuiDir_Left) && canGoBack)
+		{
+			select_forward_history.push_back(select_current_directory);
+			const std::string path = select_back_history.back();
+			select_back_history.pop_back();
+			navigateToDirectory(path, false);
 		}
-		if (ImGui::Button(T("Cancel"), ScaledVec2(0, 30)))
+		if (!canGoBack)
+			ImGui::EndDisabled();
+		ImGui::SameLine();
+		const bool canGoForward = !select_forward_history.empty();
+		if (!canGoForward)
+			ImGui::BeginDisabled(true);
+		if (ImGui::ArrowButton("##forward", ImGuiDir_Right) && canGoForward)
+		{
+			select_back_history.push_back(select_current_directory);
+			const std::string path = select_forward_history.back();
+			select_forward_history.pop_back();
+			navigateToDirectory(path, false);
+		}
+		if (!canGoForward)
+			ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("##up", ImGuiDir_Up)
+				&& !select_current_directory.empty() && select_current_directory != "/")
+			navigateToDirectory(hostfs::storage().getParentPath(select_current_directory), true);
+		ImGui::SameLine();
+		PathBox(&select_pathbox_text_mode);
+		ImGui::SameLine();
+		FavoriteButton(false);
+		ImGui::SameLine();
+		if (ImGui::InputTextEx("##searchTB", T("Search"), fileSearchText, sizeof(fileSearchText),
+				ImVec2(-FLT_MIN, navSize), 0))
+		{
+		}
+		ImGui::Separator();
+
+		const float bottomBarHeight = ImGui::GetFrameHeight() * 2.f + ImGui::GetStyle().ItemSpacing.y * 2.f;
+		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, -bottomBarHeight)))
+		{
+			ImGui::TableSetupColumn("##tree", ImGuiTableColumnFlags_WidthFixed, uiScaled(125));
+			ImGui::TableSetupColumn("##content", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::BeginChild("##treeContainer", ImVec2(0, -bottomBarHeight),
+					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
+			{
+				ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 8));
+				ImGui::TextDisabled(T("Folders"));
+				ImGui::Separator();
+
+				for (const auto& path : getNavigationChain(select_current_directory))
+				{
+					const std::string leafName = getPathLeaf(path);
+					const std::string label = leafName.empty() ? path : leafName;
+					hostfs::FileInfo breadcrumb;
+					breadcrumb.name = label;
+					breadcrumb.path = path;
+					FolderNode(breadcrumb, false);
+				}
+				for (const auto& entry : subfolders)
+				{
+					if (!matchesSearch(entry.name))
+						continue;
+
+					FolderNode(entry, false);
+				}
+				scrollWhenDraggingOnVoid();
+				windowDragScroll();
+			}
+			ImGui::EndChild();
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::BeginChild("##contentContainer", ImVec2(0, -bottomBarHeight),
+					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
+			{
+				if (ImGui::BeginTable("##contentTable", 3,
+						ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY))
+				{
+					ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
+					ImGui::TableSetupColumn(T("Date modified"), ImGuiTableColumnFlags_WidthFixed, uiScaled(170));
+					ImGui::TableSetupColumn(T("Size"), ImGuiTableColumnFlags_WidthFixed, uiScaled(95));
+					ImGui::TableHeadersRow();
+
+					for (const auto& entry : subfolders)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+						FolderNode(entry, true);
+					}
+
+					for (const auto& entry : folderFiles)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+						if (selectFile)
+							FileNode(entry);
+						else {
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							drawBrowserItemLabel(ICON_FA_FILE, entry.name, ImGui::GetCursorScreenPos(), true);
+							ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing()));
+							ImGui::TableSetColumnIndex(1);
+							ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+							ImGui::TableSetColumnIndex(2);
+							ImGui::Text("%.3f KiB", entry.size / 1024.0f);
+						}
+					}
+
+					ImGui::EndTable();
+				}
+				scrollWhenDraggingOnVoid();
+				windowDragScroll();
+			}
+			ImGui::EndChild();
+			ImGui::EndTable();
+		}
+		ImGui::TextUnformatted(selectFile ? T("File name:") : T("Folder:"));
+		ImGui::SameLine();
+		const bool inputSubmitted = ImGui::InputTextEx("##file_input", T("Filename"), fileInputText, sizeof(fileInputText),
+				ImVec2(-FLT_MIN, 0),
+				ImGuiInputTextFlags_EnterReturnsTrue);
+		if (ImGui::IsItemEdited())
+			fileInputIsDirectory = false;
+		if (inputSubmitted)
+			finalizeSelection(fileInputText);
+		const float buttonWidth = std::max(ImGui::CalcTextSize(T("Open")).x, ImGui::CalcTextSize(T("Cancel")).x)
+				+ ImGui::GetStyle().FramePadding.x * 2.f + uiScaled(32.f);
+		const float ok_cancel_width = buttonWidth * 2.f + ImGui::GetStyle().ItemSpacing.x;
+		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ok_cancel_width);
+		if (ImGui::Button(T("Open"),
+				ImVec2(buttonWidth, 0.0f)))
+		{
+			finalizeSelection(fileInputText);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel"), ImVec2(-FLT_MIN, 0.0f)))
 		{
 			subfolders_read = false;
 			if (callback)
