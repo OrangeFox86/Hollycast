@@ -137,8 +137,10 @@ public:
 
 	//! The axis value which causes a button activation (for axis to button mapping) (inclusive)
 	static const int AXIS_ACTIVATION_VALUE = 16384;  // Use 50% deflection as "pressed" threshold
+	static const int TRIGGER_ACTIVATION_VALUE = 32767 - 2000;
 	//! The axis value which causes a button deactivation (for axis to button mapping) (exclusive)
 	static const int AXIS_DEACTIVATION_VALUE = 8192; // 25% deflection as "released" threshold
+	static const int TRIGGER_DEACTIVATION_VALUE = 32767 - 1000;
 
 protected:
 	GamepadDevice(int maple_port, const char *api_name, bool remappable = true);
