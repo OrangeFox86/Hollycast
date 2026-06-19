@@ -1434,6 +1434,12 @@ void SettingIcon(const char* icon, const ImVec2& size)
 
 	const ImVec2 iconPos = ImGui::GetCursorScreenPos();
 	ImFont* font = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+
+	// FontAwesome glyphs do not always fit their box at every UI scale, so measure
+	// and shrink only when needed before drawing the icon centered in the row slot.
+	float fontSize = std::min(iconSize.x, iconSize.y);
+	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	ImFont* font = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 	float fontSize = std::min(iconSize.x, iconSize.y);
 	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
 	if (textSize.x > iconSize.x && textSize.x > 0.0f)
