@@ -2163,19 +2163,10 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
         if (controllerAcceptValue) {
             if (cfg.onApply) {
-                cfg.onApply();
-                cfg.hasPendingChanges = false;
-                modePendingChanges = false;
-                if (cfg.showApplyFlag) {
-                    *cfg.showApplyFlag = false;
-                }
-            }
-            ImGui::CloseCurrentPopup();
-        } else if (keyboardAcceptValue) {
+        if (controllerAcceptValue || keyboardAcceptValue) {
             if (cfg.onApply) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false;
-                modePendingChanges = false;
                 if (cfg.showApplyFlag) {
                     *cfg.showApplyFlag = false;
                 }
