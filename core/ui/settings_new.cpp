@@ -2087,7 +2087,7 @@ static bool RenderCollapsingHeader(
 		labelStr += id;
 	}
 
-	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+	ImGui::PushFont(settingsTitleFont);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(10.0f)));
 	bool open = ImGui::CollapsingHeader(labelStr.c_str(), flags);
 	if (labelIcon && *labelIcon != '\0')
