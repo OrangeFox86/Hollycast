@@ -359,10 +359,10 @@ static void RenderSettingsFooterBar()
 	const bool compactLayout = UseCompactSettingsLayout();
 	const float padX = compactLayout ? uiScaled(1.0f) : uiScaled(2.0f);
 	const float padY = compactLayout ? uiScaled(1.0f) : uiScaled(2.0f);
-	ImFont* titleFont = settingsRightValueFont != nullptr ? settingsRightValueFont : largeFont;
+	ImFont* titleFont = settingsTitleFont != nullptr ? settingsTitleFont : largeFont;
 	ImFont* bodyFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
 	const float footerTextScale = 1.25f;
-	const float titleFontSize = titleFont->LegacySize * (compactLayout ? 0.93f : 0.97f) * footerTextScale;
+	const float titleFontSize = titleFont->LegacySize * (compactLayout ? 1.00f : 1.06f) * footerTextScale;
 	const float bodyFontSize = bodyFont->LegacySize * (compactLayout ? 0.89f : 0.93f) * footerTextScale;
 	const float textPadX = compactLayout ? uiScaled(10.0f) : uiScaled(12.0f);
 	const float textPadY = compactLayout ? uiScaled(8.0f) : uiScaled(10.0f);
@@ -486,7 +486,7 @@ static void RenderSettingsFooterBar()
 		}
 	}
 
-	ImVec2 textPos = bodyPos;
+	ImVec2 textPos(std::floor(bodyPos.x), std::floor(bodyPos.y));
 	drawList->PushClipRect(clipMin, clipMax, true);
 	if (!displayTitle.empty())
 	{
@@ -495,15 +495,24 @@ static void RenderSettingsFooterBar()
 			std::min(bodyColor.y + 0.15f, 1.0f),
 			std::min(bodyColor.z + 0.15f, 1.0f),
 			1.0f);
+		const ImU32 titleColor = ImGui::ColorConvertFloat4ToU32(titleColor2);
+		drawList->AddText(
+			titleFont,
+			finalTitleSize,
+			ImVec2(textPos.x + 0.6f, textPos.y),
+			titleColor,
+			displayTitle.c_str(),
+			nullptr,
+			wrapWidth);
 		drawList->AddText(
 			titleFont,
 			finalTitleSize,
 			textPos,
-			ImGui::ColorConvertFloat4ToU32(titleColor2),
+			titleColor,
 			displayTitle.c_str(),
 			nullptr,
 			wrapWidth);
-		textPos.y += finalTitleSize + titleSpacing;
+		textPos.y = std::floor(textPos.y + finalTitleSize + titleSpacing);
 	}
 
 	if (!bodyText.empty())

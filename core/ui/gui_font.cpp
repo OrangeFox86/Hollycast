@@ -491,7 +491,11 @@ void gui_loadFonts()
 
 	data = resource::load("fonts/Jura-wght.ttf", dataSize);
 	if (data != nullptr)
-		settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, ranges);
+	{
+		ImFontConfig settingsTitleFontCfg;
+		settingsTitleFontCfg.RasterizerMultiply = 1.25f;
+		settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &settingsTitleFontCfg, ranges);
+	}
 
 	data = resource::load("fonts/EncodeSans-wdth-wght.ttf", dataSize);
 	if (data != nullptr)
