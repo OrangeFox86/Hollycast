@@ -65,6 +65,9 @@ void toggleMenuVisibility();
 // Check if menu bar is currently visible
 bool isMenuBarVisible();
 
+// Current effective menu bar height for laying out full-screen UI.
+float mainMenuBarHeight();
+
 // Initialize menu system
 // Called during GUI initialization to set up menu state
 void initialize();

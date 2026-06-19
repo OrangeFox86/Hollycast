@@ -33,6 +33,7 @@
 #include "oslib/storage.h"
 #include "oslib/http_client.h"
 #include "oslib/i18n.h"
+#include "gui_menu.h"
 #include "imgui_driver.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -492,7 +493,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 			{
 				ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 8));
-				ImGui::TextDisabled(T("Folders"));
+				ImGui::TextDisabled("%s", T("Folders"));
 				ImGui::Separator();
 
 				for (const auto& path : getNavigationChain(select_current_directory))
@@ -925,8 +926,8 @@ void fullScreenWindow(bool modal)
 			ImGui::End();
 		}
 	}
-	// Position the main window below the menu bar to avoid covering it
-	float menuBarHeight = ImGui::GetFrameHeight();  // Standard menu bar height
+	// Position the main window below the menu bar only when it is actually visible.
+	float menuBarHeight = GuiMenu::mainMenuBarHeight();
 	ImGui::SetNextWindowPos(ImVec2(insetLeft, insetTop + menuBarHeight));
 	ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - insetLeft - insetRight, ImGui::GetIO().DisplaySize.y - insetTop - insetBottom - menuBarHeight));
 }

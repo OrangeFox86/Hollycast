@@ -63,7 +63,7 @@ int getScaledTopInset()
 #ifdef LIBRETRO
 	return 0;
 #else
-	return GuiMenu::isMenuBarVisible() ? ImGui::GetFrameHeight() : 0;
+	return (int)GuiMenu::mainMenuBarHeight();
 #endif
 }
 

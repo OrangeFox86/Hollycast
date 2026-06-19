@@ -28,6 +28,9 @@
 #include "types.h"
 #include "settings.h"
 #include "oslib/i18n.h"
+#if defined(USE_SDL)
+#include "sdl/sdl.h"
+#endif
 
 // External game state flag from gui.cpp
 extern bool game_started;
@@ -39,6 +42,42 @@ namespace GuiMenu {
 
 // Menu visibility state
 bool menuVisible = true;
+static bool menuBarVisibleThisFrame = true;
+static double touchMenuVisibleUntil = 0.0;
+
+static bool isFullscreenMenuMode()
+{
+#if defined(__ANDROID__)
+	return true;
+#elif defined(USE_SDL)
+	return sdl_is_fullscreen();
+#else
+	return false;
+#endif
+}
+
+static bool shouldShowMenuBar()
+{
+	if (!menuVisible)
+		return false;
+	if (!isFullscreenMenuMode())
+		return true;
+
+	ImGuiIO& io = ImGui::GetIO();
+	const float revealHeight = ImGui::GetFrameHeight() * 1.75f;
+	const bool hasPointer = io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX;
+	const bool pointerAtTop = hasPointer && io.MousePos.y <= revealHeight;
+	const bool popupOpen = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
+
+	if (io.MouseSource == ImGuiMouseSource_TouchScreen)
+	{
+		if (!popupOpen && pointerAtTop && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			touchMenuVisibleUntil = ImGui::GetTime() + 5.0;
+		return popupOpen || ImGui::GetTime() < touchMenuVisibleUntil;
+	}
+
+	return popupOpen || pointerAtTop;
+}
 
 static bool openUrlInShell(const char* url)
 {
@@ -53,7 +92,8 @@ static bool openUrlInShell(const char* url)
 // Render the main menu bar using standard ImGui.
 void renderMainMenuBar()
 {
-	if (!menuVisible)
+	menuBarVisibleThisFrame = shouldShowMenuBar();
+	if (!menuBarVisibleThisFrame)
 		return;
 
 	// Use ImGui's native main menu bar - it handles everything automatically:
@@ -366,11 +406,18 @@ bool isMenuBarVisible()
 	return menuVisible;
 }
 
+float mainMenuBarHeight()
+{
+	return menuBarVisibleThisFrame ? ImGui::GetFrameHeight() : 0.0f;
+}
+
 // Initialize menu system
 // Called during GUI initialization to set up menu state
 void initialize()
 {
 	menuVisible = true;
+	menuBarVisibleThisFrame = true;
+	touchMenuVisibleUntil = 0.0;
 }
 
 // Cleanup menu system

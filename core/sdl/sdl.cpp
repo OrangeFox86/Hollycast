@@ -61,6 +61,11 @@ void sdl_stopHaptic(int port);
 static void pauseHaptic();
 static void resumeHaptic();
 
+bool sdl_is_fullscreen()
+{
+	return window_fullscreen;
+}
+
 static struct SDLDeInit
 {
 	~SDLDeInit() {
