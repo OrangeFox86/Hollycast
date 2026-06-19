@@ -1632,7 +1632,7 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 			}
 			else if (getButtonState(gamepad, systemMapping->key))
 			{
-				ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
+				ImGui::PushFont(settingsIconFont);
 				ImGui::Text(ICON_FA_CIRCLE_DOT);
 				ImGui::PopFont();
 			}
