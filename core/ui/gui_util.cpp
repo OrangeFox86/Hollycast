@@ -1470,7 +1470,7 @@ void BeginSettingsRow(const SettingsRowParams& params)
 	// Draw icon if provided
 	if (params.icon != nullptr)
 	{
-		ImGui::PushFont(settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont());
+		ImGui::PushFont(settingsIconFont);
 		ImGui::Text("%s", params.icon);
 		ImGui::PopFont();
 		ImGui::SameLine(0, settings.display.uiScale * 12);
