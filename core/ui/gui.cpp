@@ -2039,9 +2039,10 @@ void gui_refresh_boxart_cache()
 		std::lock_guard<std::mutex> guard(scanner.get_mutex());
 		games = scanner.get_game_list();
 	}
-	for (const GameMedia& game : games)
+	for (const GameMedia& game : games) {
 		if (!game.device)
 			boxart.queueBoxart(game);
+	}
 	boxart.startFetch();
 }
 
