@@ -4893,32 +4893,13 @@ void renderControlsTab()
 				ImVec2(0, 0), uiScaled(8)))
 		{
 			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
-			float mainComboWidth = 0;
+			float mainComboWidth = comboWidthPadding;
 			for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
 			{
 				mainComboWidth = std::max(
 					ImGui::CalcTextSize(maple_device_types[i]).x + comboWidthPadding,
 					mainComboWidth
 				);
-			}
-
-			// DreamLink device names for main device
-			const char* dream_link_names[MAPLE_PORTS]{};
-			for (int bus = 0; bus < MAPLE_PORTS; bus++)
-			{
-				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
-				if (link && (link->dreamlink->getIssueDescription() == nullptr))
-				{
-					dream_link_names[bus] = link->dreamlink->getName();
-					mainComboWidth = std::max(
-						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
-						mainComboWidth
-					);
-				}
-				else
-				{
-					dream_link_names[bus] = "";
-				}
 			}
 
 			// Externally managed expansion device types
@@ -4931,13 +4912,49 @@ void renderControlsTab()
 				const char* name;
 			};
 
-			std::list<MapleExpansionDeviceDesc> maple_expansion_device_types = {
+			const std::list<MapleExpansionDeviceDesc> static_maple_expansion_device_types = {
 				{MDT_None, T("None")},
 				{MDT_SegaVMU, T("Sega VMU")},
 				{MDT_PurupuruPack, T("Vibration Pack")},
 				{MDT_Microphone, T("Microphone")},
 				{MDT_DreamPotato, T("DreamPotato")},
 			};
+
+			float expComboWidth = comboWidthPadding;
+			for (const auto& devIter : static_maple_expansion_device_types)
+			{
+				expComboWidth = std::max(
+					ImGui::CalcTextSize(devIter.name).x + comboWidthPadding,
+					expComboWidth
+				);
+			}
+
+			// DreamLink device names for main device
+			const char* dream_link_names[MAPLE_PORTS]{};
+			const char* dream_link_ext_labels[MAPLE_PORTS]{};
+			for (int bus = 0; bus < MAPLE_PORTS; bus++)
+			{
+				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
+				if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				{
+					dream_link_names[bus] = link->dreamlink->getName();
+					mainComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
+						mainComboWidth
+					);
+
+					dream_link_ext_labels[bus] = link->dreamlink->getExpansionDeviceLabel();
+					expComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_ext_labels[bus]).x + comboWidthPadding,
+						expComboWidth
+					);
+				}
+				else
+				{
+					dream_link_names[bus] = "";
+					dream_link_ext_labels[bus] = "";
+				}
+			}
 
 			// Settings 3-22: Dreamcast Device Ports (4 ports x device + expansion)
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
@@ -4984,22 +5001,19 @@ void renderControlsTab()
 					ImGui::EndCombo();
 				}
 
+				std::list<MapleExpansionDeviceDesc> maple_expansion_device_types = static_maple_expansion_device_types;
 				int port_count = 0;
 				if (has_dream_link)
 				{
+					// Using real hardware for this - done with disable section
 					ImGui::EndDisabled();
+
 					port_count = 2;
-					maple_expansion_device_types.push_back({MDT_DreamLink, dream_link_name});
+					maple_expansion_device_types.push_back({MDT_DreamLink, dream_link_ext_labels[bus]});
 				}
 				else
 				{
 					port_count = maple_getPortCount(config::MapleMainDevices[bus]);
-				}
-
-				float expComboWidth = comboWidthPadding;
-				for (const auto& devIter : maple_expansion_device_types)
-				{
-					expComboWidth = std::max(ImGui::CalcTextSize(devIter.name).x + comboWidthPadding, expComboWidth);
 				}
 
 				for (int port = 0; port < port_count; port++)
@@ -5030,7 +5044,7 @@ void renderControlsTab()
 					{
 						for (const auto& devIter : maple_expansion_device_types)
 						{
-							bool is_selected = (subtype == devIter.deviceType);
+							bool is_selected = (selectedDevIter->deviceType == devIter.deviceType);
 							if (ImGui::Selectable(devIter.name, &is_selected))
 							{
 								subtype = devIter.deviceType;

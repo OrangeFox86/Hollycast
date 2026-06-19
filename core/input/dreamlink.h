@@ -85,6 +85,12 @@ public:
 	virtual void term() = 0;
 	//! @return the display name of this DreamLink
 	virtual const char* getName() const = 0;
+	//! @return the label to be used in the extension device combo box on settings
+	virtual inline const char* getExpansionDeviceLabel() const {
+		return getName();
+	}
+	//! @return the function code at the given port
+	virtual u32 getFunctionCodesMask(int forPort) const = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test

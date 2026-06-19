@@ -115,6 +115,10 @@ struct DppVirtualVmu : public maple_sega_vmu
 		loaded_us_since_write = std::numeric_limits<u64>::max();
 		fullSaveNeeded = false;
 	}
+
+	//! MapleLink relay is disabled for this virtual VMU
+	inline void relayMapleLink() override
+	{}
 };
 
 static std::string getBusDescription(int software_bus, int hardware_bus) {
@@ -481,7 +485,7 @@ public:
 		const int endPort = (expansion >= 0) ? (expansion + 1) : 2;
 
 		for (int port = startPort; port < endPort; ++port) {
-			u32 fnCode = getFunctionCode(port);
+			u32 fnCode = getFunctionCodesMask(port);
 
 			if ((fnCode & MFID_1_Storage) == 0) {
 				// Not a storage device
@@ -538,7 +542,7 @@ public:
 		}
 	}
 
-    u32 getFunctionCode(int forPort) const {
+	u32 getFunctionCodesMask(int forPort) const override {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		forPort = fcPortToDppPort(forPort);
@@ -613,12 +617,16 @@ public:
 		return device_name.c_str();
 	}
 
+	const char* getExpansionDeviceLabel() const override {
+		return "DreamPicoPort";
+	}
+
 	void setMapleDevices()
 	{
 		if (!DreamLink::isValidBus(software_bus))
 			return;
 
-		u32 portOneFn = getFunctionCode(0);
+		u32 portOneFn = getFunctionCodesMask(0);
 		if (portOneFn & MFID_1_Storage) {
 			if (storageEnabled() && isGameRunning())
 			{
@@ -626,7 +634,7 @@ public:
 			}
 		}
 
-		u32 portTwoFn = getFunctionCode(1);
+		u32 portTwoFn = getFunctionCodesMask(1);
 		if (portTwoFn & MFID_1_Storage) {
 			if (storageEnabled() && isGameRunning())
 			{
@@ -1043,13 +1051,13 @@ public:
 		}
 
 		const std::string portCharStr = std::string(1, 'A' + software_bus);
-		const u32 mainCode = getFunctionCode(5);
+		const u32 mainCode = getFunctionCodesMask(5);
 
 		if (mainCode != 0) {
-			std::string deviceSummary(fnToName(getFunctionCode(5)));
+			std::string deviceSummary(fnToName(getFunctionCodesMask(5)));
 
 			for (int i = MAPLE_FIRST_EXT_DEV_IDX; i <= MAPLE_LAST_EXT_DEV_IDX; ++i) {
-				const u32 code = getFunctionCode(i);
+				const u32 code = getFunctionCodesMask(i);
 				if (code != 0) {
 					const std::string extDesc = portCharStr + std::string(1, '1' + i - MAPLE_FIRST_EXT_DEV_IDX);
 					deviceSummary += ", " + extDesc + ": " + fnToName(code);
@@ -1094,7 +1102,7 @@ bool DppMapleLinkDevice::linkStatus()
 	bool isLinked = (
 		linkedDpp &&
 		linkedDpp->isConnected() &&
-		((linkedDpp->getFunctionCode(bus_port) & supportedFns) != 0)
+		((linkedDpp->getFunctionCodesMask(bus_port) & supportedFns) != 0)
 	);
 
 	if (!isLinked) {
@@ -1125,7 +1133,7 @@ MapleDeviceType DppMapleLinkDevice::get_device_type()
 	if (!linkedDpp)
 		return serializingType;
 
-	serializingType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
+	serializingType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port));
 
 	establishVirtualDevice(serializingType);
 
@@ -1196,7 +1204,7 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 	if (!linkedDpp)
 		return MDRS_JVSNone;
 
-	establishVirtualDevice(fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port)));
+	establishVirtualDevice(fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port)));
 
 	// Deserialize the first data word without popping off of dma
 	u32 firstWord = 0;
@@ -1292,7 +1300,7 @@ bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 	bool isSameType = false;
 
 	if (linkedDpp) {
-		MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
+		MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port));
 		isSameType = (type != MDT_None && detectedType == type);
 	}
 
@@ -1367,7 +1375,7 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 		return;
 	}
 
-	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCode(bus_port));
+	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port));
 
 	if (detectedType != deserializingType)
 	{

@@ -333,6 +333,9 @@ struct maple_base: maple_device
 
 		return outlen + 4;
 	}
+
+	//! This is called by a virtual device when a feedback message relay is requested
+	virtual void relayMapleLink();
 };
 
 struct BaseMIE : public maple_base

@@ -26,6 +26,7 @@
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <chrono>
 
 //! A MapleLink puts bus/port context onto a DreamLink and allows for creation of a maple_device
 class MapleLink
@@ -60,6 +61,9 @@ public:
 
 	//! True if the link is operational
 	bool isConnected();
+
+	//! @return the function code for this MapleLink
+	u32 getFunctionCodesMask() const;
 
 	//! Create the maple device needed to interface this device to the emulator
 	std::shared_ptr<maple_device> createMapleDevice();
@@ -117,6 +121,12 @@ protected:
 	//! @param[in] dev The device that the DreamLink created
 	//! @param[in] vmu The VMU containing LCD data (may or may not be the same as dev)
 	static void mirrorLcd(MapleLink& link, maple_base& dev, maple_sega_vmu& vmu);
+
+	//! Relays a maple message to the currently active physical DreamLink device on the given bus and port
+	//! @param[in] bus The target DreamLink bus
+	//! @param[in] port The target DreamLink port
+	//! @param[in] msg The message to send
+	static void relayPhysicalMapleLink(int bus, int port, const MapleMsg& msg);
 };
 
 //! Base class all maple link devices must inherit from
@@ -136,6 +146,12 @@ struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 	//! Constructor
 	//! @param[in] link The link to set
 	explicit inline MapleLinkDeviceBase(const MapleLink& link) : link(link) {}
+
+	//! @return true iff this device is currently present
+	bool linkStatus() override
+	{
+		return (MapleDeviceBase::linkStatus() && link.isConnected() && (link.getFunctionCodesMask() != 0));
+	}
 
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice, defined when the MapleDeviceBase is a maple_sega_vmu
@@ -175,6 +191,14 @@ protected:
 	{
 		MapleLinkDevice::mirrorLcd(link, *this, vmu);
 	}
+
+	//! This is called by a virtual device when a feedback message relay is requested
+	inline void relayMapleLink() override
+	{
+		if (inMsg) {
+			MapleLinkDevice::relayPhysicalMapleLink(bus_id, bus_port, *inMsg);
+		}
+	}
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink
@@ -195,6 +219,18 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	using maple_sega_vmu::serialize;
 	//! Performs deserialization and writes deserialized LCD
 	void deserialize(Deserializer& deser) override;
+
+	//! @return true iff this device is currently present
+	bool linkStatus() override
+	{
+		if (!MapleLinkDeviceBase<maple_sega_vmu>::linkStatus())
+			return false;
+
+		if (link.storageEnabled())
+			return link.isConnected();
+		else
+			return true; // local storage means this must always remain "linked"
+	}
 
 	//! Send a read request to the external VMU memory
 	//! @param[in] dest Destination address
