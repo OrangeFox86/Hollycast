@@ -480,14 +480,15 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		ImGui::Separator();
 
 		const float bottomBarHeight = ImGui::GetFrameHeight() * 2.f + ImGui::GetStyle().ItemSpacing.y * 2.f;
-		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, -bottomBarHeight)))
+		const float browserHeight = std::max(uiScaled(160.0f), ImGui::GetContentRegionAvail().y - bottomBarHeight);
+		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, browserHeight)))
 		{
 			ImGui::TableSetupColumn("##tree", ImGuiTableColumnFlags_WidthFixed, uiScaled(125));
 			ImGui::TableSetupColumn("##content", ImGuiTableColumnFlags_WidthStretch);
 			ImGui::TableNextRow();
 
 			ImGui::TableSetColumnIndex(0);
-			ImGui::BeginChild("##treeContainer", ImVec2(0, -bottomBarHeight),
+			ImGui::BeginChild("##treeContainer", ImVec2(0, 0),
 					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 			{
 				ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 8));
@@ -516,7 +517,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::EndChild();
 
 			ImGui::TableSetColumnIndex(1);
-			ImGui::BeginChild("##contentContainer", ImVec2(0, -bottomBarHeight),
+			ImGui::BeginChild("##contentContainer", ImVec2(0, 0),
 					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
 			{
 				if (ImGui::BeginTable("##contentTable", 3,
@@ -569,7 +570,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			fileInputIsDirectory = false;
 		if (inputSubmitted)
 			finalizeSelection(fileInputText);
-		const float buttonWidth = std::max(ImGui::CalcTextSize(T("Open")).x, ImGui::CalcTextSize(T("Cancel")).x)
+		const float buttonWidth = std::max(ImGui::CalcTextSize(T("Open")).x, ImGui::CalcTextSize(T("Back")).x)
 				+ ImGui::GetStyle().FramePadding.x * 2.f + uiScaled(32.f);
 		const float ok_cancel_width = buttonWidth * 2.f + ImGui::GetStyle().ItemSpacing.x;
 		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ok_cancel_width);
@@ -579,7 +580,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			finalizeSelection(fileInputText);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button(T("Cancel"), ImVec2(-FLT_MIN, 0.0f)))
+		if (ImGui::Button(T("Back"), ImVec2(-FLT_MIN, 0.0f)))
 		{
 			subfolders_read = false;
 			if (callback)

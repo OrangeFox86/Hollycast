@@ -146,7 +146,7 @@ static float SettingsNavigationWidth()
 {
 	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 	const float minWidth = 136.0f;
-	const float maxWidth = std::min(310.0f, displaySize.x * 0.20f);
+	const float maxWidth = std::max(minWidth, std::min(310.0f, displaySize.x * 0.20f));
 	if (!UseCompactSettingsLayout())
 		return std::clamp(uiScaled(225.0f), minWidth, maxWidth);
 	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
