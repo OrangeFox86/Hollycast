@@ -1955,7 +1955,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	                  ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
 	g_focusSettingsNavigation = false;
 
-	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
+	ImGui::PushFont(settingsTitleFont);
 	if (backButton.realize())
 		exitSettings();
 	ImGui::Spacing();
