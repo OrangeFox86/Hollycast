@@ -3922,7 +3922,7 @@ void renderVideoTab()
 
 		// 2x height toggle rows for Performance settings
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(12.0f)));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, uiScaled(8.0f)));
 
 		// Shadows toggle
 		RenderGeneralToggleSettingRow(
@@ -3962,7 +3962,7 @@ void renderVideoTab()
 
 		// 2x height toggle rows for Advanced settings
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(12.0f)));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, uiScaled(8.0f)));
 
 		// Delay Frame Swapping
 		RenderGeneralToggleSettingRow(
