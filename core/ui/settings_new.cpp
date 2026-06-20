@@ -4310,10 +4310,7 @@ void renderAudioTab()
 		volumeConfig.defaultValue = 100;
 		volumeConfig.format = "%d%%";
 		volumeConfig.applyButtonText = T("Apply");
-		volumeConfig.onApply = []() {
-			config::AudioVolume.set(volumeTemp);
-			config::AudioVolume.calcDbPower();
-		};
+		volumeConfig.onApply = nullptr;
 		volumeConfig.onValueChange = []() {
 			config::AudioVolume.set(volumeTemp);
 			config::AudioVolume.calcDbPower();
@@ -4521,7 +4518,7 @@ void renderAudioTab()
 						backendIntCfg.format = "%d";
 						backendIntCfg.valueWidth = 220.0f;
 						backendIntCfg.sliderWidth = 320.0f;
-						backendIntCfg.onApply = [&]() {
+						backendIntCfg.onValueChange = [&]() {
 							cfgSaveStr(current_backend->slug, options->name, std::to_string(tempVal));
 						};
 
@@ -4781,10 +4778,10 @@ void renderControlsTab()
 			sensitivityConfig.defaultValue = 100;
 			sensitivityConfig.format = "%d";
 			sensitivityConfig.applyButtonText = T("Apply");
-			sensitivityConfig.onApply = []() {
+			sensitivityConfig.onApply = nullptr;
+			sensitivityConfig.onValueChange = []() {
 				config::MouseSensitivity.set(sensitivityTemp);
 			};
-			sensitivityConfig.onValueChange = nullptr;
 			sensitivityConfig.iconSize = 20.0f;
 			sensitivityConfig.iconSpacing = 8.0f;
 			sensitivityConfig.valueWidth = 220.0f;
@@ -5174,10 +5171,10 @@ void renderControlsTab()
 			crosshairConfig.defaultValue = 50;
 			crosshairConfig.format = "%d";
 			crosshairConfig.applyButtonText = T("Apply");
-			crosshairConfig.onApply = []() {
+			crosshairConfig.onApply = nullptr;
+			crosshairConfig.onValueChange = []() {
 				config::CrosshairSize.set(crosshairSizeTemp);
 			};
-			crosshairConfig.onValueChange = nullptr;
 			crosshairConfig.iconSize = 20.0f;
 			crosshairConfig.iconSpacing = 8.0f;
 			crosshairConfig.valueWidth = 220.0f;
