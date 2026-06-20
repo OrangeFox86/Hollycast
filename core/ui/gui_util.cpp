@@ -1893,10 +1893,11 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
     // Configure popup window BEFORE opening (DuckStation-style)
     centerNextWindow();
-    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.5f;
+    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.85f;
     float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
-    ImGui::SetNextWindowSizeConstraints(ImVec2(uiScaled(250), 0), ImVec2(maxWidth, maxHeight));
-    ImGui::SetNextWindowSize(ImVec2(uiScaled(500), 0), ImGuiCond_FirstUseEver);
+    float popupWidth = std::min(uiScaled(500), maxWidth);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(uiScaled(320), maxWidth), 0), ImVec2(maxWidth, maxHeight));
+    ImGui::SetNextWindowSize(ImVec2(popupWidth, 0), ImGuiCond_Appearing);
 
     PopupStyleScope style;
     if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
@@ -1946,12 +1947,17 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         char rangeText[128];
         snprintf(rangeText, sizeof(rangeText), "Value Range: %d - %d", cfg.minValue, cfg.maxValue);
         ImGui::PushFont(PopupEmphasisFont());
+        const float contentWidth = ImGui::GetContentRegionAvail().x;
         ImGui::TextDisabled("%s", rangeText);
 
         if (cfg.defaultValue >= cfg.minValue && cfg.defaultValue <= cfg.maxValue) {
             char defaultText[128];
             snprintf(defaultText, sizeof(defaultText), "Default Value: %d", cfg.defaultValue);
-            ImGui::SameLine(0, uiScaled(20));
+            const float rangeWidth = ImGui::CalcTextSize(rangeText).x;
+            const float defaultWidth = ImGui::CalcTextSize(defaultText).x;
+            const float sameLineSpacing = uiScaled(20);
+            if (rangeWidth + sameLineSpacing + defaultWidth <= contentWidth)
+                ImGui::SameLine(0, sameLineSpacing);
             ImGui::TextDisabled("%s", defaultText);
         }
         ImGui::PopFont();

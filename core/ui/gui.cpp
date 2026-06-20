@@ -536,9 +536,15 @@ static void finish_exit_request(bool exitEmulator, bool saveFirst)
 {
 	if (saveFirst)
 		save_auto_state_before_exit();
-	gui_stop_game("", false);
+
 	if (exitEmulator && !commandLineStart)
+	{
+		emu.unloadGame(false);
 		mainui_stop();
+		return;
+	}
+
+	gui_stop_game("", false);
 }
 
 void gui_request_exit_to_library()

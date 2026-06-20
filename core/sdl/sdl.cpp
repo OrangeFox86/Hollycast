@@ -18,6 +18,7 @@
 #include "sdl_keyboard_mac.h"
 #include "wsi/context.h"
 #include "emulator.h"
+#include "ui/gui.h"
 #include "stdclass.h"
 #include "imgui.h"
 #include "hw/naomi/card_reader.h"
@@ -60,6 +61,16 @@ static bool handleBarcodeScanner(const SDL_Event& event);
 void sdl_stopHaptic(int port);
 static void pauseHaptic();
 static void resumeHaptic();
+
+static void updateFullscreenCursorVisibility(int mouseY)
+{
+	if (!window_fullscreen || !gameRunning || mouseCaptured)
+		return;
+
+	const ImGuiContext* context = ImGui::GetCurrentContext();
+	const float revealHeight = (context != nullptr ? ImGui::GetFrameHeight() : 20.0f) * 1.75f;
+	SDL_ShowCursor(mouseY <= revealHeight || gui_mouse_captured() ? SDL_ENABLE : SDL_DISABLE);
+}
 
 bool sdl_is_fullscreen()
 {
@@ -342,7 +353,7 @@ void input_sdl_handle()
 		switch (event.type)
 		{
 			case SDL_QUIT:
-				dc_exit();
+				gui_request_exit_emulator();
 				break;
 
 			case SDL_KEYDOWN:
@@ -505,6 +516,7 @@ void input_sdl_handle()
 
 			case SDL_MOUSEMOTION:
 				gui_set_mouse_position(event.motion.x, event.motion.y, false);
+				updateFullscreenCursorVisibility(event.motion.y);
 				checkRawInput();
 				if (!config::UseRawInput)
 				{
