@@ -2824,7 +2824,7 @@ void renderGeneralTab()
 			"SaveProtection",
 			ICON_FA_SHIELD_HALVED,
 			T("Save Protection"),
-			T("CAREFUL, TURNING THIS OFF CAN CAUSE ACCIDENTAL PROGRESS LOSS."),
+			T("Disabling this will remove the safeguards that help prevent lost game progress from not saving."),
 			static_cast<bool>(config::SaveProtection),
 			[](bool enabled) { config::SaveProtection = enabled; },
 			T(
