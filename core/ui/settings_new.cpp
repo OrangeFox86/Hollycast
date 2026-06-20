@@ -307,16 +307,6 @@ static void SetSettingsFooterText(const char* text)
 		g_settingsFooterText = text;
 }
 
-static bool IsSettingsPaneNavPressed(ImGuiKey dpadKey, ImGuiKey stickKey)
-{
-	return ImGui::IsKeyPressed(dpadKey, false) || ImGui::IsKeyPressed(stickKey, false);
-}
-
-static bool IsSettingsPaneNavPressed(ImGuiKey keyboardKey, ImGuiKey dpadKey, ImGuiKey stickKey)
-{
-	return ImGui::IsKeyPressed(keyboardKey, false) || IsSettingsPaneNavPressed(dpadKey, stickKey);
-}
-
 static bool IsAnySettingsPopupOpen()
 {
 	return ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
