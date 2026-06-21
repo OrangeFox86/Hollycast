@@ -2083,7 +2083,7 @@ static bool RenderCollapsingHeader(
 		const float fontSize = ImGui::GetFontSize();
 		const float iconWidth = iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, labelIcon).x;
 		const float spaceWidth = std::max(1.0f, settingsTitleFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, " ").x);
-		const int spacerCount = std::max(2, static_cast<int>(std::ceil((iconWidth + uiScaled(6.0f)) / spaceWidth)));
+		const int spacerCount = std::max(2, static_cast<int>(std::ceil((iconWidth + uiScaled(2.0f)) / spaceWidth)));
 		labelStr.append(spacerCount, ' ');
 	}
 

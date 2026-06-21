@@ -68,7 +68,26 @@ static bool isWindowFullscreen()
 		return window_fullscreen;
 
 	const u32 flags = SDL_GetWindowFlags(window);
-	return (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+	if ((flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0)
+		return true;
+
+#ifdef __APPLE__
+	int displayIndex = SDL_GetWindowDisplayIndex(window);
+	SDL_Rect displayBounds;
+	if (displayIndex >= 0 && SDL_GetDisplayBounds(displayIndex, &displayBounds) == 0)
+	{
+		SDL_Rect windowBounds;
+		SDL_GetWindowPosition(window, &windowBounds.x, &windowBounds.y);
+		SDL_GetWindowSize(window, &windowBounds.w, &windowBounds.h);
+		const int tolerance = 2;
+		return std::abs(windowBounds.x - displayBounds.x) <= tolerance
+				&& std::abs(windowBounds.y - displayBounds.y) <= tolerance
+				&& std::abs(windowBounds.w - displayBounds.w) <= tolerance
+				&& std::abs(windowBounds.h - displayBounds.h) <= tolerance;
+	}
+#endif
+
+	return false;
 }
 
 static void updateFullscreenCursorVisibility(int mouseY)
