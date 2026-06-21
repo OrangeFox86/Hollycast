@@ -439,7 +439,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		};
 
 		ImGui::Separator();
-		ImguiStyleColor navButtonColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 		const bool canGoBack = !select_back_history.empty();
 		if (!canGoBack)
 			ImGui::BeginDisabled(true);
@@ -589,6 +589,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::CloseCurrentPopup();
 		}
 		error_popup();
+		ImGui::PopStyleColor();
 		ImGui::EndPopup();
 	}
 }
