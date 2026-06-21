@@ -195,8 +195,8 @@ protected:
 	//! This is called by a virtual device when a feedback message relay is requested
 	inline void relayMapleLink() override
 	{
-		if (inMsg) {
-			MapleLinkDevice::relayPhysicalMapleLink(bus_id, bus_port, *inMsg);
+		if (this->inMsg) {
+			MapleLinkDevice::relayPhysicalMapleLink(this->bus_id, this->bus_port, *this->inMsg);
 		}
 	}
 };
