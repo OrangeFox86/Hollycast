@@ -62,9 +62,18 @@ void sdl_stopHaptic(int port);
 static void pauseHaptic();
 static void resumeHaptic();
 
+static bool isWindowFullscreen()
+{
+	if (window == nullptr)
+		return window_fullscreen;
+
+	const u32 flags = SDL_GetWindowFlags(window);
+	return (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+}
+
 static void updateFullscreenCursorVisibility(int mouseY)
 {
-	if (!window_fullscreen || !gameRunning || mouseCaptured)
+	if (!isWindowFullscreen() || !gameRunning || mouseCaptured)
 		return;
 
 	const ImGuiContext* context = ImGui::GetCurrentContext();
@@ -74,7 +83,7 @@ static void updateFullscreenCursorVisibility(int mouseY)
 
 bool sdl_is_fullscreen()
 {
-	return window_fullscreen;
+	return isWindowFullscreen();
 }
 
 static struct SDLDeInit
@@ -654,7 +663,7 @@ static float hdpiScaling = 1.f;
 static inline void get_window_state()
 {
 	u32 flags = SDL_GetWindowFlags(window);
-	window_fullscreen = flags & SDL_WINDOW_FULLSCREEN_DESKTOP;
+	window_fullscreen = (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
 	window_maximized = flags & SDL_WINDOW_MAXIMIZED;
     if (!window_fullscreen && !window_maximized){
         SDL_GetWindowSize(window, &windowPos.w, &windowPos.h);
