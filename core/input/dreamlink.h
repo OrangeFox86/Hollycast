@@ -83,12 +83,13 @@ public:
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
-	//! @return the display name of this DreamLink
-	virtual const char* getName() const = 0;
-	//! @return the label to be used in the extension device combo box on settings
-	virtual inline const char* getExpansionDeviceLabel() const {
-		return getName();
+	//! @return the display name of this DreamLink instance
+	//! @note Defaults to getProductName() if the subclass does not require unique instance naming
+	virtual const char* getName() const {
+		return getProductName();
 	}
+	//! @return The static hardware or product name characteristic of this device class
+	virtual inline const char* getProductName() const = 0;
 	//! @return the function code at the given port
 	virtual u32 getFunctionCodesMask(int forPort) const = 0;
 

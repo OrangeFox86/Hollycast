@@ -628,7 +628,7 @@ public:
 		return device_name.c_str();
 	}
 
-	const char* getExpansionDeviceLabel() const override {
+	const char* getProductName() const override {
 		return "DreamPicoPort";
 	}
 
