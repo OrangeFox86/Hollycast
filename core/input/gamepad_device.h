@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -135,12 +136,45 @@ public:
 	void setPerGameMapping(bool enabled);
 	bool isPerGameMapping() const { return perGameMapping; }
 
+	// LIMITS
+	//! The maximum activation value which is at least 1 notch on a [-128,127] scale
+	static const int MAX_ACTIVATION_VALUE = (126.0 / 127.0) * 32767 - 1;
+	// The minimum deactivation value
+	static const int MIN_ACTIVATION_VALUE = 0;
+
 	//! The axis value which causes a button activation (for axis to button mapping) (inclusive)
 	static const int AXIS_ACTIVATION_VALUE = 16384;  // Use 50% deflection as "pressed" threshold
+	//! The trigger analog value which causes a button activation
 	static const int TRIGGER_ACTIVATION_VALUE = 32767 - 2000;
 	//! The axis value which causes a button deactivation (for axis to button mapping) (exclusive)
 	static const int AXIS_DEACTIVATION_VALUE = 8192; // 25% deflection as "released" threshold
+	//! The trigger analog value which causes a button deactivation
 	static const int TRIGGER_DEACTIVATION_VALUE = 32767 - 1000;
+
+	static_assert(
+		AXIS_ACTIVATION_VALUE <= MAX_ACTIVATION_VALUE && AXIS_DEACTIVATION_VALUE <= MAX_ACTIVATION_VALUE,
+		"Axis activation/deactivation values must be at least 1 notch on a [-128,127] scale"
+	);
+	static_assert(
+		TRIGGER_ACTIVATION_VALUE <= MAX_ACTIVATION_VALUE && TRIGGER_DEACTIVATION_VALUE <= MAX_ACTIVATION_VALUE,
+		"Trigger activation/deactivation values must be at least 1 notch on a [-128,127] scale"
+	);
+	static_assert(
+		AXIS_ACTIVATION_VALUE >= MIN_ACTIVATION_VALUE && AXIS_DEACTIVATION_VALUE >= MIN_ACTIVATION_VALUE,
+		"Axis activation/deactivation values must be at least minimum threshold"
+	);
+	static_assert(
+		TRIGGER_ACTIVATION_VALUE >= MIN_ACTIVATION_VALUE && TRIGGER_DEACTIVATION_VALUE >= MIN_ACTIVATION_VALUE,
+		"Trigger activation/deactivation values must be at least minimum threshold"
+	);
+	static_assert(
+		AXIS_DEACTIVATION_VALUE < AXIS_ACTIVATION_VALUE,
+		"Axis deactivation value must be less than the activation value"
+	);
+	static_assert(
+		TRIGGER_DEACTIVATION_VALUE > TRIGGER_ACTIVATION_VALUE,
+		"Trigger deactivation value must be greater than the activation value"
+	);
 
 protected:
 	GamepadDevice(int maple_port, const char *api_name, bool remappable = true);
