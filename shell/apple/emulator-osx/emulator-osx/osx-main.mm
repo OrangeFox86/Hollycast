@@ -58,8 +58,9 @@ int darw_printf(const char* text, ...)
 
 void os_DoEvents() {
 #if defined(USE_SDL)
-	NSMenuItem *editMenuItem = [[NSApp mainMenu] itemAtIndex:1];
-	[editMenuItem setEnabled:SDL_IsTextInputActive()];
+	NSMenuItem *editMenuItem = [[NSApp mainMenu] itemWithTitle:@"Edit"];
+	if (editMenuItem)
+		[editMenuItem setEnabled:SDL_IsTextInputActive()];
 
 	NSMenuItem *toggleMenuItem = [[[[NSApp mainMenu] itemAtIndex:0] submenu] itemWithTag:MENU_TAG_TOGGLE_MENU];
 	if (toggleMenuItem) {

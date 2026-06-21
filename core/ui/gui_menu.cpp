@@ -93,9 +93,147 @@ static bool openUrlInShell(const char* url)
 	return platformIo.Platform_OpenInShellFn(ImGui::GetCurrentContext(), url);
 }
 
+void addRomDirectory(const std::string& path)
+{
+	if (path.empty())
+		return;
+	config::ContentPath.get().push_back(path);
+	SaveSettings();
+	gui_refresh_files();
+}
+
+void loadRomFile(const std::string& path)
+{
+	if (!path.empty())
+		gui_start_game(path);
+}
+
+void rescanRomDirectory()
+{
+	gui_refresh_files();
+}
+
+void saveState()
+{
+	if (::game_started)
+		gui_saveState();
+}
+
+void loadState()
+{
+	if (::game_started)
+		gui_loadState();
+}
+
+void exitEmulator()
+{
+	gui_request_exit_emulator();
+}
+
+void pauseOrResume()
+{
+	if (!::game_started)
+		return;
+	if (gui_state == GuiState::Closed)
+	{
+		emu.stop();
+		gui_setState(GuiState::Commands);
+	}
+	else
+	{
+		gui_setState(GuiState::Closed);
+		emu.start();
+	}
+}
+
+void restartGame()
+{
+	if (::game_started)
+	{
+		emu.stop();
+		emu.start();
+	}
+}
+
+void toggleFastForward()
+{
+	if (::game_started)
+		settings.input.fastForwardMode = !settings.input.fastForwardMode;
+}
+
+void takeScreenshot()
+{
+	if (::game_started)
+		gui_takeScreenshot();
+}
+
+void openCheats()
+{
+	if (::game_started)
+		gui_setState(GuiState::Cheats);
+}
+
+void openCustomBoxartSettings()
+{
+	gui_setState(GuiState::Settings);
+	gui_focus_boxart_settings_section();
+}
+
+static void openSettingsTab(GuiSettingsTab tab)
+{
+	gui_prepare_settings_tab(tab);
+	gui_setState(GuiState::Settings);
+}
+
+void openGeneralSettings()
+{
+	openSettingsTab(GuiSettingsTab::General);
+}
+
+void openVideoSettings()
+{
+	openSettingsTab(GuiSettingsTab::Video);
+}
+
+void openAudioSettings()
+{
+	openSettingsTab(GuiSettingsTab::Audio);
+}
+
+void openControlsSettings()
+{
+	openSettingsTab(GuiSettingsTab::Controls);
+}
+
+void openNetworkSettings()
+{
+	openSettingsTab(GuiSettingsTab::Network);
+}
+
+void openAdvancedSettings()
+{
+	openSettingsTab(GuiSettingsTab::Advanced);
+}
+
+void openAboutSettings()
+{
+	openSettingsTab(GuiSettingsTab::About);
+}
+
+bool isGameRunning()
+{
+	return ::game_started;
+}
+
 // Render the main menu bar using standard ImGui.
 void renderMainMenuBar()
 {
+#if defined(TARGET_MAC)
+	menuBarVisibleThisFrame = false;
+	menuBarHeightThisFrame = 0.0f;
+	return;
+#endif
+
 	menuBarVisibleThisFrame = shouldShowMenuBar();
 	menuBarHeightThisFrame = 0.0f;
 	if (!menuBarVisibleThisFrame)
@@ -134,9 +272,7 @@ void renderFileMenu()
 			select_file_popup(T("Select ROM Directory"), [](bool cancelled, std::string selection) {
 				if (!cancelled && !selection.empty())
 				{
-					config::ContentPath.get().push_back(selection);
-					SaveSettings();
-					gui_refresh_files();
+					addRomDirectory(selection);
 				}
 				return true;
 			}, false, "");
@@ -145,7 +281,7 @@ void renderFileMenu()
 		// Rescan ROM Directory
 		if (ImGui::MenuItem(T("Rescan ROM Directory"), nullptr, false, true))
 		{
-			gui_refresh_files();
+			rescanRomDirectory();
 		}
 
 		ImGui::Separator();
@@ -157,7 +293,7 @@ void renderFileMenu()
 			select_file_popup(T("Select ROM File"), [](bool cancelled, std::string selection) {
 				if (!cancelled && !selection.empty())
 				{
-					gui_start_game(selection);
+					loadRomFile(selection);
 				}
 				return true;
 			}, true, "");
@@ -168,19 +304,13 @@ void renderFileMenu()
 		// Save State
 		if (ImGui::MenuItem(T("Save State"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-			{
-				gui_saveState();
-			}
+			saveState();
 		}
 
 		// Load State
 		if (ImGui::MenuItem(T("Load State"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-			{
-				gui_loadState();
-			}
+			loadState();
 		}
 
 		ImGui::Separator();
@@ -188,7 +318,7 @@ void renderFileMenu()
 		// Exit Emulator
 		if (ImGui::MenuItem(T("Exit Emulator"), nullptr, false, true))
 		{
-			gui_request_exit_emulator();
+			exitEmulator();
 		}
 
 		ImGui::EndMenu();
@@ -207,16 +337,14 @@ void renderSystemMenu()
 			{
 				if (ImGui::MenuItem(T("Pause"), nullptr, false, true))
 				{
-					emu.stop();
-					gui_setState(GuiState::Commands);
+					pauseOrResume();
 				}
 			}
 			else
 			{
 				if (ImGui::MenuItem(T("Resume"), nullptr, false, true))
 				{
-					gui_setState(GuiState::Closed);
-					emu.start();
+					pauseOrResume();
 				}
 			}
 		}
@@ -224,11 +352,7 @@ void renderSystemMenu()
 		// Restart
 		if (ImGui::MenuItem(T("Restart"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-			{
-				emu.stop();
-				emu.start();
-			}
+			restartGame();
 		}
 
 		ImGui::Separator();
@@ -236,15 +360,13 @@ void renderSystemMenu()
 		// Fast Forward
 		if (ImGui::MenuItem(T("Fast Forward"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-				settings.input.fastForwardMode = !settings.input.fastForwardMode;
+			toggleFastForward();
 		}
 
 		// Screenshot
 		if (ImGui::MenuItem(T("Screenshot"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-				gui_takeScreenshot();
+			takeScreenshot();
 		}
 
 		ImGui::Separator();
@@ -268,10 +390,7 @@ void renderSystemMenu()
 		// Cheats
 		if (ImGui::MenuItem(T("Cheats"), nullptr, false, ::game_started))
 		{
-			if (::game_started)
-			{
-				gui_setState(GuiState::Cheats);
-			}
+			openCheats();
 		}
 
 		ImGui::EndMenu();
@@ -290,8 +409,7 @@ void renderToolsMenu()
 		// Custom Boxart
 		if (ImGui::MenuItem(T("Custom Boxart"), nullptr, false, true))
 		{
-			gui_setState(GuiState::Settings);
-			gui_focus_boxart_settings_section();
+			openCustomBoxartSettings();
 		}
 
 		ImGui::EndMenu();
@@ -306,43 +424,37 @@ void renderSettingsMenu()
 		// General
 		if (ImGui::MenuItem(T("General"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::General);
-			gui_setState(GuiState::Settings);
+			openGeneralSettings();
 		}
 
 		// Video
 		if (ImGui::MenuItem(T("Video"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::Video);
-			gui_setState(GuiState::Settings);
+			openVideoSettings();
 		}
 
 		// Audio
 		if (ImGui::MenuItem(T("Audio"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::Audio);
-			gui_setState(GuiState::Settings);
+			openAudioSettings();
 		}
 
 		// Controls
 		if (ImGui::MenuItem(T("Controls"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::Controls);
-			gui_setState(GuiState::Settings);
+			openControlsSettings();
 		}
 
 		// Network
 		if (ImGui::MenuItem(T("Network"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::Network);
-			gui_setState(GuiState::Settings);
+			openNetworkSettings();
 		}
 
 		// Advanced
 		if (ImGui::MenuItem(T("Advanced"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::Advanced);
-			gui_setState(GuiState::Settings);
+			openAdvancedSettings();
 		}
 
 		ImGui::EndMenu();
@@ -385,8 +497,7 @@ void renderHelpMenu()
 
 		if (ImGui::MenuItem(T("About Hollycast"), nullptr, false, true))
 		{
-			gui_prepare_settings_tab(GuiSettingsTab::About);
-			gui_setState(GuiState::Settings);
+			openAboutSettings();
 		}
 
 		ImGui::EndMenu();
