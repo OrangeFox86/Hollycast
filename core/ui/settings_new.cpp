@@ -4435,18 +4435,21 @@ void renderAudioTab()
 		std::string currentBackendName = currentBackend ? currentBackend->getName() : T("Unknown");
 
 		// Build dynamic options list
-		std::vector<const char*> backendOptions;
-		std::vector<std::string> backendLabels;
-		for (u32 i = 0; i < AudioBackend::getCount(); i++)
+		int backendCount = (int)AudioBackend::getCount();
+		std::vector<std::string> backendLabels(backendCount);
+		for (int i = 0; i < backendCount; i++)
 		{
 			const AudioBackend* backend = AudioBackend::getBackend(i);
-			backendLabels.push_back(backend->slug + " - " + backend->getName());
-			backendOptions.push_back(backendLabels.back().c_str());
+			backendLabels[i] = backend->slug + " - " + backend->getName();
 		}
+
+		std::vector<const char*> backendOptions(backendCount);
+		for (int i = 0; i < backendCount; i++)
+			backendOptions[i] = backendLabels[i].c_str();
 
 		// Find current index
 		int currentBackendIndex = 0;
-		for (u32 i = 0; i < AudioBackend::getCount(); i++)
+		for (int i = 0; i < backendCount; i++)
 		{
 			if (config::AudioBackend.get() == AudioBackend::getBackend(i)->slug)
 				{
@@ -4463,7 +4466,7 @@ void renderAudioTab()
 		driverConfig.icon = ICON_FA_HEADPHONES;
 		driverConfig.popupID = Tnop("AudioDriverPopup");
 		driverConfig.options = backendOptions.data();
-		driverConfig.optionCount = (int)AudioBackend::getCount();
+		driverConfig.optionCount = backendCount;
 		driverConfig.currentValue = &selectedBackendIndex;
 		driverConfig.valueToString = nullptr;  // Use options array directly
 		driverConfig.storageIndexMap = nullptr;
