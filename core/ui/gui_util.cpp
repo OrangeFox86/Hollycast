@@ -549,7 +549,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 				ImGui::Separator();
 
 				hostfs::FileInfo rootEntry;
-				rootEntry.name = T("This PC");
+				rootEntry.name = T("This device");
 				rootEntry.path = "";
 				FolderNode(rootEntry, false, 0);
 
