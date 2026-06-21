@@ -52,6 +52,7 @@
 #include "stdclass.h"
 #include "achievements/achievements.h"
 #include "vgamepad.h"
+#include <cmath>
 #include <cstring>
 #include <cfloat>
 #ifdef __ANDROID__
@@ -116,6 +117,7 @@ static float g_twoLineRowExtraHeightPx = 0.0f;
 static bool g_twoLineRowSeparatorsEnabled = false;
 static float g_twoLineRowSeparatorAlpha = 0.5f;
 static float g_twoLineRowStartScreenX = 0.0f;
+static float g_twoLineRowEndScreenX = 0.0f;
 static float g_twoLineRowEndScreenY = 0.0f;
 static bool g_mapleDevicesChangedInSettings = false;
 static bool g_scrollToBoxArtSection = false;
@@ -567,6 +569,7 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 	ImguiStyleVar rowItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing.x, 0.0f));
 	const bool clicked = ImGui::Selectable(rowId, false, rowFlags, ImVec2(0.0f, TwoLineSettingRowHeight()));
 	g_twoLineRowStartScreenX = ImGui::GetItemRectMin().x;
+	g_twoLineRowEndScreenX = ImGui::GetItemRectMax().x;
 	g_twoLineRowEndScreenY = ImGui::GetItemRectMax().y;
 	if (tooltip != nullptr && (ImGui::IsItemHovered() || ImGui::IsItemFocused()))
 		SetSettingsFooterText(tooltip);
@@ -656,7 +659,14 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 		textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+	const float wrapWidth = std::max(uiScaled(80.0f),
+		g_twoLineRowEndScreenX - ImGui::GetCursorScreenPos().x - uiScaled(16.0f));
+	const ImVec2 textMin = ImGui::GetCursorScreenPos();
+	ImGui::PushClipRect(textMin, ImVec2(g_twoLineRowEndScreenX - uiScaled(8.0f), g_twoLineRowEndScreenY - uiScaled(2.0f)), true);
+	ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrapWidth);
 	ImGui::TextUnformatted(compactLine.c_str());
+	ImGui::PopTextWrapPos();
+	ImGui::PopClipRect();
 	ImGui::PopStyleColor();
 	ImGui::PopFont();
 }
@@ -2066,8 +2076,16 @@ static bool RenderCollapsingHeader(
 	thread_local std::string labelStr;
 	labelStr.clear(); // Keeps the allocated capacity intact
 
+	ImGui::PushFont(settingsTitleFont);
 	if (labelIcon && *labelIcon != '\0')
-		labelStr += "  ";
+	{
+		ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+		const float fontSize = ImGui::GetFontSize();
+		const float iconWidth = iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, labelIcon).x;
+		const float spaceWidth = std::max(1.0f, settingsTitleFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, " ").x);
+		const int spacerCount = std::max(2, static_cast<int>(std::ceil((iconWidth + uiScaled(6.0f)) / spaceWidth)));
+		labelStr.append(spacerCount, ' ');
+	}
 
 	labelStr += labelText;
 
@@ -2077,7 +2095,6 @@ static bool RenderCollapsingHeader(
 		labelStr += id;
 	}
 
-	ImGui::PushFont(settingsTitleFont);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(8.0f), uiScaled(10.0f)));
 	bool open = ImGui::CollapsingHeader(labelStr.c_str(), flags);
 	if (labelIcon && *labelIcon != '\0')
