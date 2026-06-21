@@ -3976,13 +3976,14 @@ void renderVideoTab()
 			"DelayFrameSwapping",
 			ICON_FA_CLOCK,
 			T("Delay Frame Swapping"),
-			T("Reduce flashing and glitchy video playback."),
+			T("Delay the frame swap to reduce flashing or unstable video playback."),
 			static_cast<bool>(config::DelayFrameSwapping),
 			[](bool enabled) { config::DelayFrameSwapping = enabled; },
 			T(
 				"Delay Frame Swapping\n"
-				"Useful to avoid a flashing screen or glitchy videos in some titles.\n"
-				"Not recommended on slow platforms."
+				"Waits for the Dreamcast read/write frame buffers to line up before presenting the next frame.\n\n"
+				"This can reduce flashing screens, unstable video playback, or pacing issues in titles that swap buffers in unusual ways.\n"
+				"Leave it off if it causes slowdown or extra latency on slower devices."
 			));
 
 		// Fix Upscale Bleeding Edge
