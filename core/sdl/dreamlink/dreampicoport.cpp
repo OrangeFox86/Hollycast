@@ -261,6 +261,17 @@ public:
 				all_dpp_api_devices.insert(std::make_pair(serial_number, dpp_api_device));
 			}
 		}
+		else if (!dpp_api_device->isConnected()) {
+			if (!dpp_api_device->connect()) {
+				WARN_LOG(
+					INPUT,
+					"DreamPicoPort[%s] API connect failed: %s",
+					getLocDesc().c_str(),
+					dpp_api_device->getLastErrorStr().c_str()
+				);
+				dpp_api_device.reset();
+			}
+		}
 	}
 
 	virtual ~ApiDreamPicoPortComms() = default;
