@@ -102,11 +102,25 @@ namespace hostfs
 void select_file_popup(const char *prompt, const StringCallback& callback,
 		bool selectFile, const std::string& selectExtension)
 {
-	fullScreenWindow(true);
+	const float windowInset = uiScaled(8.0f);
+	const ImVec2 parentPos = ImGui::GetWindowPos();
+	const ImVec2 parentSize = ImGui::GetWindowSize();
+	const ImVec2 popupPos(parentPos.x + windowInset, parentPos.y + windowInset);
+	const ImVec2 visibleSize = ImGui::GetIO().DisplaySize;
+	const ImVec2 maxVisibleSize(
+			std::max(uiScaled(320.0f), visibleSize.x - popupPos.x - windowInset),
+			std::max(uiScaled(240.0f), visibleSize.y - popupPos.y - windowInset));
+	ImGui::SetNextWindowPos(popupPos, ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(
+			std::min(std::max(uiScaled(320.0f), parentSize.x - windowInset * 2.0f), maxVisibleSize.x),
+			std::min(std::max(uiScaled(240.0f), parentSize.y - windowInset * 2.0f), maxVisibleSize.y)),
+			ImGuiCond_Always);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ImVec2(4, 3)); // default
 
-	if (ImGui::BeginPopup(prompt, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize ))
+	if (ImGui::BeginPopup(prompt, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
+			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+			| ImGuiWindowFlags_NoSavedSettings))
 	{
 		static std::string error_message;
 
@@ -133,7 +147,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		};
 
 		auto navigateToDirectory = [&](const std::string& path, bool addToHistory) {
-			if (path.empty() || path == select_current_directory)
+			if (path == select_current_directory)
 				return;
 			if (addToHistory && !select_current_directory.empty())
 			{
@@ -215,7 +229,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 									|| extension == selectExtension)
 								folderFiles.push_back(entry);
 						}
-						else if (isSupportedGameExtension(extension))
+						else
 							folderFiles.push_back(entry);
 					}
 				}
@@ -285,6 +299,20 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			return chain;
 		};
 
+		auto normalizePathForCompare = [](std::string path) {
+			while (path.size() > 1 && (path.back() == '/' || path.back() == '\\'))
+				path.pop_back();
+#ifdef _WIN32
+			std::transform(path.begin(), path.end(), path.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+			return path;
+		};
+
+		auto isSamePath = [&](const std::string& lhs, const std::string& rhs) {
+			return normalizePathForCompare(lhs) == normalizePathForCompare(rhs);
+		};
+
 		const float navSize = ImGui::GetFrameHeight();
 		auto formatTimestamp = [](u64 updateTime) {
 			if (updateTime == 0)
@@ -339,10 +367,18 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 					ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 			{
 				const std::vector<std::string> chain = getNavigationChain(select_current_directory);
+				if (ImGui::SmallButton(T("This PC")))
+					navigateToDirectory("", true);
 				bool first = true;
 				for (size_t i = 0; i < chain.size(); ++i)
 				{
 					const std::string leaf = chain[i] == "/" ? "/" : getPathLeaf(chain[i]);
+					if (first)
+					{
+						ImGui::SameLine(0.0f, 2.0f);
+						ImGui::Text(">");
+						ImGui::SameLine(0.0f, 2.0f);
+					}
 					if (!first)
 					{
 						ImGui::SameLine(0.0f, 2.0f);
@@ -351,22 +387,21 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 					}
 					first = false;
 
-					const bool isCurrent = chain[i] == select_current_directory;
 					if (ImGui::SmallButton(leaf.c_str()))
+						navigateToDirectory(chain[i], true);
+					if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 					{
 						setInputText(chain[i]);
 						fileInputIsDirectory = true;
-					}
-					if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-						navigateToDirectory(chain[i], true);
-					if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 						*editMode = true;
+					}
 				}
 			}
 			ImGui::EndChild();
 		};
 
-		auto drawBrowserItemLabel = [&](const char* icon, const std::string& name, const ImVec2& pos, bool disabled = false) {
+		auto drawBrowserItemLabel = [&](const char* icon, const std::string& name, const ImVec2& pos,
+				bool disabled, float indent) {
 			ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 			ImFont* textFont = ImGui::GetFont();
 			ImGuiStyle& style = ImGui::GetStyle();
@@ -374,35 +409,41 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			const float iconSize = ImGui::GetFontSize();
 			const float iconWidth = uiScaled(18.0f);
 			const ImU32 color = ImGui::GetColorU32(disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text);
-			const ImVec2 iconPos(pos.x + style.FramePadding.x, pos.y + style.FramePadding.y);
-			const ImVec2 textPos(pos.x + style.FramePadding.x + iconWidth, pos.y + style.FramePadding.y);
+			const float itemX = pos.x + style.FramePadding.x + indent;
+			const ImVec2 iconPos(itemX, pos.y + style.FramePadding.y);
+			const ImVec2 textPos(itemX + iconWidth, pos.y + style.FramePadding.y);
 
 			ImGui::GetWindowDrawList()->AddText(iconFont, iconSize, iconPos, color, icon);
 			ImGui::GetWindowDrawList()->AddText(textFont, textHeight, textPos, color, name.c_str());
 		};
 
-		auto FolderNode = [&](const hostfs::FileInfo& entry, bool inContentPane) {
-			const bool selected = fileInputIsDirectory && std::strcmp(fileInputText, entry.path.c_str()) == 0;
+		auto FolderNode = [&](const hostfs::FileInfo& entry, bool inContentPane, int treeDepth) {
+			const bool selected = inContentPane
+					? fileInputIsDirectory && std::strcmp(fileInputText, entry.path.c_str()) == 0
+					: isSamePath(select_current_directory, entry.path);
 			const char* icon = selected ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
 			const ImVec2 rowSize(0.0f, ImGui::GetTextLineHeightWithSpacing());
 			if (inContentPane)
 				ImGui::TableNextRow();
 			if (inContentPane)
 				ImGui::TableSetColumnIndex(0);
-			ImGui::PushID(entry.path.c_str());
+			ImGui::PushID(entry.path.empty() ? entry.name.c_str() : entry.path.c_str());
 			const ImVec2 rowPos = ImGui::GetCursorScreenPos();
 			if (ImGui::Selectable("##folder", selected,
 					inContentPane
 							? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)
-							: ImGuiSelectableFlags_AllowDoubleClick,
+							: 0,
 					rowSize))
 			{
 				setInputText(entry.path);
 				fileInputIsDirectory = true;
 				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 					navigateToDirectory(entry.path, true);
+				else if (!inContentPane)
+					navigateToDirectory(entry.path, true);
 			}
-			drawBrowserItemLabel(icon, entry.name, rowPos);
+			drawBrowserItemLabel(icon, entry.name, rowPos, false,
+					inContentPane ? 0.0f : uiScaled(14.0f) * treeDepth);
 			ImGui::PopID();
 			if (inContentPane)
 			{
@@ -428,7 +469,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 				setInputText(entry.name);
 				fileInputIsDirectory = false;
 			}
-			drawBrowserItemLabel(ICON_FA_FILE, entry.name, rowPos);
+			drawBrowserItemLabel(ICON_FA_FILE, entry.name, rowPos, false, 0.0f);
 			ImGui::PopID();
 
 			ImGui::TableSetColumnIndex(1);
@@ -468,7 +509,12 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		ImGui::SameLine();
 		if (ImGui::ArrowButton("##up", ImGuiDir_Up)
 				&& !select_current_directory.empty() && select_current_directory != "/")
-			navigateToDirectory(hostfs::storage().getParentPath(select_current_directory), true);
+		{
+			std::string parent = hostfs::storage().getParentPath(select_current_directory);
+			if (parent == select_current_directory)
+				parent.clear();
+			navigateToDirectory(parent, true);
+		}
 		ImGui::SameLine();
 		PathBox(&select_pathbox_text_mode);
 		ImGui::SameLine();
@@ -480,11 +526,17 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		}
 		ImGui::Separator();
 
-		const float bottomBarHeight = ImGui::GetFrameHeight() * 2.f + ImGui::GetStyle().ItemSpacing.y * 2.f;
-		const float browserHeight = std::max(uiScaled(160.0f), ImGui::GetContentRegionAvail().y - bottomBarHeight);
-		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, browserHeight)))
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float bottomControlsHeight = ImGui::GetFrameHeightWithSpacing() * 2.0f
+				+ style.ItemSpacing.y * 2.0f
+				+ style.WindowPadding.y;
+		const float browserHeight = std::max(uiScaled(120.0f),
+				ImGui::GetContentRegionAvail().y - bottomControlsHeight);
+		ImGui::BeginChild("##file_browser_region", ImVec2(0, browserHeight),
+				ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, 0)))
 		{
-			ImGui::TableSetupColumn("##tree", ImGuiTableColumnFlags_WidthFixed, uiScaled(125));
+			ImGui::TableSetupColumn("##tree", ImGuiTableColumnFlags_WidthFixed, uiScaled(170));
 			ImGui::TableSetupColumn("##content", ImGuiTableColumnFlags_WidthStretch);
 			ImGui::TableNextRow();
 
@@ -496,21 +548,57 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 				ImGui::TextDisabled("%s", T("Folders"));
 				ImGui::Separator();
 
-				for (const auto& path : getNavigationChain(select_current_directory))
-				{
-					const std::string leafName = getPathLeaf(path);
-					const std::string label = leafName.empty() ? path : leafName;
-					hostfs::FileInfo breadcrumb;
-					breadcrumb.name = label;
-					breadcrumb.path = path;
-					FolderNode(breadcrumb, false);
-				}
-				for (const auto& entry : subfolders)
-				{
-					if (!matchesSearch(entry.name))
-						continue;
+				hostfs::FileInfo rootEntry;
+				rootEntry.name = T("This PC");
+				rootEntry.path = "";
+				FolderNode(rootEntry, false, 0);
 
-					FolderNode(entry, false);
+				std::vector<hostfs::FileInfo> roots;
+				try {
+					roots = hostfs::storage().listContent("");
+					std::sort(roots.begin(), roots.end());
+				} catch (const hostfs::StorageException&) {
+				}
+
+				const std::vector<std::string> navigationChain = getNavigationChain(select_current_directory);
+				const std::string activeRoot = navigationChain.empty() ? std::string() : navigationChain.front();
+				for (const auto& root : roots)
+				{
+					if (!root.isDirectory || !matchesSearch(root.name))
+						continue;
+					FolderNode(root, false, 1);
+
+					if (!activeRoot.empty() && isSamePath(root.path, activeRoot))
+					{
+						for (size_t i = 1; i < navigationChain.size(); ++i)
+						{
+							const std::string& path = navigationChain[i];
+							const std::string leafName = getPathLeaf(path);
+							const std::string label = leafName.empty() ? path : leafName;
+							hostfs::FileInfo breadcrumb;
+							breadcrumb.name = label;
+							breadcrumb.path = path;
+							FolderNode(breadcrumb, false, static_cast<int>(i + 1));
+						}
+						for (const auto& entry : subfolders)
+						{
+							if (!matchesSearch(entry.name))
+								continue;
+
+							FolderNode(entry, false, static_cast<int>(navigationChain.size() + 1));
+						}
+					}
+				}
+
+				if (roots.empty())
+				{
+					for (const auto& entry : subfolders)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+
+						FolderNode(entry, false, 1);
+					}
 				}
 				scrollWhenDraggingOnVoid();
 				windowDragScroll();
@@ -533,7 +621,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 					{
 						if (!matchesSearch(entry.name))
 							continue;
-						FolderNode(entry, true);
+						FolderNode(entry, true, 0);
 					}
 
 					for (const auto& entry : folderFiles)
@@ -545,7 +633,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						else {
 							ImGui::TableNextRow();
 							ImGui::TableSetColumnIndex(0);
-							drawBrowserItemLabel(ICON_FA_FILE, entry.name, ImGui::GetCursorScreenPos(), true);
+							drawBrowserItemLabel(ICON_FA_FILE, entry.name, ImGui::GetCursorScreenPos(), true, 0.0f);
 							ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing()));
 							ImGui::TableSetColumnIndex(1);
 							ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
@@ -562,6 +650,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::EndChild();
 			ImGui::EndTable();
 		}
+		ImGui::EndChild();
 		ImGui::TextUnformatted(selectFile ? T("File name:") : T("Folder:"));
 		ImGui::SameLine();
 		const bool inputSubmitted = ImGui::InputTextEx("##file_input", T("Filename"), fileInputText, sizeof(fileInputText),

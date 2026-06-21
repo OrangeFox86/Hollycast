@@ -43,6 +43,7 @@ namespace GuiMenu {
 // Menu visibility state
 bool menuVisible = true;
 static bool menuBarVisibleThisFrame = true;
+static float menuBarHeightThisFrame = 0.0f;
 static double touchMenuVisibleUntil = 0.0;
 
 static bool isFullscreenMenuMode()
@@ -64,7 +65,10 @@ static bool shouldShowMenuBar()
 		return true;
 
 	ImGuiIO& io = ImGui::GetIO();
+	ImFont* menuFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	ImGui::PushFont(menuFont);
 	const float revealHeight = ImGui::GetFrameHeight() * 1.75f;
+	ImGui::PopFont();
 	const bool hasPointer = io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX;
 	const bool pointerAtTop = hasPointer && io.MousePos.y <= revealHeight;
 	const bool popupOpen = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
@@ -93,6 +97,7 @@ static bool openUrlInShell(const char* url)
 void renderMainMenuBar()
 {
 	menuBarVisibleThisFrame = shouldShowMenuBar();
+	menuBarHeightThisFrame = 0.0f;
 	if (!menuBarVisibleThisFrame)
 		return;
 
@@ -102,9 +107,11 @@ void renderMainMenuBar()
 	// - Hover effects (ImGuiCol_HeaderHovered) and dropdown menus
 	// - Cross-platform native appearance
 	// Theme colors are already set by applyCurrentTheme().
-	ImGui::PushFont(settingsTitleFont);
+	ImFont* menuFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	ImGui::PushFont(menuFont);
 	if (ImGui::BeginMainMenuBar())
 	{
+		menuBarHeightThisFrame = ImGui::GetWindowHeight();
 		renderFileMenu();
 		renderSystemMenu();
 		renderToolsMenu();
@@ -408,7 +415,7 @@ bool isMenuBarVisible()
 
 float mainMenuBarHeight()
 {
-	return menuBarVisibleThisFrame ? ImGui::GetFrameHeight() : 0.0f;
+	return menuBarHeightThisFrame;
 }
 
 // Initialize menu system
