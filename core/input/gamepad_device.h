@@ -137,10 +137,10 @@ public:
 	bool isPerGameMapping() const { return perGameMapping; }
 
 	// LIMITS
-	//! The maximum activation value which is at least 2 notches on a [0,255] scale
-	static const int MAX_ACTIVATION_VALUE = (32767 * 254 / 256) - 1;
-	// The minimum deactivation value
-	static const int MIN_ACTIVATION_VALUE = 0;
+	//! The maximum activation/deactivation value which is at least 3 notches on an 8-bit scale
+	static const int MAX_ACTIVATION_VALUE = (32767 * 253 / 256);
+	// The minimum activation/deactivation value which is at least 3 notches on an 8-bit scale
+	static const int MIN_ACTIVATION_VALUE = (32767 * 3 / 256);
 
 	//! The axis value which causes a button activation (for axis to button mapping) (inclusive)
 	static const int AXIS_ACTIVATION_VALUE = 16384;  // Use 50% deflection as "pressed" threshold
@@ -168,12 +168,12 @@ public:
 		"Trigger activation/deactivation values must be at least minimum threshold"
 	);
 	static_assert(
-		AXIS_DEACTIVATION_VALUE < AXIS_ACTIVATION_VALUE,
-		"Axis deactivation value must be less than the activation value"
+		AXIS_DEACTIVATION_VALUE <= AXIS_ACTIVATION_VALUE,
+		"Axis deactivation value must be at most the activation value"
 	);
 	static_assert(
-		TRIGGER_DEACTIVATION_VALUE > TRIGGER_ACTIVATION_VALUE,
-		"Trigger deactivation value must be greater than the activation value"
+		TRIGGER_DEACTIVATION_VALUE >= TRIGGER_ACTIVATION_VALUE,
+		"Trigger deactivation value must be at least the activation value"
 	);
 
 protected:
