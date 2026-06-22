@@ -1,4 +1,6 @@
 /*
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of Flycast.
 
     Flycast is free software: you can redistribute it and/or modify
@@ -54,6 +56,7 @@ bool isActive();
 Game getCurrentGame();
 std::vector<Achievement> getAchievementList();
 bool canPause();
+void setHostOverride(const std::string& host);
 
 #else
 
