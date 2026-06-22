@@ -697,10 +697,10 @@ public:
 	void connect() override {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
-		internalConnect();
-
 		connect_attempted = true;
 		connect_requested = true;
+
+		internalConnect();
 
 		if (!isConnected()) {
 			// Retry again later
@@ -821,19 +821,17 @@ private:
 		// Query peripheral after 3.5 seconds on first connection attempt
 		// This is because gamepad_btn_input event handler isn't active for a few seconds after physical connection. An
 		// older VMU without battery takes 3 seconds to boot, so this should ensure initial attachment is captured.
-		if (!connect_attempted) {
-			std::weak_ptr<BaseDreamLink> weakThis = weak_from_this();
-			gui_runOnUiThread(
-				std::chrono::milliseconds(3500),
-				[weakThis]()
-				{
-					std::shared_ptr<DreamPicoPort> link = std::dynamic_pointer_cast<DreamPicoPort>(weakThis.lock());
-					if (link) {
-						link->queryPeripherals();
-					}
+		std::weak_ptr<BaseDreamLink> weakThis = weak_from_this();
+		gui_runOnUiThread(
+			std::chrono::milliseconds(3500),
+			[weakThis]()
+			{
+				std::shared_ptr<DreamPicoPort> link = std::dynamic_pointer_cast<DreamPicoPort>(weakThis.lock());
+				if (link) {
+					link->queryPeripherals();
 				}
-			);
-		}
+			}
+		);
 
 		setMapleDevices();
 	}
