@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -484,9 +485,9 @@ bool GamepadDevice::gamepad_axis_input(u32 code, int value)
 			if (input_mapper->isTrigger(code))
 			{
 				if (!input_mapper->isReverseTrigger(code))
-					pressed = v >= -32768 + 100;	// positive range -32768 -> 32767
+					pressed = v >= -TRIGGER_ACTIVATION_VALUE;
 				else
-					pressed = v <= 32767 - 100;		// negative range 32767 -> -32768
+					pressed = v <= TRIGGER_ACTIVATION_VALUE;
 			}
 			else {
 				pressed = std::abs(v) >= AXIS_ACTIVATION_VALUE;
@@ -552,14 +553,21 @@ bool GamepadDevice::gamepad_axis_input(u32 code, int value)
 	if (input_mapper->isTrigger(code))
 	{
 		if (!input_mapper->isReverseTrigger(code))
-			pressed = value >= -32768 + 100;	// normal range -32768 -> 32767
+		{
+			// normal range -32768 -> 32767
+			pressed = value >= -TRIGGER_ACTIVATION_VALUE;
+			released = value < -TRIGGER_DEACTIVATION_VALUE;
+		}
 		else
-			pressed = value <= 32767 - 100;		// reverse range 32767 -> -32768
-		released = !pressed;
+		{
+			// reverse range 32767 -> -32768
+			pressed = value <= TRIGGER_ACTIVATION_VALUE;
+			released = value > TRIGGER_DEACTIVATION_VALUE;
+		}
 	}
 	else {
 		pressed = std::abs(value) >= AXIS_ACTIVATION_VALUE;
-		released = std::abs(value) < AXIS_ACTIVATION_VALUE;
+		released = std::abs(value) < AXIS_DEACTIVATION_VALUE;
 	}
 	if (pressed || released)
 	{

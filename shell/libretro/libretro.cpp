@@ -40,7 +40,7 @@
 
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
 #include <glsm/glsm.h>
-#include "wsi/gl_context.h"
+#include "wsi/libretro.h"
 #endif
 #ifdef HAVE_VULKAN
 #include "rend/vulkan/vulkan_context.h"
@@ -1370,7 +1370,13 @@ static void context_reset()
 	glsm_ctl(GLSM_CTL_STATE_CONTEXT_RESET, NULL);
 	glsm_ctl(GLSM_CTL_STATE_SETUP, NULL);
 	rend_term_renderer();
-	theGLContext.init();
+	GraphicsContext::Term();
+	try {
+		GLGraphicsContext::Create(nullptr, nullptr);
+	} catch (const std::exception& e) {
+		ERROR_LOG(RENDERER, "%s", e.what());
+		return;
+	}
 	rend_init_renderer();
 #ifdef HAVE_OIT
 	if (!perPixelChecked)
@@ -1383,6 +1389,7 @@ static void context_destroy()
 	gl_ctx_resetting = true;
 	rend_term_renderer();
 	glsm_ctl(GLSM_CTL_STATE_CONTEXT_DESTROY, NULL);
+	GraphicsContext::Term();
 }
 #endif
 
@@ -1947,8 +1954,6 @@ static void remove_extension(char *buf, const char *path, size_t size)
 }
 
 #ifdef HAVE_VULKAN
-static VulkanContext theVulkanContext;
-
 static void retro_vk_context_reset()
 {
 	NOTICE_LOG(RENDERER, "retro_vk_context_reset");
@@ -1958,8 +1963,12 @@ static void retro_vk_context_reset()
 		ERROR_LOG(RENDERER, "Get Vulkan HW interface failed");
 		return;
 	}
-	if (!theVulkanContext.init((retro_hw_render_interface_vulkan *)vulkan))
+	try {
+		VulkanContext::Create((retro_hw_render_interface_vulkan *)vulkan);
+	} catch (const std::exception& e) {
+		ERROR_LOG(RENDERER, "%s", e.what());
 		return;
+	}
 	rend_term_renderer();
 	rend_init_renderer();
 	if (!perPixelChecked)
@@ -1970,7 +1979,7 @@ static void retro_vk_context_destroy()
 {
 	NOTICE_LOG(RENDERER, "retro_vk_context_destroy");
 	rend_term_renderer();
-	theVulkanContext.term();
+	GraphicsContext::Term();
 }
 
 static bool set_vulkan_hw_render()
@@ -2092,9 +2101,14 @@ static void dx11_context_reset()
 		return;
 	}
 	rend_term_renderer();
-	theDX11Context.term();
+	GraphicsContext::Term();
 
-	theDX11Context.init(hw_render->device, hw_render->context, hw_render->D3DCompile, hw_render->featureLevel);
+	try {
+		DX11Context::Create(hw_render->device, hw_render->context, hw_render->D3DCompile, hw_render->featureLevel);
+	} catch (const std::exception& e) {
+		ERROR_LOG(RENDERER, "%s", e.what());
+		return;
+	}
 	if (config::RendererType == RenderType::OpenGL_OIT || config::RendererType == RenderType::Vulkan_OIT)
 		config::RendererType = RenderType::DirectX11_OIT;
 	else if (config::RendererType != RenderType::DirectX11_OIT)
@@ -2108,7 +2122,7 @@ static void dx11_context_destroy()
 {
 	NOTICE_LOG(RENDERER, "DX11 context destroyed");
 	rend_term_renderer();
-	theDX11Context.term();
+	GraphicsContext::Term();
 }
 #endif
 

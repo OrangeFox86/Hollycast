@@ -3390,24 +3390,39 @@ void renderVideoTab()
 				"Recommended for most users. If you notice unusual stutter or latency, try toggling it."
 			));
 
+		ImGui::Indent();
+
+#ifdef __ANDROID__
+		RenderGeneralToggleSettingRow(
+			"FramePacing",
+			ICON_FA_TIMELINE,
+			T("Frame Pacing (Experimental)"),
+			T("Provide the GPU with presentation timing for each frame to replicate original frame pacing."),
+			static_cast<bool>(config::FramePacing),
+			[](bool enabled) { config::FramePacing.set(enabled); },
+			T("Provide the GPU with presentation timing for each frame to replicate original frame pacing.")
+		);
+#else
 		if (isVulkan(config::RendererType))
 		{
-			ImGui::Indent();
-				RenderGeneralToggleSettingRow(
-					"DuplicateFrames",
-					ICON_FA_CLONE,
-					T("Duplicate Frames"),
-					T("Improve pacing on high refresh-rate displays."),
-					static_cast<bool>(config::DupeFrames),
-					[](bool enabled) { config::DupeFrames.set(enabled); },
-					T(
-						"Duplicate Frames\n"
-						"Duplicates frames on high refresh-rate monitors (120 Hz and above) to improve perceived pacing.\n"
-						"Only available for Vulkan, and only when VSync is disabled."
-					),
-					!config::VSync);
-			ImGui::Unindent();
+			RenderGeneralToggleSettingRow(
+				"DuplicateFrames",
+				ICON_FA_CLONE,
+				T("Duplicate Frames"),
+				T("Improve pacing on high refresh-rate displays."),
+				static_cast<bool>(config::DupeFrames),
+				[](bool enabled) { config::DupeFrames.set(enabled); },
+				T(
+					"Duplicate Frames\n"
+					"Duplicates frames on high refresh-rate monitors (120 Hz and above) to improve perceived pacing.\n"
+					"Only available for Vulkan, and only when VSync is disabled."
+				),
+				!config::VSync
+			);
 		}
+#endif
+
+		ImGui::Unindent();
 #endif
 
 		RenderGeneralToggleSettingRow(

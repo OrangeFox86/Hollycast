@@ -31,9 +31,11 @@
 #include "utils.h"
 #include "emulator.h"
 #include "oslib/oslib.h"
+#include "oslib/directory.h"
 #include "vulkan_driver.h"
 #include "rend/transform_matrix.h"
 #include "rend/osd.h"
+#include "swappyvk.h"
 #if defined(__ANDROID__) && HOST_CPU == CPU_ARM64
 #include "adreno.h"
 #endif
@@ -49,8 +51,6 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #include <cstring>
 
 void ReInitOSD();
-
-VulkanContext *VulkanContext::contextInstance;
 
 #ifdef VK_DEBUG
 #ifndef __ANDROID__
@@ -177,11 +177,11 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 		//layer_names.push_back("VK_LAYER_ARM_AGA");
 #ifdef VK_DEBUG
 #ifndef __ANDROID__
-		vext.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		vext.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+		vext.push_back(vk::EXTDebugUtilsExtensionName);
+		vext.push_back(vk::EXTDebugReportExtensionName);
 		layer_names.push_back("VK_LAYER_KHRONOS_validation");
 #else
-		vext.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);	// NDK <= 19?
+		vext.push_back(vk::EXTDebugReportExtensionName);	// NDK <= 19?
 		layer_names.push_back("VK_LAYER_GOOGLE_threading");
 		layer_names.push_back("VK_LAYER_LUNARG_parameter_validation");
 		layer_names.push_back("VK_LAYER_LUNARG_core_validation");
@@ -202,17 +202,17 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 		{
 			bool portabilityEnumSupported = false;
 			for (const auto& ext : vk::enumerateInstanceExtensionProperties())
-				if (strcmp(ext.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0) {
+				if (strcmp(ext.extensionName, vk::KHRPortabilityEnumerationExtensionName) == 0) {
 					portabilityEnumSupported = true;
 					break;
 				}
 			if (portabilityEnumSupported) {
 				const bool alreadyRequested = std::any_of(vext.begin(), vext.end(),
 					[](const char *name) {
-						return strcmp(name, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+						return strcmp(name, vk::KHRPortabilityEnumerationExtensionName) == 0;
 					});
 				if (!alreadyRequested)
-					vext.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+					vext.push_back(vk::KHRPortabilityEnumerationExtensionName);
 				instanceFlags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 			}
 		}
@@ -370,7 +370,7 @@ void VulkanContext::InitImgui()
 
 #if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
 	ImGui_ImplVulkan_LoadFunctions(0, [](const char *function_name, void *) {
-		return VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr((VkInstance) *contextInstance->instance, function_name);
+		return VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr((VkInstance) *Instance()->instance, function_name);
 	});
 #endif
 
@@ -397,7 +397,6 @@ bool VulkanContext::InitDevice()
 		graphicsQueueIndex = (u32)std::distance(queueFamilyProperties.begin(),
 				std::find_if(queueFamilyProperties.begin(), queueFamilyProperties.end(),
 						[](vk::QueueFamilyProperties const& qfp) { return qfp.queueFlags & vk::QueueFlagBits::eGraphics; }));
-		verify(graphicsQueueIndex < queueFamilyProperties.size());
 
 		// determine a queueFamilyIndex that supports present
 		// first check if the graphicsQueueFamilyIndex is good enough
@@ -462,16 +461,16 @@ bool VulkanContext::InitDevice()
 		};
 
 		// Required swapchain extension
-		tryAddDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		tryAddDeviceExtension(vk::KHRSwapchainExtensionName);
 
 #ifdef VK_ENABLE_BETA_EXTENSIONS
-		tryAddDeviceExtension(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+		tryAddDeviceExtension(vk::KHRPortabilitySubsetExtensionName);
 #endif
 #ifdef VK_USE_PLATFORM_METAL_EXT
-		tryAddDeviceExtension(VK_EXT_METAL_OBJECTS_EXTENSION_NAME);
+		tryAddDeviceExtension(vk::EXTMetalObjectsExtensionName);
 #endif
 #ifdef VK_DEBUG
-		tryAddDeviceExtension(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+		tryAddDeviceExtension(vk::EXTDebugMarkerExtensionName);
 #endif
 
 		// Enable VK_KHR_dedicated_allocation if available
@@ -482,10 +481,10 @@ bool VulkanContext::InitDevice()
 		}
 		else
 		{
-			const bool getMemReq2Supported = tryAddDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+			const bool getMemReq2Supported = tryAddDeviceExtension(vk::KHRGetMemoryRequirements2ExtensionName);
 			if (getMemReq2Supported)
 			{
-				dedicatedAllocationSupported = tryAddDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+				dedicatedAllocationSupported = tryAddDeviceExtension(vk::KHRDedicatedAllocationExtensionName);
 			}
 		}
 
@@ -493,14 +492,20 @@ bool VulkanContext::InitDevice()
 		// Core as of Vulkan 1.1
 		const bool getPhysicalDeviceProperties2Supported =
 			(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1)
-			? true : tryAddDeviceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+			? true : tryAddDeviceExtension(vk::KHRGetPhysicalDeviceProperties2ExtensionName);
 
 		if (getPhysicalDeviceProperties2Supported)
 		{
 			// Enable VK_EXT_provoking_vertex if available
-			provokingVertexSupported = tryAddDeviceExtension(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
+			provokingVertexSupported = tryAddDeviceExtension(vk::EXTProvokingVertexExtensionName);
 		}
-		
+		bool googleTimingSupported = false;
+#if defined(SWAPPY)
+		googleTimingSupported = tryAddDeviceExtension(vk::GOOGLEDisplayTimingExtensionName);
+		if (googleTimingSupported)
+			NOTICE_LOG(RENDERER, "VK_GOOGLE_display_timing supported");
+#endif
+
 		// Get device features
 
 		vk::PhysicalDeviceFeatures2 featuresChain{};
@@ -511,7 +516,7 @@ bool VulkanContext::InitDevice()
 		{
 			featuresChain.pNext = &provokingVertexFeatures;
 		}
-		
+
 		// Get the physical device's features
 		if (getPhysicalDeviceProperties2Supported && featuresChain.pNext)
 		{
@@ -556,6 +561,7 @@ bool VulkanContext::InitDevice()
 	    // Queues
 	    graphicsQueue = device->getQueue(graphicsQueueIndex, 0);
 	    presentQueue = device->getQueue(presentQueueIndex, 0);
+	    swappyvk::setQueueFamilyIndex(googleTimingSupported, device.get(), presentQueue, presentQueueIndex);
 
 	    // Descriptor pool
         std::array<vk::DescriptorPoolSize, 11> pool_sizes =
@@ -575,8 +581,15 @@ bool VulkanContext::InitDevice()
 	    descriptorPool = device->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
 	    		40000, pool_sizes));
 
+	    constexpr const char *PipelineSection = "validate";
+	    constexpr const char *PipelineKey = "vkPipelineCache";
 
 	    std::string cachePath = hostfs::getShaderCachePath("vulkan_pipeline.cache");
+	    bool pipelineCacheCorrupted = config::loadBool(PipelineSection, PipelineKey, false);
+	    if (pipelineCacheCorrupted) {
+	    	flycast::unlink(cachePath.c_str());
+	    	config::saveBool(PipelineSection, PipelineKey, false);
+	    }
 	    FILE *f = nowide::fopen(cachePath.c_str(), "rb");
 	    if (f == nullptr)
 	    	pipelineCache = device->createPipelineCacheUnique(vk::PipelineCacheCreateInfo());
@@ -589,6 +602,8 @@ bool VulkanContext::InitDevice()
 	    	if (std::fread(cacheData, 1, cacheSize, f) != cacheSize)
 	    		cacheSize = 0;
 	    	std::fclose(f);
+    		// if this is still true in the next init, it means the cache file is corrupted
+    		config::saveBool(PipelineSection, PipelineKey, true);
 	    	try {
 	    		pipelineCache = device->createPipelineCacheUnique(vk::PipelineCacheCreateInfo(vk::PipelineCacheCreateFlags(), cacheSize, cacheData));
 	    		INFO_LOG(RENDERER, "Vulkan pipeline cache loaded from %s: %zd bytes", cachePath.c_str(), cacheSize);
@@ -596,8 +611,10 @@ bool VulkanContext::InitDevice()
 	    	catch (const vk::SystemError& err) {
 	    		WARN_LOG(RENDERER, "Error loading pipeline cache: %s", err.what());
 	    		pipelineCache = device->createPipelineCacheUnique(vk::PipelineCacheCreateInfo());
+	    		flycast::unlink(cachePath.c_str());
 	    	}
     		delete [] cacheData;
+    		config::saveBool(PipelineSection, PipelineKey, false);
 	    }
 	    allocator.Init(physicalDevice, *device, *instance);
 
@@ -743,14 +760,22 @@ void VulkanContext::CreateSwapChain()
 				INFO_LOG(RENDERER, "Using mailbox present mode");
 				swapchainPresentMode = vk::PresentModeKHR::eMailbox;
 			}
+#ifndef SWAPPY
 			if (swapOnVSync && config::DupeFrames && settings.display.refreshRate > 60.f)
 				swapInterval = settings.display.refreshRate / 60.f;
 			else
+#endif
 				swapInterval = 1;
 
 			vk::SurfaceTransformFlagBitsKHR preTransform = (surfaceCapabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) ? vk::SurfaceTransformFlagBitsKHR::eIdentity : surfaceCapabilities.currentTransform;
-
-			u32 imageCount = std::max(3u * swapInterval, surfaceCapabilities.minImageCount);
+			INFO_LOG(RENDERER, "Surface capabilities: minImageCount %d maxImageCount %d swapInterval %d", surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount, swapInterval);
+#ifdef SWAPPY
+			// No need to dupe frames
+			u32 imageCount = 3;
+#else
+			u32 imageCount = 4;
+#endif
+			imageCount = std::max(imageCount * swapInterval, surfaceCapabilities.minImageCount);
 			if (surfaceCapabilities.maxImageCount != 0)
 				imageCount = std::min(imageCount, surfaceCapabilities.maxImageCount);
 			vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eColorAttachment;
@@ -771,6 +796,7 @@ void VulkanContext::CreateSwapChain()
 				swapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
 			}
 
+			swappyvk::detachSwapchain();
 			swapChain.reset();
 			try {
 				swapChain = device->createSwapchainKHRUnique(swapChainCreateInfo);
@@ -783,6 +809,8 @@ void VulkanContext::CreateSwapChain()
 			}
 		}
 		while (!swapChain);
+
+		swappyvk::init(physicalDevice, *device, *swapChain);
 
 		std::vector<vk::Image> swapChainImages = device->getSwapchainImagesKHR(*swapChain);
 
@@ -865,10 +893,8 @@ void VulkanContext::CreateSwapChain()
 
 bool VulkanContext::init()
 {
-	GraphicsContext::instance = this;
-
 	std::vector<const char *> extensions;
-	extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+	extensions.push_back(vk::KHRSurfaceExtensionName);
 #if defined(USE_SDL)
 	if (!sdl_recreate_window(SDL_WINDOW_VULKAN))
 		return false;
@@ -879,13 +905,13 @@ bool VulkanContext::init()
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
     extern void CreateMainWindow();
     CreateMainWindow();
-	extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+	extensions.push_back(vk::KHRWin32SurfaceExtensionName);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
-	extensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
+	extensions.push_back(vk::EXTMetalSurfaceExtensionName);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
-	extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+	extensions.push_back(vk::KHRXlibSurfaceExtensionName);
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-	extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+	extensions.push_back(vk::KHRAndroidSurfaceExtensionName);
 #endif
 	if (!InitInstance(&extensions[0], extensions.size())) {
 		term();
@@ -966,7 +992,7 @@ void VulkanContext::NewFrame()
 	inFlightObjects[currentImage].clear();
 	vk::CommandBuffer commandBuffer = *commandBuffers[currentImage];
 	commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-	verify(!rendering);
+	assert(!rendering);
 	rendering = true;
 }
 
@@ -995,7 +1021,7 @@ void VulkanContext::EndFrame(vk::CommandBuffer overlayCmdBuffer)
 	vk::SubmitInfo submitInfo(*imageAcquiredSemaphores[currentSemaphore], wait_stage, allCmdBuffers, *renderCompleteSemaphores[currentSemaphore]);
 	device->resetFences(*drawFences[currentImage]);
 	graphicsQueue.submit(submitInfo, *drawFences[currentImage]);
-	verify(rendering);
+	assert(rendering);
 	rendering = false;
 	renderDone = true;
 }
@@ -1006,7 +1032,7 @@ void VulkanContext::Present() noexcept
 	{
 		try {
 			DoSwapAutomation();
-			vk::Result res = presentQueue.presentKHR(vk::PresentInfoKHR(1, &(*renderCompleteSemaphores[currentSemaphore]), 1, &(*swapChain), &currentImage));
+			vk::Result res = swappyvk::present(presentQueue, vk::PresentInfoKHR(1, &(*renderCompleteSemaphores[currentSemaphore]), 1, &(*swapChain), &currentImage));
 #if defined(VK_USE_PLATFORM_METAL_EXT) || defined(__APPLE__)
 			// presentKHR lists eSuboptimalKHR as a success code so it is
 			// returned rather than thrown. Treat it as a request to
@@ -1020,9 +1046,12 @@ void VulkanContext::Present() noexcept
 				resized = true;
 #endif
 			currentSemaphore = (currentSemaphore + 1) % renderCompleteSemaphores.size();
-
-			if (lastFrameView && IsValid() && !gui_is_open())
-				for (int i = 1; i < swapInterval; i++)
+#ifndef SWAPPY
+			if (lastFrameView && IsValid() && !gui_is_open()
+					&& swapOnVSync && config::DupeFrames)
+			{
+				const int interval = swapInterval * gameSwapInterval;
+				for (int i = 1; i < interval; i++)
 				{
 					PresentFrame(vk::Image(), lastFrameView, lastFrameExtent, lastFrameAR);
 					res = presentQueue.presentKHR(vk::PresentInfoKHR(1, &(*renderCompleteSemaphores[currentSemaphore]), 1, &(*swapChain), &currentImage));
@@ -1036,6 +1065,8 @@ void VulkanContext::Present() noexcept
 						break;
 					}
 				}
+			}
+#endif
 		} catch (const vk::SystemError& e) {
 			// Happens when resizing the window
 			INFO_LOG(RENDERER, "vk::SystemError %s", e.what());
@@ -1090,7 +1121,7 @@ void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& exten
 	int dx = 0;
 	int dy = 0;
 	getWindowboxDimensions(width, outheight, aspectRatio, dx, dy, config::Rotate90);
-	
+
 	vk::Viewport viewport(dx, dy + topInset, width - dx * 2, outheight - dy * 2);
 	commandBuffer.setViewport(0, viewport);
 	commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(dx, dy + topInset), vk::Extent2D(width - dx * 2, outheight - dy * 2)));
@@ -1141,8 +1172,8 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 				        vk::AccessFlagBits::eShaderRead,
 				        vk::ImageLayout::eShaderReadOnlyOptimal,
 				        vk::ImageLayout::eShaderReadOnlyOptimal,
-				        VK_QUEUE_FAMILY_IGNORED,
-				        VK_QUEUE_FAMILY_IGNORED,
+				        vk::QueueFamilyIgnored,
+				        vk::QueueFamilyIgnored,
 				        image,
 				        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 				GetCurrentCommandBuffer().pipelineBarrier(
@@ -1162,7 +1193,7 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 			imguiDriver->renderDrawData(ImGui::GetDrawData(), false);
 			EndFrame(overlayCmdBuffer);
 			static_cast<BaseVulkanRenderer*>(renderer)->RenderVideoRouting();
-			
+
 		} catch (const InvalidVulkanContext&) {
 			// Re-create swap chain
 			resized = true;
@@ -1178,7 +1209,6 @@ void VulkanContext::PresentLastFrame()
 
 void VulkanContext::term()
 {
-	GraphicsContext::instance = nullptr;
 	lastFrameView = nullptr;
 	if (device && graphicsQueue)
 		WaitIdle();
@@ -1234,6 +1264,7 @@ void VulkanContext::term()
 		instance->destroySurfaceKHR(surface.release());
 #endif
 	pipelineCache.reset();
+	swappyvk::detachDevice();
 	device.reset();
 #ifdef VK_DEBUG
 #ifndef __ANDROID__
@@ -1286,14 +1317,14 @@ void VulkanContext::DoSwapAutomation()
 			// Transition destination image to transfer destination layout
 			vk::ImageMemoryBarrier barrier(vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite,
 					vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
-					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+					vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
 					*dstImage, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 			cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
 					vk::DependencyFlags(), nullptr, nullptr, barrier);
 			// Transition swapchain image from present to transfer source layout
 			barrier = vk::ImageMemoryBarrier(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eTransferRead,
 								vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eTransferSrcOptimal,
-								VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+								vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
 								srcImage, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 			cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
 								vk::DependencyFlags(), nullptr, nullptr, barrier);
@@ -1317,14 +1348,14 @@ void VulkanContext::DoSwapAutomation()
 			// Transition destination image to general layout, which is the required layout for mapping the image memory later on
 			barrier = vk::ImageMemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eMemoryRead,
 											vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral,
-											VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+											vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
 											*dstImage, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 			cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
 					vk::DependencyFlags(), nullptr, nullptr, barrier);
 			// Transition back the swap chain image after the blit is done
 			barrier = vk::ImageMemoryBarrier(vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eMemoryRead,
 											vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::ePresentSrcKHR,
-											VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+											vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
 											srcImage, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 			cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
 					vk::DependencyFlags(), nullptr, nullptr, barrier);
@@ -1338,7 +1369,7 @@ void VulkanContext::DoSwapAutomation()
 			vk::SubresourceLayout subresourceLayout;
 			device->getImageSubresourceLayout(*dstImage, &subresource, &subresourceLayout);
 
-			u8* img = (u8*)device->mapMemory(*deviceMemory, 0, VK_WHOLE_SIZE);
+			u8* img = (u8*)device->mapMemory(*deviceMemory, 0, vk::WholeSize);
 			img += subresourceLayout.offset;
 
 			u8 *end = img + settings.display.width * settings.display.height * 4;
@@ -1410,16 +1441,19 @@ void VulkanContext::SetWindowSize(u32 width, u32 height)
 	}
 }
 
-VulkanContext::VulkanContext()
-{
-	verify(contextInstance == nullptr);
-	contextInstance = this;
+void VulkanContext::Create(void *window, void *display) {
+	new VulkanContext(window, display);
 }
 
-VulkanContext::~VulkanContext()
+VulkanContext::VulkanContext(void *window, void *display)
+	: GraphicsContext(window, display)
 {
-	verify(contextInstance == this);
-	contextInstance = nullptr;
+	if (!init())
+		throw FlycastException("Vulkan initialization failed");
+}
+
+VulkanContext::~VulkanContext() {
+	term();
 }
 
 bool VulkanContext::GetLastFrame(std::vector<u8>& data, int& width, int& height)
@@ -1527,11 +1561,11 @@ bool VulkanContext::GetLastFrame(std::vector<u8>& data, int& width, int& height)
 	vk::BufferMemoryBarrier bufferMemoryBarrier(
 			vk::AccessFlagBits::eTransferWrite,
 			vk::AccessFlagBits::eHostRead,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
+			vk::QueueFamilyIgnored,
+			vk::QueueFamilyIgnored,
 			*attachment.GetBufferData()->buffer,
 			0,
-			VK_WHOLE_SIZE);
+			vk::WholeSize);
 	commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
 					vk::PipelineStageFlagBits::eHost, {}, nullptr, bufferMemoryBarrier, nullptr);
 	commandBuffer->end();
@@ -1570,4 +1604,14 @@ bool VulkanContext::GetLastFrame(std::vector<u8>& data, int& width, int& height)
 	attachment.GetBufferData()->UnmapMemory();
 
 	return true;
+}
+
+void VulkanContext::setSwapInterval(int interval)
+{
+	interval = std::min(interval, 2);
+	if (gameSwapInterval != interval) {
+		NOTICE_LOG(RENDERER, "Swap interval changed to %d", swapOnVSync ? swapInterval * interval : 0);
+		swappyvk::setSwapInterval(interval);
+	}
+	gameSwapInterval = interval;
 }
