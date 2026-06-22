@@ -242,9 +242,7 @@ public:
 		}
 	}
 
-	virtual ~ApiDreamPicoPortComms() {
-		dpp_api_device.reset();
-	}
+	virtual ~ApiDreamPicoPortComms() = default;
 
 	void changeHardwareBus(int hardware_bus) {
 		this->hardware_bus = hardware_bus;
