@@ -137,8 +137,8 @@ public:
 	bool isPerGameMapping() const { return perGameMapping; }
 
 	// LIMITS
-	//! The maximum activation value which is at least 1 notch on a [-128,127] scale
-	static const int MAX_ACTIVATION_VALUE = (126.0 / 127.0) * 32767 - 1;
+	//! The maximum activation value which is at least 2 notches on a [0,255] scale
+	static const int MAX_ACTIVATION_VALUE = (32767 * 254 / 256) - 1;
 	// The minimum deactivation value
 	static const int MIN_ACTIVATION_VALUE = 0;
 
@@ -153,11 +153,11 @@ public:
 
 	static_assert(
 		AXIS_ACTIVATION_VALUE <= MAX_ACTIVATION_VALUE && AXIS_DEACTIVATION_VALUE <= MAX_ACTIVATION_VALUE,
-		"Axis activation/deactivation values must be at least 1 notch on a [-128,127] scale"
+		"Axis activation/deactivation values must be at most the maximum threshold"
 	);
 	static_assert(
 		TRIGGER_ACTIVATION_VALUE <= MAX_ACTIVATION_VALUE && TRIGGER_DEACTIVATION_VALUE <= MAX_ACTIVATION_VALUE,
-		"Trigger activation/deactivation values must be at least 1 notch on a [-128,127] scale"
+		"Trigger activation/deactivation values must be at most the maximum threshold"
 	);
 	static_assert(
 		AXIS_ACTIVATION_VALUE >= MIN_ACTIVATION_VALUE && AXIS_DEACTIVATION_VALUE >= MIN_ACTIVATION_VALUE,
