@@ -136,20 +136,29 @@ public:
 	void setPerGameMapping(bool enabled);
 	bool isPerGameMapping() const { return perGameMapping; }
 
-	// LIMITS
-	//! The maximum activation/deactivation value which is at least 3 notches on an 8-bit scale
-	static const int MAX_ACTIVATION_VALUE = (32767 * 253 / 256);
-	// The minimum activation/deactivation value which is at least 3 notches on an 8-bit scale
-	static const int MIN_ACTIVATION_VALUE = (32767 * 3 / 256);
+	// SDL LIMITS
+	//! The minimum value for an analog input provided by SDL
+	static constexpr int ANALOG_INPUT_MIN = -32768;
+	//! The maximum value for an analog input provided by SDL
+	static constexpr int ANALOG_INPUT_MAX = 32767;
+	//! The total range for an analog input provided by SDL
+	static constexpr int ANALOG_INPUT_RANGE = (ANALOG_INPUT_MAX - ANALOG_INPUT_MIN);
 
+	// ANALOG TO DIGITAL CONVERSION LIMITS
+	// The minimum activation/deactivation value which is at least 1% deflection
+	static constexpr int MIN_ACTIVATION_VALUE = (ANALOG_INPUT_RANGE * 1 / 100);
+	//! The maximum activation/deactivation value which is at least 1% deflection
+	static constexpr int MAX_ACTIVATION_VALUE = (ANALOG_INPUT_MAX - MIN_ACTIVATION_VALUE);
+
+	// SPECIFIC ANALOG TO DIGITAL THRESHOLDS
 	//! The axis value which causes a button activation (for axis to button mapping) (inclusive)
-	static const int AXIS_ACTIVATION_VALUE = 16384;  // Use 50% deflection as "pressed" threshold
-	//! The trigger analog value which causes a button activation
-	static const int TRIGGER_ACTIVATION_VALUE = 32767 - 2000;
+	static constexpr int AXIS_ACTIVATION_VALUE = (ANALOG_INPUT_MAX / 2);  // Use 50% deflection as "pressed" threshold
 	//! The axis value which causes a button deactivation (for axis to button mapping) (exclusive)
-	static const int AXIS_DEACTIVATION_VALUE = 8192; // 25% deflection as "released" threshold
+	static constexpr int AXIS_DEACTIVATION_VALUE = (ANALOG_INPUT_MAX / 4); // 25% deflection as "released" threshold
+	//! The trigger analog value which causes a button activation
+	static constexpr int TRIGGER_ACTIVATION_VALUE = (ANALOG_INPUT_MAX - 2000);
 	//! The trigger analog value which causes a button deactivation
-	static const int TRIGGER_DEACTIVATION_VALUE = 32767 - 1000;
+	static constexpr int TRIGGER_DEACTIVATION_VALUE = (ANALOG_INPUT_MAX - 1000);
 
 	static_assert(
 		AXIS_ACTIVATION_VALUE <= MAX_ACTIVATION_VALUE && AXIS_DEACTIVATION_VALUE <= MAX_ACTIVATION_VALUE,
