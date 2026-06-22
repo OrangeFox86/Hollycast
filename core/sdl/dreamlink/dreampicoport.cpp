@@ -137,7 +137,7 @@ struct DppMapleLinkDevice : public MapleLinkDeviceBase<maple_base>
 	//! The supported functions mask for this device
 	const u32 supportedFns;
 	//! The linked DreamPicoPort
-	std::shared_ptr<class DreamPicoPort> linkedDpp;
+	std::weak_ptr<class DreamPicoPort> linkedDppWptr;
 	//! The last time write was performed
 	std::chrono::steady_clock::time_point lastWriteTime;
 	//! Mutex serializing write operations
@@ -242,7 +242,9 @@ public:
 		}
 	}
 
-	virtual ~ApiDreamPicoPortComms() = default;
+	virtual ~ApiDreamPicoPortComms() {
+		dpp_api_device.reset();
+	}
 
 	void changeHardwareBus(int hardware_bus) {
 		this->hardware_bus = hardware_bus;
@@ -716,7 +718,7 @@ public:
 		connect_requested = false;
 	}
 
-    void sendPort() {
+	void sendPort() {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		if (dpp_comms) {
@@ -1133,7 +1135,8 @@ public:
 DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) :
 	MapleLinkDeviceBase<maple_base>(link), supportedFns(supportedFns)
 {
-	linkedDpp = std::dynamic_pointer_cast<DreamPicoPort>(link.dreamlink);
+	std::shared_ptr<DreamPicoPort> linkedDpp = std::dynamic_pointer_cast<DreamPicoPort>(link.dreamlink);
+	linkedDppWptr = linkedDpp;
 	if (!linkedDpp) {
 		ERROR_LOG(INPUT, "DppMapleLinkDevice created without an associated DreamPicoPort");
 	}
@@ -1154,6 +1157,8 @@ bool DppMapleLinkDevice::linkStatus()
 {
 	if (!maple_base::linkStatus())
 		return false;
+
+	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
 
 	bool isLinked = (
 		linkedDpp &&
@@ -1185,6 +1190,8 @@ MapleDeviceType DppMapleLinkDevice::get_device_type()
 {
 	// This is mainly used by the serializer
 	serializingType = MDT_None;
+
+	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
 
 	if (!linkedDpp)
 		return serializingType;
@@ -1257,6 +1264,8 @@ u32 DppMapleLinkDevice::virtualVmuDma(u32 cmd)
 
 u32 DppMapleLinkDevice::dma(u32 cmd)
 {
+	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
+
 	if (!linkedDpp)
 		return MDRS_JVSNone;
 
@@ -1354,6 +1363,7 @@ bool DppMapleLinkDevice::deserializingFor(MapleDeviceType type)
 {
 	deserializingType = type;
 	bool isSameType = false;
+	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
 
 	if (linkedDpp) {
 		MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port));
@@ -1404,6 +1414,8 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 	// Assumption: the caller would have called deserializingFor() just before deserialize(), so deserializingType
 	//             should be set to the expected deserialization type
 
+	std::shared_ptr<DreamPicoPort> linkedDpp;
+
 	if (deserializingType == MDT_None)
 	{
 		ERROR_LOG(INPUT, "DppMapleLinkDevice received deserialize for MDT_None");
@@ -1420,15 +1432,19 @@ void DppMapleLinkDevice::deserialize(Deserializer& deser)
 		requestReconnect();
 		return;
 	}
-	else if (!linkedDpp)
+	else
 	{
-		ERROR_LOG(
-			INPUT,
-			"DppMapleLinkDevice no link setup to deserialize [%i]",
-			static_cast<int>(deserializingType)
-		);
-		requestReconnect();
-		return;
+		linkedDpp = linkedDppWptr.lock();
+		if (!linkedDpp)
+		{
+			ERROR_LOG(
+				INPUT,
+				"DppMapleLinkDevice no link setup to deserialize [%i]",
+				static_cast<int>(deserializingType)
+			);
+			requestReconnect();
+			return;
+		}
 	}
 
 	MapleDeviceType detectedType = fnCodeToMapleDeviceType(linkedDpp->getFunctionCodesMask(bus_port));
@@ -1484,6 +1500,8 @@ u32 MapleLinkMainDevice::dma(u32 cmd)
 
 		PlainJoystickState pjs;
 		config->GetInput(&pjs);
+
+		std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
 
 		if (!linkedDpp || !linkedDpp->isConnected())
 		{
