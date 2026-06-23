@@ -679,7 +679,7 @@ void Boxart::recoverDatabases(const std::string& saveDir)
 			json v = json::parse(f.get());
 			if (!v.is_array())
 				continue;
-			processedDatabasePaths.insert(normalizePath(dbPath));
+			bool recoveredAnyGame = false;
 			const std::string dbDir = parentPath(dbPath);
 			for (const auto& o : v)
 			{
@@ -703,7 +703,10 @@ void Boxart::recoverDatabases(const std::string& saveDir)
 				auto existing = mergedGames.find(key);
 				if (existing == mergedGames.end() || boxartMergeScore(candidate) > boxartMergeScore(existing->second))
 					mergedGames[key] = candidate;
+				recoveredAnyGame = true;
 			}
+			if (recoveredAnyGame)
+				processedDatabasePaths.insert(normalizePath(dbPath));
 		} catch (const json::exception& e) {
 			WARN_LOG(COMMON, "Skipping corrupt boxart database %s: %s", dbPath.c_str(), e.what());
 		}
@@ -809,9 +812,25 @@ void Boxart::reviewDatabaseArtwork()
 void Boxart::refreshCache()
 {
 	if (physicalFetching.valid())
-		physicalFetching.get();
+	{
+		try {
+			physicalFetching.get();
+		} catch (const std::exception& e) {
+			ERROR_LOG(COMMON, "Physical boxart scraper thread exception: %s", e.what());
+		} catch (...) {
+			ERROR_LOG(COMMON, "Physical boxart scraper thread unknown exception");
+		}
+	}
 	if (onlineFetching.valid())
-		onlineFetching.get();
+	{
+		try {
+			onlineFetching.get();
+		} catch (const std::exception& e) {
+			ERROR_LOG(COMMON, "Online boxart scraper thread exception: %s", e.what());
+		} catch (...) {
+			ERROR_LOG(COMMON, "Online boxart scraper thread unknown exception");
+		}
+	}
 	saveDatabase();
 	{
 		std::lock_guard<std::mutex> guard(mutex);

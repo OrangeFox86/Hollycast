@@ -132,8 +132,8 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			fileInputText[sizeof(fileInputText) - 1] = '\0';
 		};
 
-		auto setPathText = []() {
-			std::strncpy(filePathText, select_current_directory.c_str(), sizeof(filePathText) - 1);
+		auto setPathText = [](const std::string& text) {
+			std::strncpy(filePathText, text.c_str(), sizeof(filePathText) - 1);
 			filePathText[sizeof(filePathText) - 1] = '\0';
 		};
 
@@ -143,7 +143,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			else
 				setInputText(select_current_directory);
 			fileInputIsDirectory = false;
-			setPathText();
+			setPathText(select_current_directory);
 		};
 
 		auto navigateToDirectory = [&](const std::string& path, bool addToHistory) {
@@ -391,7 +391,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						navigateToDirectory(chain[i], true);
 					if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 					{
-						setInputText(chain[i]);
+						setPathText(chain[i]);
 						fileInputIsDirectory = true;
 						*editMode = true;
 					}

@@ -267,9 +267,7 @@ static void RenderScaledIconInRect(const char* icon, const ImVec2& min, const Im
 
 static bool SettingsIconButton(const char* id, const char* icon, const ImVec2& size)
 {
-	ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
 	const bool pressed = ImGui::Button(id, size);
-	ImGui::PopItemFlag();
 	RenderScaledIconInRect(icon, ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
 	return pressed;
 }
@@ -1924,12 +1922,15 @@ const char* getTabName(SettingsTab tab)
 static float CalculateSettingsNavigationWidth(const char* exitLabel)
 {
 	ImFont* navFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
-	const std::string backLabel = strprintf("%s  %s", ICON_FA_ARROW_LEFT, exitLabel);
-	float minWidth = navFont->CalcTextSizeA(navFont->LegacySize, FLT_MAX, -1.0f, backLabel.c_str()).x;
+	ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : navFont;
+	const float fontSize = navFont->LegacySize;
+	float minWidth = navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, exitLabel).x
+			+ iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, ICON_FA_ARROW_LEFT).x
+			+ uiScaled(8.0f);
 	for (int i = 0; i < (int)SettingsTab::Count; i++)
 	{
 		const char* tabName = getTabName((SettingsTab)i);
-		minWidth = std::max(minWidth, navFont->CalcTextSizeA(navFont->LegacySize, FLT_MAX, -1.0f, tabName).x);
+		minWidth = std::max(minWidth, navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, tabName).x);
 	}
 	const float maxWidth = std::max(136.0f, std::min(310.0f, ImGui::GetIO().DisplaySize.x * 0.20f));
 	return std::clamp(
@@ -1939,11 +1940,36 @@ static float CalculateSettingsNavigationWidth(const char* exitLabel)
 	);
 }
 
+static bool SettingsBackButton(const char* icon, const char* label, const ImVec2& size)
+{
+	const bool pressed = ImGui::Button("##SettingsBackButton", size);
+	const ImVec2 min = ImGui::GetItemRectMin();
+	const ImVec2 max = ImGui::GetItemRectMax();
+
+	ImFont* textFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	ImFont* iconFont = settingsIconFont;
+	const float fontSize = ImGui::GetFontSize();
+	const ImVec2 textSize = textFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, label);
+	const ImVec2 iconSize = iconFont != nullptr ? iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon) : ImVec2();
+	const float gap = iconFont != nullptr ? uiScaled(8.0f) : 0.0f;
+	const float totalWidth = iconSize.x + gap + textSize.x;
+	float x = min.x + (max.x - min.x - totalWidth) * 0.5f;
+	const float y = min.y + (max.y - min.y - textSize.y) * 0.5f;
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+	if (iconFont != nullptr)
+	{
+		drawList->AddText(iconFont, fontSize, ImVec2(x, y), color, icon);
+		x += iconSize.x + gap;
+	}
+	drawList->AddText(textFont, fontSize, ImVec2(x, y), color, label);
+	return pressed;
+}
+
 // Render left navigation rail with tab buttons (225px wide)
 // This creates the vertical strip on the left side with navigation items
 static void renderNavigationRail(const std::function<void()>& exitSettings, const char* exitLabel)
 {
-	IconButton backButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0));
 	const float navWidth = CalculateSettingsNavigationWidth(exitLabel);
 	const float footerGap = SettingsFooterGap();
 	const float footerHeight = SettingsFooterHeight();
@@ -1956,7 +1982,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	g_focusSettingsNavigation = false;
 
 	ImGui::PushFont(settingsTitleFont);
-	if (backButton.realize())
+	if (SettingsBackButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0)))
 		exitSettings();
 	ImGui::Spacing();
 	ImGui::Separator();
@@ -2076,13 +2102,14 @@ static bool RenderCollapsingHeader(
 	thread_local std::string labelStr;
 	labelStr.clear(); // Keeps the allocated capacity intact
 
-	ImGui::PushFont(settingsTitleFont);
+	ImFont* titleFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	ImGui::PushFont(titleFont);
 	if (labelIcon && *labelIcon != '\0')
 	{
 		ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 		const float fontSize = ImGui::GetFontSize();
 		const float iconWidth = iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, labelIcon).x;
-		const float spaceWidth = std::max(1.0f, settingsTitleFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, " ").x);
+		const float spaceWidth = std::max(1.0f, titleFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, " ").x);
 		const int spacerCount = std::max(2, static_cast<int>(std::ceil((iconWidth + uiScaled(2.0f)) / spaceWidth)));
 		labelStr.append(spacerCount, ' ');
 	}
