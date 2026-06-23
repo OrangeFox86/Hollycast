@@ -657,7 +657,7 @@ public:
 
 		u32 portOneFn = getFunctionCodesMask(0);
 		if (portOneFn & MFID_1_Storage) {
-			if (storageEnabled() && isGameRunning())
+			if (storageEnabled() && EventManager::isGameRunning())
 			{
 				sendGameId(0);
 			}
@@ -665,7 +665,7 @@ public:
 
 		u32 portTwoFn = getFunctionCodesMask(1);
 		if (portTwoFn & MFID_1_Storage) {
-			if (storageEnabled() && isGameRunning())
+			if (storageEnabled() && EventManager::isGameRunning())
 			{
 				sendGameId(1);
 			}
@@ -1082,7 +1082,7 @@ public:
 		peripherals = std::move(optPeriph.value());
 
 		// If game is running, send game ID to any newly attached VMUs
-		if (isGameRunning()) {
+		if (EventManager::isGameRunning()) {
 			auto portContainsMemory = [](const std::vector<std::array<uint32_t, 2>>& portData) {
 				bool containsMemory = false;
 				for (const auto& fns : portData) {

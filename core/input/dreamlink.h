@@ -68,8 +68,6 @@ public:
 	virtual bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) = 0;
 	//! @return true iff VMU reads and writes should be sent to the device
 	virtual bool storageEnabled() = 0;
-	//! @return true iff a game has been started
-	virtual bool isGameRunning() const = 0;
 	//! Attempt connection to the link
 	virtual void connect() = 0;
 	//! Disconnect from the link
@@ -154,8 +152,6 @@ protected:
 public:
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
-	//! @return true iff a game has been started
-	bool isGameRunning() const;
 	//! Child may override this if it needs to report fatal errors
 	const char* getIssueDescription() const override;
 	//! Do termination cleanup
@@ -228,9 +224,6 @@ private:
 		//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
 		void unregisterLink(BaseDreamLink* dreamlink, bool isTerminal = false);
 
-		//! @return true iff game is currently running
-		bool isGameRunning() const;
-
 	private:
 	    //! Central event handler
 		//! @param[in] event The incoming event
@@ -253,9 +246,6 @@ private:
 		void removeLinkFromRegistry(const BaseDreamLink* dreamlink, int newBus = -1);
 
 	private:
-		//! Flag which tracks game start/termination events
-		std::atomic<bool> mIsGameRunning;
-
 		//! Mutex serializing access to Registry
 		std::recursive_mutex mMutex;
 		//! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)

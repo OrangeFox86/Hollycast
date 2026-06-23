@@ -71,7 +71,11 @@ public:
 	}
 
 	static void event(Event event) {
-		instance().broadcastEvent(event);
+		instance().handleEvent(event);
+	}
+
+	static bool isGameRunning() {
+		return instance().running;
 	}
 
 private:
@@ -83,8 +87,10 @@ private:
 
 	void registerEvent(Event event, Callback callback, void *param);
 	void unregisterEvent(Event event, Callback callback, void *param);
+	void handleEvent(Event event);
 	void broadcastEvent(Event event);
 
+	std::atomic<bool> running = false;
 	std::array<std::vector<std::pair<Callback, void *>>, static_cast<size_t>(Event::max) + 1> callbacks;
 };
 

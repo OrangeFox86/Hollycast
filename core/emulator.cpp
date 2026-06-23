@@ -961,6 +961,19 @@ void EventManager::unregisterEvent(Event event, Callback callback, void *param)
 		vector.erase(it);
 }
 
+void EventManager::handleEvent(Event event)
+{
+	if (event == Event::Start) {
+		running.store(true);
+	}
+
+	broadcastEvent(event);
+
+	if (event == Event::Terminate) {
+		running.store(false);
+	}
+}
+
 void EventManager::broadcastEvent(Event event)
 {
 	auto& vector = callbacks[static_cast<size_t>(event)];
