@@ -1847,7 +1847,7 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
         ImVec2(uiScaled(Layout::POPUP_MIN_WIDTH), 0),
         ImVec2(maxWidth, maxHeight)
     );
-    ImGui::SetNextWindowSize(ImVec2(uiScaled(Layout::POPUP_WIDTH), 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(uiScaled(Layout::POPUP_WIDTH), 0), ImGuiCond_Always);
 
     PopupStyleScope style;
     if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
@@ -1987,7 +1987,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
     float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
     float popupWidth = std::min(uiScaled(500), maxWidth);
     ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(uiScaled(320), maxWidth), 0), ImVec2(maxWidth, maxHeight));
-    ImGui::SetNextWindowSize(ImVec2(popupWidth, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(popupWidth, 0), ImGuiCond_Always);
 
     PopupStyleScope style;
     if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
