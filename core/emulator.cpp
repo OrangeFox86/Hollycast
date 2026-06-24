@@ -963,15 +963,22 @@ void EventManager::unregisterEvent(Event event, Callback callback, void *param)
 
 void EventManager::handleEvent(Event event)
 {
-	if (event == Event::Start) {
-		running.store(true);
+	switch (event)
+	{
+		case Event::Start:
+			running.store(true);
+			break;
+
+		case Event::Terminate:
+			running.store(false);
+			break;
+
+		default:
+			// Do nothing
+			break;
 	}
 
 	broadcastEvent(event);
-
-	if (event == Event::Terminate) {
-		running.store(false);
-	}
 }
 
 void EventManager::broadcastEvent(Event event)
