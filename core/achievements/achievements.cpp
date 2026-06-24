@@ -263,7 +263,7 @@ void Achievements::setHostOverride(const std::string& host)
 {
 	config::AchievementsHostUrl.set(host);
 	hostOverrideActive = !host.empty();
-	// rc_client_set_host sets the global URL even when rc_client is null.
+	// rc_client_set_host sets the global URL even when rc_client is null
 	rc_client_set_host(rc_client, host.empty() ? nullptr : host.c_str());
 	if (rc_client != nullptr)
 	{

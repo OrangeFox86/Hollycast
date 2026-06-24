@@ -430,7 +430,7 @@ static void loadSpecialSettings()
 			config::ExtraDepthScale.override(10000.f);
 		}
 		if (prod_id == "SEGA STRIKE FIGHTER IN JPN-SLAVE")
-			// Slave 1 left channel is connected to a bass shaker, which buzzes on regular speakers.
+			// slave 1 left channel is connected to a bass shaker, which produces an annoying buzzing sound on regular speakers
 			settings.aica.muteAudio = true;
 	}
 }
