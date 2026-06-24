@@ -468,6 +468,8 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			{
 				setInputText(entry.name);
 				fileInputIsDirectory = false;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					finalizeSelection(entry.name);
 			}
 			drawBrowserItemLabel(ICON_FA_FILE, entry.name, rowPos, false, 0.0f);
 			ImGui::PopID();

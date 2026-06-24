@@ -1,3 +1,5 @@
+// Portions Copyright 2026 The Hollycast Authors
+
 #ifndef LIBRETRO
 #include "types.h"
 #include "emulator.h"

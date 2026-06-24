@@ -975,7 +975,7 @@ static int suspendEventFilter(void *userdata, SDL_Event *event)
             try {
                 emu.stop();
                 if (config::AutoSaveState)
-                    dc_savestate(config::SavestateSlot);
+                    dc_savestate(dc_getAutoSaveSlot());
             } catch (const FlycastException& e) { }
         }
         return 0;
