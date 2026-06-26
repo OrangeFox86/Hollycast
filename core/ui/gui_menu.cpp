@@ -75,9 +75,20 @@ static bool shouldShowMenuBar()
 
 	if (io.MouseSource == ImGuiMouseSource_TouchScreen)
 	{
+#if defined(__ANDROID__)
+		// Settings rows also use ImGui popups. Do not treat those popups as a
+		// reason to reveal the top menu on Android: showing the menu changes the
+		// Settings window position between OpenPopup() and BeginPopup(), which can
+		// make row value popups flicker and fail unless the menu was already shown.
+		const bool settingsOwnsTouch = gui_state == GuiState::Settings;
+		if (!settingsOwnsTouch && !popupOpen && pointerAtTop && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			touchMenuVisibleUntil = ImGui::GetTime() + 5.0;
+		return ImGui::GetTime() < touchMenuVisibleUntil;
+#else
 		if (!popupOpen && pointerAtTop && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 			touchMenuVisibleUntil = ImGui::GetTime() + 5.0;
 		return popupOpen || ImGui::GetTime() < touchMenuVisibleUntil;
+#endif
 	}
 
 	return popupOpen || pointerAtTop;

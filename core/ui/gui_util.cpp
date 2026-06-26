@@ -717,6 +717,25 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button)
 		window = window->ParentWindow;
 	if (window == nullptr || !(window->Flags & ImGuiWindowFlags_DragScrolling))
 		return;
+#if defined(__ANDROID__)
+	const ImGuiIO& io = ImGui::GetIO();
+	const bool touchDragAnywhere = io.MouseSource == ImGuiMouseSource_TouchScreen
+			&& io.MouseDown[mouse_button]
+			&& window->Rect().Contains(io.MousePos)
+			&& ImGui::IsMouseDragging(mouse_button, io.MouseDragThreshold);
+	if (touchDragAnywhere)
+	{
+		// Android finger scrolling often starts over a live Selectable row. Treat
+		// that as a scroll drag so settings rows do not eat the swipe as a tap.
+		const ImVec2& delta = io.MouseDelta;
+		if (delta != ImVec2())
+		{
+			window->DragScrolling = true;
+			window->ScrollSpeed = delta;
+		}
+		return;
+	}
+#endif
     bool hovered = false;
     bool held = false;
     ImGuiButtonFlags button_flags = (mouse_button == ImGuiMouseButton_Left) ? ImGuiButtonFlags_MouseButtonLeft

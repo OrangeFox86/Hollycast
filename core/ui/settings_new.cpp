@@ -126,32 +126,138 @@ static bool g_focusSettingsContent = false;
 static std::string g_settingsFooterText;
 static constexpr float kSettingsFooterHeightPx = 152.0f;
 
+#if defined(__ANDROID__)
+struct SettingsAndroidScaleState
+{
+	float activeUiScale = 0.0f;
+	float baseScale = 1.0f;
+	float appliedUserScale = 1.0f;
+};
+
+static SettingsAndroidScaleState& SettingsAndroidScaleStateCache()
+{
+	static SettingsAndroidScaleState state;
+
+	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+	if (state.activeUiScale != settings.display.uiScale)
+	{
+		state.activeUiScale = settings.display.uiScale;
+		state.baseScale = settings.display.uiScale / userScale;
+		state.appliedUserScale = userScale;
+	}
+
+	return state;
+}
+
+static float SettingsAndroidBaseScale()
+{
+	return SettingsAndroidScaleStateCache().baseScale;
+}
+#endif
+
+static float SettingsTextPreviewScale()
+{
+#if defined(__ANDROID__)
+	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+	const float appliedUserScale = std::max(0.01f, SettingsAndroidScaleStateCache().appliedUserScale);
+	// Font atlas rebuilds only happen on Apply. This preview scale lets Android
+	// Settings text grow while dragging without also widening the nav rail or
+	// making the fixed footer taller.
+	return std::clamp(userScale / appliedUserScale, 0.5f, 2.0f);
+#else
+	return 1.0f;
+#endif
+}
+
+static float SettingsPreviewFontSize(ImFont* font)
+{
+	font = font != nullptr ? font : ImGui::GetFont();
+	return font->LegacySize * SettingsTextPreviewScale();
+}
+
+static float SettingsLayoutScaled(float px)
+{
+#if defined(__ANDROID__)
+	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+	const float compressedUserScale = 1.0f + (userScale - 1.0f) * 0.20f;
+	// Keep the Settings layout responsive while dragging the UI Scaling slider,
+	// but cache the applied base scale. The slider changes config::UIScaling
+	// before mainui_reinit(), so recalculating the base from every pending value
+	// makes lower percentages grow the panels instead of shrinking them.
+	return px * SettingsAndroidBaseScale() * compressedUserScale;
+#else
+	return uiScaled(px);
+#endif
+}
+
+static float SettingsFixedLayoutScaled(float px)
+{
+#if defined(__ANDROID__)
+	// Android Settings lets text scale up for readability, but fixed frame pieces
+	// like the left rail and bottom details panel must not grow into the content.
+	return px * SettingsAndroidBaseScale();
+#else
+	return uiScaled(px);
+#endif
+}
+
+static float SettingsFixedFooterScaled(float px)
+{
+#if defined(__ANDROID__)
+	return SettingsFixedLayoutScaled(px) * 0.85f;
+#else
+	return uiScaled(px);
+#endif
+}
+
+static float SettingsFixedNavigationScaled(float px)
+{
+#if defined(__ANDROID__)
+	return SettingsFixedLayoutScaled(px) * 0.90f;
+#else
+	return uiScaled(px);
+#endif
+}
+
+static ImVec2 SettingsLayoutSize(float width, float height)
+{
+	return ImVec2(SettingsLayoutScaled(width), SettingsLayoutScaled(height));
+}
+
 static bool UseCompactSettingsLayout()
 {
 	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-	return displaySize.x < uiScaled(960.0f) || displaySize.y < uiScaled(720.0f);
+	return displaySize.x < SettingsLayoutScaled(960.0f) || displaySize.y < SettingsLayoutScaled(720.0f);
 }
 
 static float SettingsFooterHeight()
 {
 	if (!UseCompactSettingsLayout())
-		return uiScaled(kSettingsFooterHeightPx);
-	return std::clamp(ImGui::GetIO().DisplaySize.y * 0.20f, uiScaled(104.0f), uiScaled(136.0f));
+		return SettingsFixedFooterScaled(kSettingsFooterHeightPx);
+	return std::clamp(ImGui::GetIO().DisplaySize.y * 0.20f, SettingsFixedFooterScaled(104.0f), SettingsFixedFooterScaled(136.0f));
 }
 
 static float SettingsFooterGap()
 {
-	return UseCompactSettingsLayout() ? uiScaled(1.0f) : uiScaled(2.0f);
+	return UseCompactSettingsLayout() ? SettingsLayoutScaled(1.0f) : SettingsLayoutScaled(2.0f);
 }
 
 static float SettingsNavigationWidth()
 {
 	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+#if defined(__ANDROID__)
+	const float minWidth = SettingsFixedNavigationScaled(136.0f);
+	const float maxWidth = std::max(minWidth, std::min(SettingsFixedNavigationScaled(310.0f), displaySize.x * 0.20f));
+	if (!UseCompactSettingsLayout())
+		return std::clamp(SettingsFixedNavigationScaled(225.0f), minWidth, maxWidth);
+	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
+#else
 	const float minWidth = 136.0f;
 	const float maxWidth = std::max(minWidth, std::min(310.0f, displaySize.x * 0.20f));
 	if (!UseCompactSettingsLayout())
 		return std::clamp(uiScaled(225.0f), minWidth, maxWidth);
 	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
+#endif
 }
 
 // Visual-only toggle switch rendering (no interaction)
@@ -163,8 +269,8 @@ static void RenderToggleSwitchVisual(bool value)
 	if (window->SkipItems)
 		return;
 
-	const float height = settings.display.uiScale * 24;
-	const float width = settings.display.uiScale * 48;
+	const float height = SettingsLayoutScaled(24.0f);
+	const float width = SettingsLayoutScaled(48.0f);
 	const float radius = height * 0.5f;
 	const ImVec2 pos = window->DC.CursorPos;
 	const ImVec2 size(width, height);
@@ -208,20 +314,20 @@ static float TwoLineSettingContentHeight()
 {
 	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
 	ImFont* secondaryFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
-	const float primaryHeight = primaryFont->LegacySize;
-	const float secondaryHeight = secondaryFont->LegacySize;
-	return primaryHeight + uiScaled(4.0f) + secondaryHeight;
+	const float primaryHeight = SettingsPreviewFontSize(primaryFont);
+	const float secondaryHeight = SettingsPreviewFontSize(secondaryFont);
+	return primaryHeight + SettingsLayoutScaled(4.0f) + secondaryHeight;
 }
 
 static float TwoLineSettingSecondaryLineOffsetY()
 {
 	ImFont* primaryFont = largeFont != nullptr ? largeFont : ImGui::GetFont();
-	return primaryFont->LegacySize + uiScaled(4.0f);
+	return SettingsPreviewFontSize(primaryFont) + SettingsLayoutScaled(4.0f);
 }
 
 static float TwoLineSettingRowHeight()
 {
-	return TwoLineSettingContentHeight() + uiScaled(g_twoLineRowExtraHeightPx);
+	return TwoLineSettingContentHeight() + SettingsLayoutScaled(g_twoLineRowExtraHeightPx);
 }
 
 static float TwoLineSettingContentOffsetY()
@@ -231,13 +337,13 @@ static float TwoLineSettingContentOffsetY()
 
 static float TwoLineSettingRowGap()
 {
-	return uiScaled(2.0f);
+	return SettingsLayoutScaled(2.0f);
 }
 
 static float RightColumnX(float itemWidth, float rightPadding = 28.0f)
 {
 	const float rowRightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
-	return rowRightX - itemWidth - uiScaled(rightPadding);
+	return rowRightX - itemWidth - SettingsLayoutScaled(rightPadding);
 }
 
 static void RenderScaledIconInRect(const char* icon, const ImVec2& min, const ImVec2& max)
@@ -347,28 +453,32 @@ static void RenderSettingsFooterBar()
 	accent.w = 1.0f;
 
 	const bool compactLayout = UseCompactSettingsLayout();
-	const float padX = compactLayout ? uiScaled(1.0f) : uiScaled(2.0f);
-	const float padY = compactLayout ? uiScaled(1.0f) : uiScaled(2.0f);
+	const float padX = compactLayout ? SettingsLayoutScaled(1.0f) : SettingsLayoutScaled(2.0f);
+	const float padY = compactLayout ? SettingsLayoutScaled(1.0f) : SettingsLayoutScaled(2.0f);
 	ImFont* titleFont = settingsTitleFont != nullptr ? settingsTitleFont : largeFont;
 	ImFont* bodyFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+#if defined(__ANDROID__)
+	const float footerTextScale = (compactLayout ? 1.0f : 1.15f) * SettingsTextPreviewScale();
+#else
 	const float footerTextScale = 1.25f;
+#endif
 	const float titleFontSize = titleFont->LegacySize * (compactLayout ? 1.00f : 1.06f) * footerTextScale;
 	const float bodyFontSize = bodyFont->LegacySize * (compactLayout ? 0.89f : 0.93f) * footerTextScale;
-	const float textPadX = compactLayout ? uiScaled(10.0f) : uiScaled(12.0f);
-	const float textPadY = compactLayout ? uiScaled(8.0f) : uiScaled(10.0f);
+	const float textPadX = compactLayout ? SettingsLayoutScaled(10.0f) : SettingsLayoutScaled(12.0f);
+	const float textPadY = compactLayout ? SettingsLayoutScaled(8.0f) : SettingsLayoutScaled(10.0f);
 	const ImVec2 textBoxMin(footerMin.x + padX, footerMin.y + padY);
 	const ImVec2 textBoxMax(footerMax.x - padX, footerMax.y - padY);
 	ImVec4 textBoxBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
 	textBoxBg.w = std::min(textBoxBg.w + 0.35f, 1.0f);
 	drawList->AddRectFilled(textBoxMin, textBoxMax,
-		ImGui::ColorConvertFloat4ToU32(textBoxBg), uiScaled(10.0f));
+		ImGui::ColorConvertFloat4ToU32(textBoxBg), SettingsLayoutScaled(10.0f));
 	drawList->AddRect(textBoxMin, textBoxMax,
-		ImGui::ColorConvertFloat4ToU32(border), uiScaled(10.0f), 0, 1.0f);
+		ImGui::ColorConvertFloat4ToU32(border), SettingsLayoutScaled(10.0f), 0, 1.0f);
 	drawList->AddRectFilled(
 		textBoxMin,
-		ImVec2(textBoxMax.x, textBoxMin.y + uiScaled(3.0f)),
+		ImVec2(textBoxMax.x, textBoxMin.y + SettingsLayoutScaled(3.0f)),
 		ImGui::ColorConvertFloat4ToU32(accent),
-		uiScaled(10.0f),
+		SettingsLayoutScaled(10.0f),
 		ImDrawFlags_RoundCornersTop);
 
 	const char* footerText = g_settingsFooterText.empty()
@@ -453,7 +563,7 @@ static void RenderSettingsFooterBar()
 			out.pop_back();
 		return out;
 	};
-	const std::string bodyText = normalizeFooterBody(bodyStart);
+	std::string bodyText = normalizeFooterBody(bodyStart);
 	const std::string displayTitle = titleLine.empty()
 		? std::string()
 		: std::string(T("Setting Details: ")) + titleLine;
@@ -463,14 +573,60 @@ static void RenderSettingsFooterBar()
 	float finalBodySize = bodyFontSize;
 	if (availableHeight > 0.0f && (!displayTitle.empty() || !bodyText.empty()))
 	{
-		float totalHeight = 0.0f;
-		if (!displayTitle.empty())
-			totalHeight += titleFont->CalcTextSizeA(titleFontSize, FLT_MAX, wrapWidth, displayTitle.c_str()).y + titleSpacing;
-		if (!bodyText.empty())
-			totalHeight += bodyFont->CalcTextSizeA(bodyFontSize, FLT_MAX, wrapWidth, bodyText.c_str()).y;
+		const auto measureFooterTextHeight = [&](float titleSize, float bodySize, const std::string& body) -> float
+		{
+			float totalHeight = 0.0f;
+			if (!displayTitle.empty())
+				totalHeight += titleFont->CalcTextSizeA(titleSize, FLT_MAX, wrapWidth, displayTitle.c_str()).y + titleSpacing;
+			if (!body.empty())
+				totalHeight += bodyFont->CalcTextSizeA(bodySize, FLT_MAX, wrapWidth, body.c_str()).y;
+			return totalHeight;
+		};
+		const auto compactOverflowBody = [](const std::string& text) -> std::string
+		{
+			std::string out;
+			out.reserve(text.size());
+			bool pendingSpace = false;
+			for (char c : text)
+			{
+				if (c == '\r' || c == '\n' || c == '\t' || c == ' ')
+				{
+					pendingSpace = !out.empty();
+					continue;
+				}
+				if (pendingSpace && !out.empty())
+				{
+					out.push_back(' ');
+					pendingSpace = false;
+				}
+				out.push_back(c);
+			}
+			return out;
+		};
+
+		float totalHeight = measureFooterTextHeight(titleFontSize, bodyFontSize, bodyText);
+#if defined(__ANDROID__)
+		// Keep paragraph breaks when they fit. At high Android UI scale, compact
+		// only overflowing footer copy so sentences use horizontal wrap space
+		// instead of being clipped below the fixed details box.
 		if (totalHeight > availableHeight)
 		{
+			std::string compactBodyText = compactOverflowBody(bodyText);
+			const float compactHeight = measureFooterTextHeight(titleFontSize, bodyFontSize, compactBodyText);
+			if (compactHeight < totalHeight)
+			{
+				bodyText = std::move(compactBodyText);
+				totalHeight = compactHeight;
+			}
+		}
+#endif
+		if (totalHeight > availableHeight)
+		{
+#if defined(__ANDROID__)
+			const float scale = std::clamp(availableHeight / totalHeight, 0.70f, 1.0f);
+#else
 			const float scale = std::clamp(availableHeight / totalHeight, 0.78f, 1.0f);
+#endif
 			finalTitleSize = titleFontSize * scale;
 			finalBodySize = bodyFontSize * scale;
 		}
@@ -562,7 +718,7 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 	if (disabled)
 		rowFlags |= ImGuiSelectableFlags_Disabled;
 
-	ImguiStyleVar rowRounding(ImGuiStyleVar_FrameRounding, uiScaled(8.0f));
+	ImguiStyleVar rowRounding(ImGuiStyleVar_FrameRounding, SettingsLayoutScaled(8.0f));
 	const ImVec2 itemSpacing = ImGui::GetStyle().ItemSpacing;
 	ImguiStyleVar rowItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing.x, 0.0f));
 	const bool clicked = ImGui::Selectable(rowId, false, rowFlags, ImVec2(0.0f, TwoLineSettingRowHeight()));
@@ -576,7 +732,7 @@ static bool BeginTwoLineSettingRow(const char* rowId, const char* tooltip = null
 	{
 		const ImVec2 rowMin = ImGui::GetItemRectMin();
 		const ImVec2 rowMax = ImGui::GetItemRectMax();
-		const float lineInset = uiScaled(6.0f);
+		const float lineInset = SettingsLayoutScaled(6.0f);
 		ImVec4 lineColor = ImGui::GetStyleColorVec4(ImGuiCol_Border);
 		lineColor.w *= g_twoLineRowSeparatorAlpha;
 		ImGui::GetWindowDrawList()->AddLine(
@@ -630,7 +786,7 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 		return;
 
 	ImGui::SetCursorPos(ImVec2(
-		line1Start.x + uiScaled(28.0f),
+		line1Start.x + SettingsLayoutScaled(28.0f),
 		line1Start.y + TwoLineSettingSecondaryLineOffsetY()
 	));
 	ImGui::PushFont(settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont());
@@ -657,10 +813,10 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 		textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	ImGui::PushStyleColor(ImGuiCol_Text, textColor);
-	const float wrapWidth = std::max(uiScaled(80.0f),
-		g_twoLineRowEndScreenX - ImGui::GetCursorScreenPos().x - uiScaled(16.0f));
+	const float wrapWidth = std::max(SettingsLayoutScaled(80.0f),
+		g_twoLineRowEndScreenX - ImGui::GetCursorScreenPos().x - SettingsLayoutScaled(16.0f));
 	const ImVec2 textMin = ImGui::GetCursorScreenPos();
-	ImGui::PushClipRect(textMin, ImVec2(g_twoLineRowEndScreenX - uiScaled(8.0f), g_twoLineRowEndScreenY - uiScaled(2.0f)), true);
+	ImGui::PushClipRect(textMin, ImVec2(g_twoLineRowEndScreenX - SettingsLayoutScaled(8.0f), g_twoLineRowEndScreenY - SettingsLayoutScaled(2.0f)), true);
 	ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrapWidth);
 	ImGui::TextUnformatted(compactLine.c_str());
 	ImGui::PopTextWrapPos();
@@ -782,16 +938,16 @@ static bool RenderGeneralToggleSettingRow(const char* id, const char* icon, cons
 
 	{
 		DisabledScope _(disabled);
-		SettingIcon(icon, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(icon, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(label);
 		ImGui::PopFont();
 
-		const float toggleWidth = uiScaled(50.0f);
+		const float toggleWidth = SettingsLayoutScaled(50.0f);
 		ImGui::SameLine(RightColumnX(toggleWidth));
 
-		const float toggleHeight = settings.display.uiScale * 24.0f;
+		const float toggleHeight = SettingsLayoutScaled(24.0f);
 		const float verticalOffset = (TwoLineSettingContentHeight() - toggleHeight) * 0.5f;
 		const ImVec2 togglePos = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(togglePos.x, togglePos.y + verticalOffset));
@@ -817,13 +973,13 @@ static void RenderGeneralTextInputSettingRow(const char* id, const char* icon, c
 
 	{
 		DisabledScope _(disabled);
-		SettingIcon(icon, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(icon, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(label);
 		ImGui::PopFont();
 
-		const float inputWidth = uiScaled(inputWidthPx);
+		const float inputWidth = SettingsLayoutScaled(inputWidthPx);
 		ImGui::SameLine(RightColumnX(inputWidth));
 		if (rowActivated)
 			ImGui::SetKeyboardFocusHere();
@@ -1671,8 +1827,8 @@ static void controller_mapping_popup(const std::shared_ptr<GamepadDevice>& gamep
 
 static void RenderGeneralRightValue(const std::string& value, float valueWidthPx, float extraRightOffsetPx = 0.0f, bool disabled = false)
 {
-	const float valueWidth = uiScaled(valueWidthPx);
-	const float extraRight = uiScaled(extraRightOffsetPx);
+	const float valueWidth = SettingsLayoutScaled(valueWidthPx);
+	const float extraRight = SettingsLayoutScaled(extraRightOffsetPx);
 	const float verticalOffset = (TwoLineSettingContentHeight() - ImGui::GetTextLineHeight()) * 0.5f;
 	std::string clipped = middleEllipsis(value, valueWidth);
 	ImFont* valueFont = settingsRightValueFont != nullptr ? settingsRightValueFont : largeFont;
@@ -1696,8 +1852,8 @@ static void RenderGeneralInfoRow(const char* id, const char* icon, const char* l
 	BeginTwoLineSettingRow("##row", rowTooltip, true);
 	const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-	SettingIcon(icon, ImVec2(uiScaled(20), uiScaled(20)));
-	ImGui::SameLine(0, uiScaled(8));
+	SettingIcon(icon, SettingsLayoutSize(20.0f, 20.0f));
+	ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 	ImGui::PushFont(largeFont);
 	ImGui::TextUnformatted(label);
 	ImGui::PopFont();
@@ -1714,8 +1870,8 @@ static void manageSinglePath(const char* label, config::Option<std::string, fals
 	const bool rowActivated = BeginTwoLineSettingRow("##row", helpText);
 	const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-	SettingIcon(ICON_FA_FOLDER_OPEN, ImVec2(uiScaled(20), uiScaled(20)));
-	ImGui::SameLine(0, uiScaled(8));
+	SettingIcon(ICON_FA_FOLDER_OPEN, SettingsLayoutSize(20.0f, 20.0f));
+	ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 	ImGui::PushFont(largeFont);
 	ImGui::TextUnformatted(label);
 	ImGui::PopFont();
@@ -1729,8 +1885,8 @@ static void manageSinglePath(const char* label, config::Option<std::string, fals
 		const float extraOffsetPx = deleteBtnWidthPx + 8.0f;
 		RenderGeneralRightValue(pathOption.get(), 280.0f, extraOffsetPx);
 
-		const float buttonWidth = uiScaled(deleteBtnWidthPx);
-		const float buttonHeight = uiScaled(deleteBtnHeightPx);
+		const float buttonWidth = SettingsLayoutScaled(deleteBtnWidthPx);
+		const float buttonHeight = SettingsLayoutScaled(deleteBtnHeightPx);
 		const float verticalOffset = (TwoLineSettingContentHeight() - buttonHeight) * 0.5f;
 
 		ImGui::SameLine(RightColumnX(buttonWidth));
@@ -1781,8 +1937,8 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 		(void)rowActivated;
 
-		SettingIcon(ICON_FA_FOLDER_OPEN, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_FOLDER_OPEN, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		if (i == 0)
 			ImGui::TextUnformatted(label);
@@ -1798,8 +1954,8 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		const float extraOffsetPx = deleteBtnWidthPx + 8.0f;
 		RenderGeneralRightValue(paths[i], 280.0f, extraOffsetPx);
 
-		const float buttonWidth = uiScaled(deleteBtnWidthPx);
-		const float buttonHeight = uiScaled(deleteBtnHeightPx);
+		const float buttonWidth = SettingsLayoutScaled(deleteBtnWidthPx);
+		const float buttonHeight = SettingsLayoutScaled(deleteBtnHeightPx);
 		const float verticalOffset = (TwoLineSettingContentHeight() - buttonHeight) * 0.5f;
 
 		ImGui::SameLine(RightColumnX(buttonWidth));
@@ -1821,8 +1977,8 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 		const bool addRowActivated = BeginTwoLineSettingRow("##row", helpText);
 		const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-		SettingIcon(ICON_FA_PLUS, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_PLUS, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(addRowLabel.c_str());
 		ImGui::PopFont();
@@ -1921,6 +2077,11 @@ const char* getTabName(SettingsTab tab)
 
 static float CalculateSettingsNavigationWidth(const char* exitLabel)
 {
+#if defined(__ANDROID__)
+	// On phones the navigation rail must remain a stable frame. Larger UI text is
+	// clipped inside the existing rail instead of making the content column shrink.
+	return SettingsNavigationWidth();
+#else
 	ImFont* navFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
 	ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : navFont;
 	const float fontSize = navFont->LegacySize;
@@ -1938,6 +2099,7 @@ static float CalculateSettingsNavigationWidth(const char* exitLabel)
 		136.0f,
 		maxWidth
 	);
+#endif
 }
 
 static bool SettingsBackButton(const char* icon, const char* label, const ImVec2& size)
@@ -1951,18 +2113,21 @@ static bool SettingsBackButton(const char* icon, const char* label, const ImVec2
 	const float fontSize = ImGui::GetFontSize();
 	const ImVec2 textSize = textFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, label);
 	const ImVec2 iconSize = iconFont != nullptr ? iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon) : ImVec2();
-	const float gap = iconFont != nullptr ? uiScaled(8.0f) : 0.0f;
+	const float gap = iconFont != nullptr ? SettingsLayoutScaled(8.0f) : 0.0f;
 	const float totalWidth = iconSize.x + gap + textSize.x;
 	float x = min.x + (max.x - min.x - totalWidth) * 0.5f;
+	if (x < min.x)
+		x = min.x + SettingsLayoutScaled(6.0f);
 	const float y = min.y + (max.y - min.y - textSize.y) * 0.5f;
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+	const ImVec4 clipRect(min.x, min.y, max.x, max.y);
 	if (iconFont != nullptr)
 	{
-		drawList->AddText(iconFont, fontSize, ImVec2(x, y), color, icon);
+		drawList->AddText(iconFont, fontSize, ImVec2(x, y), color, icon, nullptr, 0.0f, &clipRect);
 		x += iconSize.x + gap;
 	}
-	drawList->AddText(textFont, fontSize, ImVec2(x, y), color, label);
+	drawList->AddText(textFont, fontSize, ImVec2(x, y), color, label, nullptr, 0.0f, &clipRect);
 	return pressed;
 }
 
@@ -1979,6 +2144,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	// Match the main content column height so the shared footer sits flush below both panels.
 	ImGui::BeginChild("NavigationRail", ImVec2(navWidth, -(footerHeight + footerGap)),
 	                  ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
+	ImGui::SetWindowFontScale(SettingsTextPreviewScale());
 	g_focusSettingsNavigation = false;
 
 	ImGui::PushFont(settingsTitleFont);
@@ -2044,6 +2210,7 @@ static void renderContentArea()
 	ImGui::BeginChild("ContentArea", ImVec2(0, -(footerHeight + footerGap)),
 	                  ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened,
 	                  ImGuiWindowFlags_DragScrolling);
+	ImGui::SetWindowFontScale(SettingsTextPreviewScale());
 	g_focusSettingsContent = false;
 
 	if (focusContent)
@@ -2076,6 +2243,12 @@ static void renderContentArea()
 	default:
 		break;
 	}
+
+	// The content pane uses drag scrolling, but Android swipes often begin on
+	// selectable rows. Keep this after rendering rows so the helper can turn
+	// those finger drags into scrolling instead of row activation.
+	scrollWhenDraggingOnVoid();
+	windowDragScroll();
 
 	if (!IsAnySettingsPopupOpen()
 		&& ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)
@@ -2363,8 +2536,8 @@ void renderGeneralTab()
 				);
 			const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-			SettingIcon(ICON_FA_FOLDER_OPEN, ImVec2(uiScaled(20), uiScaled(20)));
-			ImGui::SameLine(0, uiScaled(8));
+			SettingIcon(ICON_FA_FOLDER_OPEN, SettingsLayoutSize(20.0f, 20.0f));
+			ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 			ImGui::PushFont(largeFont);
 			if (i == 0)
 			{
@@ -2383,8 +2556,8 @@ void renderGeneralTab()
 			const float extraOffsetPx = deleteBtnWidthPx + 8.0f;
 			RenderGeneralRightValue(config::ContentPath.get()[i], 280.0f, extraOffsetPx);
 
-			const float buttonWidth = uiScaled(deleteBtnWidthPx);
-			const float buttonHeight = uiScaled(deleteBtnHeightPx);
+			const float buttonWidth = SettingsLayoutScaled(deleteBtnWidthPx);
+			const float buttonHeight = SettingsLayoutScaled(deleteBtnHeightPx);
 			const float verticalOffset = (TwoLineSettingContentHeight() - buttonHeight) * 0.5f;
 			ImGui::SameLine(RightColumnX(buttonWidth));
 			ImVec2 buttonPos = ImGui::GetCursorPos();
@@ -2410,8 +2583,8 @@ void renderGeneralTab()
 					)
 				);
 			const ImVec2 line1Start = BeginTwoLineSettingRowContent();
-			SettingIcon(ICON_FA_PLUS, ImVec2(uiScaled(20), uiScaled(20)));
-			ImGui::SameLine(0, uiScaled(8));
+			SettingIcon(ICON_FA_PLUS, SettingsLayoutSize(20.0f, 20.0f));
+			ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 			ImGui::PushFont(largeFont);
 			ImGui::TextUnformatted(T("Add Content Folder"));
 			ImGui::PopFont();
@@ -2527,16 +2700,16 @@ void renderGeneralTab()
 				)
 			);
 			const ImVec2 line1Start = BeginTwoLineSettingRowContent();
-		SettingIcon(ICON_FA_ARROWS_ROTATE, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_ARROWS_ROTATE, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(T("Rescan Content"));
 		ImGui::PopFont();
 
 		const float refreshBtnWidthPx = 26.0f;
 		const float refreshBtnHeightPx = 22.0f;
-		const float refreshButtonWidth = uiScaled(refreshBtnWidthPx);
-		const float refreshButtonHeight = uiScaled(refreshBtnHeightPx);
+		const float refreshButtonWidth = SettingsLayoutScaled(refreshBtnWidthPx);
+		const float refreshButtonHeight = SettingsLayoutScaled(refreshBtnHeightPx);
 		const float refreshVerticalOffset = (TwoLineSettingContentHeight() - refreshButtonHeight) * 0.5f;
 
 		ImGui::SameLine(RightColumnX(refreshButtonWidth));
@@ -2703,8 +2876,8 @@ void renderGeneralTab()
 			);
 		const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-		SettingIcon(ICON_FA_FOLDER_OPEN, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_FOLDER_OPEN, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(T("Custom Boxart Folder"));
 		ImGui::PopFont();
@@ -2778,8 +2951,8 @@ void renderGeneralTab()
 		);
 		const ImVec2 refreshCacheLine1Start = BeginTwoLineSettingRowContent();
 
-		SettingIcon(ICON_FA_ARROWS_ROTATE, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_ARROWS_ROTATE, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::TextUnformatted(T("Boxart Database Review"));
 		ImGui::PopFont();
@@ -4277,13 +4450,13 @@ void renderVideoTab()
 					true);
 			const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-			SettingIcon(ICON_FA_EXPAND, ImVec2(uiScaled(20), uiScaled(20)));
-			ImGui::SameLine(0, uiScaled(8));
+			SettingIcon(ICON_FA_EXPAND, SettingsLayoutSize(20.0f, 20.0f));
+			ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 			ImGui::PushFont(largeFont);
 			ImGui::TextUnformatted(T("Output Texture Size"));
 			ImGui::PopFont();
 
-			const float valueWidth = uiScaled(220.0f);
+			const float valueWidth = SettingsLayoutScaled(220.0f);
 			ImGui::SameLine(RightColumnX(valueWidth));
 			const float valueStartX = ImGui::GetCursorPosX();
 			const float valueTextWidth = ImGui::CalcTextSize(outputSizeText.c_str()).x;
@@ -4773,7 +4946,7 @@ void renderControlsTab()
 				}
 
 				ImGui::TableSetColumnIndex(3);
-				ImGui::SameLine(0, uiScaled(8.0f));
+				ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 
 				// Map button for controller mapping
 				if (gamepad->remappable() && ImGui::Button(T("Map"), deviceButtonSize))
@@ -5170,8 +5343,8 @@ void renderControlsTab()
 					ImGui::SameLine(0, 0);
 
 					// Icon
-					SettingIcon(ICON_FA_CROSSHAIRS, ImVec2(uiScaled(16), uiScaled(16)));
-					ImGui::SameLine(0, uiScaled(6));
+					SettingIcon(ICON_FA_CROSSHAIRS, SettingsLayoutSize(16.0f, 16.0f));
+					ImGui::SameLine(0, SettingsLayoutScaled(6.0f));
 
 					// Label
 					ImGui::Text("%s", T("Crosshair"));
@@ -5526,13 +5699,13 @@ void renderNetworkTab()
 									));
 								const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-								SettingIcon(ICON_FA_HOURGLASS, ImVec2(uiScaled(20), uiScaled(20)));
-								ImGui::SameLine(0, uiScaled(8));
+								SettingIcon(ICON_FA_HOURGLASS, SettingsLayoutSize(20.0f, 20.0f));
+								ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 								ImGui::PushFont(largeFont);
 								ImGui::TextUnformatted(T("Chat Window Timeout (s)"));
 								ImGui::PopFont();
 
-								const float inputWidth = uiScaled(220.0f);
+								const float inputWidth = SettingsLayoutScaled(220.0f);
 								ImGui::SameLine(RightColumnX(inputWidth));
 								if (rowActivated)
 									ImGui::SetKeyboardFocusHere();
@@ -5652,13 +5825,13 @@ void renderNetworkTab()
 							));
 						const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-						SettingIcon(ICON_FA_KEY, ImVec2(uiScaled(20), uiScaled(20)));
-						ImGui::SameLine(0, uiScaled(8));
+						SettingIcon(ICON_FA_KEY, SettingsLayoutSize(20.0f, 20.0f));
+						ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 						ImGui::PushFont(largeFont);
 						ImGui::TextUnformatted(T("Local Port"));
 						ImGui::PopFont();
 
-						const float inputWidth = uiScaled(220.0f);
+						const float inputWidth = SettingsLayoutScaled(220.0f);
 						ImGui::SameLine(RightColumnX(inputWidth));
 						if (rowActivated)
 							ImGui::SetKeyboardFocusHere();
@@ -5778,13 +5951,13 @@ void renderNetworkTab()
 							));
 						const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-						SettingIcon(ICON_FA_KEY, ImVec2(uiScaled(20), uiScaled(20)));
-						ImGui::SameLine(0, uiScaled(8));
+						SettingIcon(ICON_FA_KEY, SettingsLayoutSize(20.0f, 20.0f));
+						ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 						ImGui::PushFont(largeFont);
 						ImGui::TextUnformatted(T("Local Port"));
 						ImGui::PopFont();
 
-						const float inputWidth = uiScaled(220.0f);
+						const float inputWidth = SettingsLayoutScaled(220.0f);
 						ImGui::SameLine(RightColumnX(inputWidth));
 						if (rowActivated)
 							ImGui::SetKeyboardFocusHere();
@@ -6226,13 +6399,13 @@ void renderAdvancedTab()
 					));
 				const ImVec2 line1Start = BeginTwoLineSettingRowContent();
 
-				SettingIcon(ICON_FA_LINK, ImVec2(uiScaled(20), uiScaled(20)));
-				ImGui::SameLine(0, uiScaled(8));
+				SettingIcon(ICON_FA_LINK, SettingsLayoutSize(20.0f, 20.0f));
+				ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 				ImGui::PushFont(largeFont);
 				ImGui::TextUnformatted(T("GDB Port"));
 				ImGui::PopFont();
 
-				const float inputWidth = uiScaled(220.0f);
+				const float inputWidth = SettingsLayoutScaled(220.0f);
 				ImGui::SameLine(RightColumnX(inputWidth));
 				if (rowActivated)
 					ImGui::SetKeyboardFocusHere();
@@ -6382,17 +6555,17 @@ void renderAdvancedTab()
 				ImGui::Text("%s", shortName.c_str());
 				ImGui::PopFont();
 
-				float toggleWidth = uiScaled(50);
+				float toggleWidth = SettingsLayoutScaled(50.0f);
 				ImGui::SameLine(RightColumnX(toggleWidth));
 
-				float toggleHeight = settings.display.uiScale * 24;
+				float toggleHeight = SettingsLayoutScaled(24.0f);
 				float verticalOffset = (rowHeight - toggleHeight) * 0.5f;
 				ImVec2 cursorPos = ImGui::GetCursorPos();
 				ImGui::SetCursorPos(ImVec2(cursorPos.x, cursorPos.y + verticalOffset));
 
 				RenderToggleSwitchVisual(enabled);
 
-				ImGui::SetCursorPos(ImVec2(line1Start.x + uiScaled(28), line1Start.y + ImGui::GetTextLineHeightWithSpacing()));
+				ImGui::SetCursorPos(ImVec2(line1Start.x + SettingsLayoutScaled(28.0f), line1Start.y + ImGui::GetTextLineHeightWithSpacing()));
 				ImGui::TextDisabled("%s", fullName.c_str());
 
 				ImGui::PopID();
@@ -6410,8 +6583,8 @@ void renderAdvancedTab()
 		}
 
 		// Log Server (network logging)
-		SettingIcon(ICON_FA_SERVER, ImVec2(uiScaled(20), uiScaled(20)));
-		ImGui::SameLine(0, uiScaled(8));
+		SettingIcon(ICON_FA_SERVER, SettingsLayoutSize(20.0f, 20.0f));
+		ImGui::SameLine(0, SettingsLayoutScaled(8.0f));
 		ImGui::PushFont(largeFont);
 		ImGui::Text("%s", T("Log Server"));
 		ImGui::PopFont();
