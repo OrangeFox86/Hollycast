@@ -457,13 +457,22 @@ class DreamPicoPort : public SDLDreamLink
 		//! The ID used for sorting on the UI
 		std::string sort_id;
 
+		//! @return The hardware port character identifier
+		char getPortChar() const {
+			return ('A' + hardware_bus);
+		}
+
+		//! @return the static product name
+		static const char* getProductName() {
+			return "DreamPicoPort";
+		}
+
 		//! @param[in] separator Separator string to use between name and port char
 		//! @return unique name of this device using the given separator
 		std::string getName(const std::string& separator = " ") const {
-			std::string name = "DreamPicoPort";
+			std::string name = getProductName();
 			if (!is_hardware_bus_implied && !is_single_device) {
-				const char portChar = ('A' + hardware_bus);
-				name += separator + std::string(1, portChar);
+				name += separator + std::string(1, getPortChar());
 			}
 			return name;
 		}
@@ -653,7 +662,7 @@ public:
 	}
 
 	const char* getProductName() const override {
-		return "DreamPicoPort";
+		return hw_info.getProductName();
 	}
 
 	void setMapleDevices()
@@ -1026,7 +1035,13 @@ private:
 		if (!hw_info.is_hardware_bus_implied && !hw_info.serial_number.empty()) {
 			// Locking to name, which includes A-D, plus serial number will ensure correct enumeration every time
 			hw_info.unique_id = std::string("sdl_") + hw_info.getName("") + std::string("_") + hw_info.serial_number;
-			hw_info.sort_id = std::string("sdl_") + hw_info.serial_number + std::string("_") + hw_info.getName("");
+			// Ensure this is ordered by SDL, product name, serial, and port char
+			hw_info.sort_id = (
+				std::string("sdl_") +
+				hw_info.getProductName() + std::string("_") +
+				hw_info.serial_number + std::string("_") +
+				hw_info.getPortChar()
+			);
 		}
 
 		return hw_info;
