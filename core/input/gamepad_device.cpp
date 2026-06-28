@@ -814,13 +814,18 @@ void GamepadDevice::Register(const std::shared_ptr<GamepadDevice>& gamepad)
 	std::sort(
 		_gamepads.begin(),
 		_gamepads.end(),
-		[](std::shared_ptr<GamepadDevice>& a, std::shared_ptr<GamepadDevice>& b)
+		[](const std::shared_ptr<GamepadDevice>& a, const std::shared_ptr<GamepadDevice>& b)
 		{
-			// Sort empty strings at end
-			if (a->sort_id().empty()) return false;
-			if (b->sort_id().empty()) return true;
+			const std::string& aId = a->sort_id();
+			const std::string& bId = b->sort_id();
 
-			return (a->sort_id() < b->sort_id());
+			// Sort empty strings at end
+			const bool aEmpty = aId.empty();
+			const bool bEmpty = bId.empty();
+			if (aEmpty != bEmpty)
+				return !aEmpty;
+
+			return (aId < bId);
 		}
 	);
 	MapleConfigMap::UpdateVibration = updateVibration;
