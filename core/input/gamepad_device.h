@@ -41,6 +41,11 @@ public:
 	int maple_port() const { return _maple_port; }
 	virtual void set_maple_port(int port) { _maple_port = port; }
 	const std::string& unique_id() { return _unique_id; }
+	virtual const std::string& sort_id()
+	{
+		static const std::string defaultSortId;
+		return defaultSortId;
+	}
 	virtual bool gamepad_btn_input(u32 code, bool pressed);
 	virtual bool gamepad_axis_input(u32 code, int value);
 	virtual ~GamepadDevice();

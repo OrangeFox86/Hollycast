@@ -811,6 +811,18 @@ void GamepadDevice::Register(const std::shared_ptr<GamepadDevice>& gamepad)
 #endif
 	Lock _(_gamepads_mutex);
 	_gamepads.push_back(gamepad);
+	std::sort(
+		_gamepads.begin(),
+		_gamepads.end(),
+		[](std::shared_ptr<GamepadDevice>& a, std::shared_ptr<GamepadDevice>& b)
+		{
+			// Sort empty strings at end
+			if (a->sort_id().empty()) return false;
+			if (b->sort_id().empty()) return true;
+
+			return (a->sort_id() < b->sort_id());
+		}
+	);
 	MapleConfigMap::UpdateVibration = updateVibration;
 
 	gamepad->_is_registered = true;

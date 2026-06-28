@@ -454,6 +454,8 @@ class DreamPicoPort : public SDLDreamLink
 		std::string serial_number;
 		//! If set, the determined unique ID of this device. If not set, the serial could not be parsed.
 		std::string unique_id;
+		//! The ID used for sorting on the UI
+		std::string sort_id;
 
 		//! @param[in] separator Separator string to use between name and port char
 		//! @return unique name of this device using the given separator
@@ -609,8 +611,12 @@ public:
 		}
 	}
 
-	std::string getUniqueId() const {
+	const std::string& getUniqueId() const {
 		return hw_info.unique_id;
+	}
+
+	const std::string& getSortId() const {
+		return hw_info.sort_id;
 	}
 
 	void changeBus(int newBus) override {
@@ -1016,9 +1022,11 @@ private:
 		}
 
 		hw_info.unique_id.clear();
+		hw_info.sort_id.clear();
 		if (!hw_info.is_hardware_bus_implied && !hw_info.serial_number.empty()) {
 			// Locking to name, which includes A-D, plus serial number will ensure correct enumeration every time
 			hw_info.unique_id = std::string("sdl_") + hw_info.getName("") + std::string("_") + hw_info.serial_number;
+			hw_info.sort_id = std::string("sdl_") + hw_info.serial_number + std::string("_") + hw_info.getName("");
 		}
 
 		return hw_info;
@@ -1549,11 +1557,17 @@ DreamPicoPortGamepad::DreamPicoPortGamepad(
 	dream_pico_port::DreamPicoPort *picoPort = dynamic_cast<dream_pico_port::DreamPicoPort*>(dreamlink.get());
 	_name = picoPort->getName();
 
-	std::string uniqueId = picoPort->getUniqueId();
+	const std::string& sortId = picoPort->getSortId();
+	if (!sortId.empty()) {
+		_sort_id = sortId;
+	}
+
+	const std::string& uniqueId = picoPort->getUniqueId();
 	if (!uniqueId.empty()) {
 		_unique_id = uniqueId;
 		loadMapping();
 	}
+
 	int bus = picoPort->getDefaultBus();
 	if (DreamLink::isValidBus(bus))
 		set_maple_port(bus);
