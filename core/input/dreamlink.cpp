@@ -259,11 +259,11 @@ void BaseDreamLink::PrioritizedRegistry::removeLinkFromRegistry(const BaseDreamL
 				for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
 				{
 					const Ptr& link = *innerIter;
-					const u32 ports = availablePorts & link->linkedPortsMask;
-					if (ports != 0)
+					link->connectedPortsMask = availablePorts & link->linkedPortsMask;
+					if (link->connectedPortsMask != 0)
 					{
-						establishInMapleLinkRegistry(link, bus, ports);
-						availablePorts = availablePorts & ~ports;
+						establishInMapleLinkRegistry(link, bus, link->connectedPortsMask);
+						availablePorts = availablePorts & ~link->connectedPortsMask;
 					}
 				}
 			}
