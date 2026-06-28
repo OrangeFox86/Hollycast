@@ -121,9 +121,16 @@ struct DppVirtualVmu : public maple_sega_vmu
 	{}
 };
 
+//! Generates the port character from a given bus
+//! @param[in] bus The target bus [0,3]
+//! @return The associated port character
+static char getPortCharForBus(int bus) {
+	return ('A' + bus);
+}
+
 static std::string getBusDescription(int software_bus, int hardware_bus) {
-	const char swPortChar = 'A' + software_bus;
-	const char hwPortChar = 'A' + hardware_bus;
+	const char swPortChar = getPortCharForBus(software_bus);
+	const char hwPortChar = getPortCharForBus(hardware_bus);
 	if (swPortChar == hwPortChar) {
 		return std::string(1, swPortChar);
 	} else {
@@ -459,7 +466,7 @@ class DreamPicoPort : public SDLDreamLink
 
 		//! @return The hardware port character identifier
 		char getPortChar() const {
-			return ('A' + hardware_bus);
+			return getPortCharForBus(hardware_bus);
 		}
 
 		//! @return the static product name
@@ -1040,7 +1047,7 @@ private:
 				std::string("sdl_") +
 				hw_info.getProductName() + std::string("_") +
 				hw_info.serial_number + std::string("_") +
-				hw_info.getPortChar()
+				std::string(1, hw_info.getPortChar())
 			);
 		}
 
@@ -1127,7 +1134,7 @@ public:
 			}
 		}
 
-		const std::string portCharStr = std::string(1, 'A' + software_bus);
+		const std::string portCharStr = std::string(1, getPortCharForBus(software_bus));
 		const u32 mainCode = getFunctionCodesMask(5);
 
 		if (mainCode != 0) {
