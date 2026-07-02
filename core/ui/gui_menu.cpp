@@ -141,6 +141,12 @@ void exitEmulator()
 	gui_request_exit_emulator();
 }
 
+void closeGame()
+{
+	if (::game_started)
+		gui_request_exit_to_library();
+}
+
 void pauseOrResume()
 {
 	if (!::game_started)
@@ -364,6 +370,12 @@ void renderSystemMenu()
 		if (ImGui::MenuItem(T("Restart"), nullptr, false, ::game_started))
 		{
 			restartGame();
+		}
+
+		// Close Game
+		if (ImGui::MenuItem(T("Close Game"), nullptr, false, ::game_started))
+		{
+			closeGame();
 		}
 
 		ImGui::Separator();

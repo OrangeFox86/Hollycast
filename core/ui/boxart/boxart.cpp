@@ -96,9 +96,20 @@ bool isMissingScrapedBoxartFile(const GameBoxart& boxart)
 	return boxart.scraped && !boxart.boxartUrl.empty() && (boxart.boxartPath.empty() || isMissingBoxartFile(boxart));
 }
 
+size_t findLastPathSeparator(const std::string& path)
+{
+#ifdef _WIN32
+	// Windows accepts both separators in paths. POSIX treats backslash as a
+	// valid filename character, so only split on '/' outside Windows.
+	return path.find_last_of("/\\");
+#else
+	return path.find_last_of('/');
+#endif
+}
+
 std::string parentPath(const std::string& path)
 {
-	const size_t pos = path.find_last_of("/\\");
+	const size_t pos = findLastPathSeparator(path);
 	if (pos == std::string::npos)
 		return {};
 	return path.substr(0, pos + 1);
@@ -106,12 +117,15 @@ std::string parentPath(const std::string& path)
 
 std::string fileNameFromPath(const std::string& path)
 {
-	const size_t pos = path.find_last_of("/\\");
+	const size_t pos = findLastPathSeparator(path);
 	if (pos == std::string::npos)
 		return path;
 	return path.substr(pos + 1);
 }
 
+// Boxart database recovery may need to match copied artwork such as
+// "Game (1).png" back to an older database entry that still points at
+// "Game.png", or the other way around.
 std::string removeCopySuffix(std::string name)
 {
 	const std::string ext = get_file_extension(name);
@@ -138,7 +152,11 @@ std::string removeCopySuffix(std::string name)
 
 std::string normalizePath(std::string path)
 {
+#ifdef _WIN32
+	// Backslash is only a path separator on Windows. POSIX platforms can use it
+	// in filenames, so do not rewrite it there.
 	std::replace(path.begin(), path.end(), '\\', '/');
+#endif
 	std::transform(path.begin(), path.end(), path.begin(), [](unsigned char c) {
 		return static_cast<char>(std::tolower(c));
 	});
@@ -155,9 +173,10 @@ bool isPathInDirectory(const std::string& path, const std::string& directory)
 int boxartMergeScore(const GameBoxart& boxart)
 {
 	int score = 0;
+	const bool hasBoxartFile = !boxart.boxartPath.empty() && file_exists(boxart.boxartPath);
 	if (boxart.scraped && !boxart.boxartUrl.empty())
-		score += file_exists(boxart.boxartPath) ? 100 : 70;
-	if (!boxart.boxartPath.empty() && file_exists(boxart.boxartPath))
+		score += hasBoxartFile ? 100 : 70;
+	if (hasBoxartFile)
 		score += 20;
 	if (boxart.parsed)
 		score += 10;
@@ -415,18 +434,22 @@ void Boxart::fetchBoxart()
 					std::vector<GameBoxart> physicalBoxart;
 					{
 						std::lock_guard<std::mutex> guard(mutex);
-						for (auto it = toFetch.begin(); it != toFetch.end() && physicalBoxart.size() < kPhysicalBoxartBatchSize; )
+						// Keep toFetch as a vector for online front-batching, but compact it
+						// once here instead of erasing physical items one by one.
+						std::vector<GameBoxart> remaining;
+						remaining.reserve(toFetch.size());
+						for (GameBoxart& item : toFetch)
 						{
-							if (!it->parsed)
+							if (!item.parsed && physicalBoxart.size() < kPhysicalBoxartBatchSize)
 							{
-								physicalBoxart.push_back(*it);
-								it = toFetch.erase(it);
+								physicalBoxart.push_back(std::move(item));
 							}
 							else
 							{
-								++it;
+								remaining.push_back(std::move(item));
 							}
 						}
+						toFetch = std::move(remaining);
 					}
 					if (physicalBoxart.empty())
 						break;

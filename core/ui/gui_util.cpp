@@ -1731,14 +1731,67 @@ static inline ImVec4 DarkerColor(const ImVec4& v, float f = 0.8f)
                 std::max(v.z, 1.0f / 255.0f) * f, v.w);
 }
 
+static inline float ColorLuminance(const ImVec4& v)
+{
+    return v.x * 0.299f + v.y * 0.587f + v.z * 0.114f;
+}
+
+static inline ImVec4 BlendColor(const ImVec4& color, const ImVec4& target, float amount)
+{
+    return ImVec4(
+        color.x + (target.x - color.x) * amount,
+        color.y + (target.y - color.y) * amount,
+        color.z + (target.z - color.z) * amount,
+        color.w
+    );
+}
+
+static ImVec4 ReadablePopupTextColor(const ImVec4& bg)
+{
+    return ColorLuminance(bg) > 0.50f
+        ? ImVec4(0.06f, 0.06f, 0.07f, 1.00f)
+        : ImVec4(0.95f, 0.95f, 0.97f, 1.00f);
+}
+
+static ImVec4 ReadablePopupDisabledTextColor(const ImVec4& bg)
+{
+    return ColorLuminance(bg) > 0.50f
+        ? ImVec4(0.32f, 0.32f, 0.36f, 1.00f)
+        : ImVec4(0.72f, 0.72f, 0.76f, 1.00f);
+}
+
+static ImVec4 ReadablePopupFillColor(ImVec4 fill, const ImVec4& text)
+{
+    const bool lightText = ColorLuminance(text) > 0.50f;
+    const ImVec4 target = lightText ? ImVec4(0.0f, 0.0f, 0.0f, fill.w) : ImVec4(1.0f, 1.0f, 1.0f, fill.w);
+    const float limit = lightText ? 0.42f : 0.58f;
+    for (int i = 0; i < 4; i++)
+    {
+        const float luminance = ColorLuminance(fill);
+        if ((lightText && luminance <= limit) || (!lightText && luminance >= limit))
+            break;
+        fill = BlendColor(fill, target, 0.25f);
+    }
+    return fill;
+}
+
 // Helper: Apply DuckStation-style popup styling
 struct PopupStyleScope {
     PopupStyleScope(float padding = Layout::SMALL_POPUP_PADDING, float rounding = Layout::POPUP_ROUNDING) {
-        // Get the popup background color from current style
-        ImVec4 popupBg = ImGui::GetStyle().Colors[ImGuiCol_PopupBg];
+        // Popup colors are derived from the current surface so theme switches
+        // cannot leave light-theme text on a dark dialog, or the reverse.
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 popupBg = style.Colors[ImGuiCol_PopupBg];
+        ImVec4 popupText = ReadablePopupTextColor(popupBg);
+        ImVec4 popupTextDisabled = ReadablePopupDisabledTextColor(popupBg);
 
         // DuckStation-style popup background with full opacity
         ImGui::PushStyleColor(ImGuiCol_PopupBg, ModAlpha(popupBg, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, popupText);
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, popupTextDisabled);
+        ImGui::PushStyleColor(ImGuiCol_Header, ReadablePopupFillColor(style.Colors[ImGuiCol_Header], popupText));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ReadablePopupFillColor(style.Colors[ImGuiCol_HeaderHovered], popupText));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ReadablePopupFillColor(style.Colors[ImGuiCol_HeaderActive], popupText));
         // Button active state (darker for pressed state)
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ModAlpha(DarkerColor(popupBg, 1.8f), 1.0f));
         // Button hovered state (medium dark)
@@ -1757,7 +1810,7 @@ struct PopupStyleScope {
 
     ~PopupStyleScope() {
         ImGui::PopStyleVar(6);
-        ImGui::PopStyleColor(4);
+        ImGui::PopStyleColor(9);
     }
 };
 
@@ -1884,7 +1937,7 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
         }
         if (popupDescription != nullptr && popupDescription[0] != '\0') {
             ImGui::PushFont(SettingsDescriptionFont());
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(popupDescription);
             ImGui::PopTextWrapPos();
@@ -2020,29 +2073,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
         if (cfg.description) {
             ImGui::PushFont(SettingsDescriptionFont());
-
-            // Determine if we're on a light or dark theme
-            ImGuiStyle& guiStyle = ImGui::GetStyle();
-            float bgLuminance = (guiStyle.Colors[ImGuiCol_WindowBg].x
-                               + guiStyle.Colors[ImGuiCol_WindowBg].y
-                               + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
-            bool isLightTheme = bgLuminance > 0.5f;
-
-            // For dark themes: use solid white text
-            // For light themes: blend with disabled color for secondary text
-            ImVec4 textColor;
-            if (isLightTheme) {
-                ImVec4 normalColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-                ImVec4 disabledColor = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-                textColor.x = (normalColor.x + disabledColor.x) * 0.5f;
-                textColor.y = (normalColor.y + disabledColor.y) * 0.5f;
-                textColor.z = (normalColor.z + disabledColor.z) * 0.5f;
-                textColor.w = 1.0f;
-            } else {
-                // Solid white for dark themes
-                textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-            }
-            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(cfg.description);
             ImGui::PopTextWrapPos();

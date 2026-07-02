@@ -996,6 +996,13 @@ void error_popup()
 	}
 }
 
+static void render_modal_dialogs()
+{
+	error_popup();
+	render_exit_save_dialog();
+	render_auto_load_dialog();
+}
+
 static void contentpath_warning_popup()
 {
     static bool show_contentpath_selection;
@@ -1661,9 +1668,7 @@ void gui_display_ui()
 
 	// Render modal dialogs BEFORE window management
 	// This ensures modals are not affected by window stack operations
-	error_popup();
-	render_exit_save_dialog();
-	render_auto_load_dialog();
+	render_modal_dialogs();
 
 	switch (gui_state)
 	{
@@ -1789,9 +1794,7 @@ void gui_draw_osd()
 	GuiMenu::renderMainMenuBar();
 
 	// Render modal dialogs (exit dialog, error popups)
-	error_popup();
-	render_exit_save_dialog();
-	render_auto_load_dialog();
+	render_modal_dialogs();
 
 	ImGui::Render();
 	uiThreadRunner.execTasks(std::chrono::steady_clock::now());

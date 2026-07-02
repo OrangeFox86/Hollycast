@@ -72,6 +72,10 @@ static bool isWindowFullscreen()
 		return true;
 
 #ifdef __APPLE__
+	// macOS uses the native system menu instead of Hollycast's ImGui menu bar,
+	// but fullscreen state still drives cursor auto-hide. SDL can miss the
+	// fullscreen flag for a display-sized macOS window, so keep a narrow bounds
+	// fallback here for cursor/state behavior without affecting normal windows.
 	int displayIndex = SDL_GetWindowDisplayIndex(window);
 	SDL_Rect displayBounds;
 	if (displayIndex >= 0 && SDL_GetDisplayBounds(displayIndex, &displayBounds) == 0)

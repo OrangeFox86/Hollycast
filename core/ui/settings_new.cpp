@@ -438,6 +438,26 @@ static void ShowFooterHelpMarker(const char* desc)
 		SetSettingsFooterText(desc);
 }
 
+static ImU32 FooterTextWeightColor(const ImVec4& color, float alphaScale)
+{
+	ImVec4 weightedColor = color;
+	weightedColor.w *= alphaScale;
+	return ImGui::ColorConvertFloat4ToU32(weightedColor);
+}
+
+static void AddWeightedFooterText(ImDrawList* drawList, ImFont* font, float fontSize,
+	const ImVec2& pos, const ImVec4& color, const char* text, float wrapWidth)
+{
+	const ImU32 textColor = ImGui::ColorConvertFloat4ToU32(color);
+	drawList->AddText(font, fontSize, pos, textColor, text, nullptr, wrapWidth);
+
+	// Low-DPI and lower-quality panels can make the details footer look too thin.
+	// A 33% strength subpixel overdraw gives this box more weight without changing
+	// font metrics, wrapping, or the user's theme colors.
+	drawList->AddText(font, fontSize, ImVec2(pos.x + 0.6f, pos.y),
+		FooterTextWeightColor(color, 0.33f), text, nullptr, wrapWidth);
+}
+
 static void RenderSettingsFooterBar()
 {
 	const float footerHeight = SettingsFooterHeight();
@@ -641,35 +661,26 @@ static void RenderSettingsFooterBar()
 			std::min(bodyColor.y + 0.15f, 1.0f),
 			std::min(bodyColor.z + 0.15f, 1.0f),
 			1.0f);
-		const ImU32 titleColor = ImGui::ColorConvertFloat4ToU32(titleColor2);
-		drawList->AddText(
-			titleFont,
-			finalTitleSize,
-			ImVec2(textPos.x + 0.6f, textPos.y),
-			titleColor,
-			displayTitle.c_str(),
-			nullptr,
-			wrapWidth);
-		drawList->AddText(
+		AddWeightedFooterText(
+			drawList,
 			titleFont,
 			finalTitleSize,
 			textPos,
-			titleColor,
+			titleColor2,
 			displayTitle.c_str(),
-			nullptr,
 			wrapWidth);
 		textPos.y = std::floor(textPos.y + finalTitleSize + titleSpacing);
 	}
 
 	if (!bodyText.empty())
 	{
-		drawList->AddText(
+		AddWeightedFooterText(
+			drawList,
 			bodyFont,
 			finalBodySize,
 			textPos,
-			ImGui::ColorConvertFloat4ToU32(bodyColor),
+			bodyColor,
 			bodyText.c_str(),
-			nullptr,
 			wrapWidth);
 	}
 	drawList->PopClipRect();
