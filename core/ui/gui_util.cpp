@@ -352,17 +352,16 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		};
 
 		auto FavoriteButton = [&](bool enabled) {
-			ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
 			if (!enabled)
 			{
 				ImGui::BeginDisabled(true);
-				ImGui::PushFont(iconFont);
+				ImGui::PushFont(settingsIconFont);
 				ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
 				ImGui::PopFont();
 				ImGui::EndDisabled();
 				return false;
 			}
-			ImGui::PushFont(iconFont);
+			ImGui::PushFont(settingsIconFont);
 			const bool pressed = ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
 			ImGui::PopFont();
 			return pressed;
