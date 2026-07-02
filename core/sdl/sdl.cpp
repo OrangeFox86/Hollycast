@@ -686,7 +686,7 @@ static float hdpiScaling = 1.f;
 static inline void get_window_state()
 {
 	u32 flags = SDL_GetWindowFlags(window);
-	window_fullscreen = (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+	window_fullscreen = flags & SDL_WINDOW_FULLSCREEN_DESKTOP;
 	window_maximized = flags & SDL_WINDOW_MAXIMIZED;
     if (!window_fullscreen && !window_maximized){
         SDL_GetWindowSize(window, &windowPos.w, &windowPos.h);
