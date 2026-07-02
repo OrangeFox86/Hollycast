@@ -2328,14 +2328,14 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                                (cfg.hasPendingChanges || modePendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag));
 
         if (controllerAcceptValue || keyboardAcceptValue) {
-            if (cfg.onApply) {
+            if (cfg.onApply)
                 cfg.onApply();
-                cfg.hasPendingChanges = false;
-                modePendingChanges = false;
-                if (cfg.showApplyFlag) {
-                    *cfg.showApplyFlag = false;
-                }
-            }
+            // Live sliders have already applied through onValueChange, but accepting
+            // should still clear pending state and close the popup.
+            cfg.hasPendingChanges = false;
+            modePendingChanges = false;
+            if (cfg.showApplyFlag)
+                *cfg.showApplyFlag = false;
             ImGui::CloseCurrentPopup();
         } else if (cfg.onApply && shouldShowApply) {
             // Begin menu buttons container
