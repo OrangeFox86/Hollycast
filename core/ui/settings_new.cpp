@@ -242,24 +242,6 @@ static float SettingsFooterGap()
 	return UseCompactSettingsLayout() ? SettingsLayoutScaled(1.0f) : SettingsLayoutScaled(2.0f);
 }
 
-static float SettingsNavigationWidth()
-{
-	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-#if defined(__ANDROID__)
-	const float minWidth = SettingsFixedNavigationScaled(136.0f);
-	const float maxWidth = std::max(minWidth, std::min(SettingsFixedNavigationScaled(310.0f), displaySize.x * 0.20f));
-	if (!UseCompactSettingsLayout())
-		return std::clamp(SettingsFixedNavigationScaled(225.0f), minWidth, maxWidth);
-	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
-#else
-	const float minWidth = 136.0f;
-	const float maxWidth = std::max(minWidth, std::min(310.0f, displaySize.x * 0.20f));
-	if (!UseCompactSettingsLayout())
-		return std::clamp(uiScaled(225.0f), minWidth, maxWidth);
-	return std::clamp(displaySize.x * 0.16f, minWidth, maxWidth);
-#endif
-}
-
 // Visual-only toggle switch rendering (no interaction)
 // Renders the toggle switch appearance based on the boolean value
 // The parent Selectable handles all user input
@@ -2086,36 +2068,42 @@ const char* getTabName(SettingsTab tab)
 	}
 }
 
-static float CalculateSettingsNavigationWidth(const char* exitLabel)
+static float SettingsNavigationWidth(const char* exitLabel)
 {
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 #if defined(__ANDROID__)
 	// On phones the navigation rail must remain a stable frame. Larger UI text is
 	// clipped inside the existing rail instead of making the content column shrink.
-	return SettingsNavigationWidth();
+	(void)exitLabel;
+	const float minWidth = SettingsFixedNavigationScaled(136.0f);
+	const float maxWidth = std::max(minWidth, std::min(SettingsFixedNavigationScaled(310.0f), displaySize.x * 0.20f));
+	const float desiredWidth = UseCompactSettingsLayout() ? displaySize.x * 0.16f : SettingsFixedNavigationScaled(225.0f);
+	return std::clamp(desiredWidth, minWidth, maxWidth);
 #else
+	const float minWidth = 136.0f;
+	const float maxWidth = std::max(minWidth, std::min(310.0f, displaySize.x * 0.20f));
+	const float layoutWidth = UseCompactSettingsLayout() ? displaySize.x * 0.16f : uiScaled(225.0f);
+
 	ImFont* navFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
 	ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : navFont;
 	const float fontSize = navFont->LegacySize;
-	float minWidth = navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, exitLabel).x
+	float labelWidth = navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, exitLabel).x
 			+ iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, ICON_FA_ARROW_LEFT).x
 			+ uiScaled(8.0f);
 	for (int i = 0; i < (int)SettingsTab::Count; i++)
 	{
 		const char* tabName = getTabName((SettingsTab)i);
-		minWidth = std::max(minWidth, navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, tabName).x);
+		labelWidth = std::max(labelWidth, navFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, tabName).x);
 	}
-	const float maxWidth = std::max(136.0f, std::min(310.0f, ImGui::GetIO().DisplaySize.x * 0.20f));
-	return std::clamp(
-		std::max(SettingsNavigationWidth(), minWidth + ImGui::GetStyle().WindowPadding.x * 2.0f),
-		136.0f,
-		maxWidth
-	);
+
+	const float desiredWidth = std::max(layoutWidth, labelWidth + ImGui::GetStyle().WindowPadding.x * 2.0f);
+	return std::clamp(desiredWidth, minWidth, maxWidth);
 #endif
 }
 
-static bool SettingsBackButton(const char* icon, const char* label, const ImVec2& size)
+static bool SettingsBackButton(const char* icon, const char* label)
 {
-	const bool pressed = ImGui::Button("##SettingsBackButton", size);
+	const bool pressed = ImGui::Button("##SettingsBackButton", ImVec2(-1, 0));
 	const ImVec2 min = ImGui::GetItemRectMin();
 	const ImVec2 max = ImGui::GetItemRectMax();
 
@@ -2146,7 +2134,7 @@ static bool SettingsBackButton(const char* icon, const char* label, const ImVec2
 // This creates the vertical strip on the left side with navigation items
 static void renderNavigationRail(const std::function<void()>& exitSettings, const char* exitLabel)
 {
-	const float navWidth = CalculateSettingsNavigationWidth(exitLabel);
+	const float navWidth = SettingsNavigationWidth(exitLabel);
 	const float footerGap = SettingsFooterGap();
 	const float footerHeight = SettingsFooterHeight();
 	const bool focusSelectedTab = g_focusSettingsNavigation;
@@ -2159,7 +2147,7 @@ static void renderNavigationRail(const std::function<void()>& exitSettings, cons
 	g_focusSettingsNavigation = false;
 
 	ImGui::PushFont(settingsTitleFont);
-	if (SettingsBackButton(ICON_FA_ARROW_LEFT, exitLabel, ImVec2(-1, 0)))
+	if (SettingsBackButton(ICON_FA_ARROW_LEFT, exitLabel))
 		exitSettings();
 	ImGui::Spacing();
 	ImGui::Separator();
