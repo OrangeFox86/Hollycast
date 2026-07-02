@@ -522,6 +522,9 @@ static void save_auto_state_before_exit()
 	try {
 		if (gui_state == GuiState::Closed)
 			emu.stop();
+		// Save here before exit so the chosen "Save and Exit" path uses the
+		// hidden auto-save slot, then suppress unloadGame() from writing a second
+		// auto-save for the same shutdown.
 		savestate(dc_getAutoSaveSlot());
 		dc_skipAutoSaveOnNextUnload();
 	} catch (const FlycastException& e) {

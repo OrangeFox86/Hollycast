@@ -236,7 +236,7 @@ GameBoxart Boxart::getBoxart(const GameMedia& media)
 
 	if (sourceMode == static_cast<int>(BoxartSourceMode::CustomThenScraped))
 	{
-		std::string customPath = getCustomBoxartPath(media);
+		const std::string customPath = getCustomBoxartPath(media);
 		if (!customPath.empty())
 			boxart.boxartPath = customPath;
 	}
