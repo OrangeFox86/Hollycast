@@ -267,13 +267,34 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 		if (showError)
 			ImGui::TextUnformatted(error_message.c_str());
 
-		auto getPathLeaf = [](const std::string& path) {
+		// POSIX allows '\' inside filenames, so only treat it as a separator when
+		// the current build is targeting Windows paths.
+		auto isPathSeparator = [](char c) {
+#ifdef _WIN32
+			return c == '/' || c == '\\';
+#else
+			return c == '/';
+#endif
+		};
+
+		auto trimTrailingPathSeparators = [&](std::string path) {
+			while (path.size() > 1 && isPathSeparator(path.back()))
+				path.pop_back();
+			return path;
+		};
+
+		auto findLastPathSeparator = [&](const std::string& path) {
+			for (size_t i = path.size(); i-- > 0;)
+				if (isPathSeparator(path[i]))
+					return i;
+			return std::string::npos;
+		};
+
+		auto getPathLeaf = [&](const std::string& path) {
 			if (path.empty())
 				return std::string("/");
-			std::string normalized = path;
-			while (normalized.size() > 1 && (normalized.back() == '/' || normalized.back() == '\\'))
-				normalized.pop_back();
-			auto pos = normalized.find_last_of("/\\");
+			std::string normalized = trimTrailingPathSeparators(path);
+			const size_t pos = findLastPathSeparator(normalized);
 			if (pos == std::string::npos)
 				return normalized;
 			return normalized.substr(pos + 1);
@@ -299,9 +320,8 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			return chain;
 		};
 
-		auto normalizePathForCompare = [](std::string path) {
-			while (path.size() > 1 && (path.back() == '/' || path.back() == '\\'))
-				path.pop_back();
+		auto normalizePathForCompare = [&](std::string path) {
+			path = trimTrailingPathSeparators(std::move(path));
 #ifdef _WIN32
 			std::transform(path.begin(), path.end(), path.begin(),
 					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -2059,8 +2079,10 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
     centerNextWindow();
     float maxWidth = ImGui::GetIO().DisplaySize.x * 0.85f;
     float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
-    float popupWidth = std::min(uiScaled(500), maxWidth);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(uiScaled(320), maxWidth), 0), ImVec2(maxWidth, maxHeight));
+    // Keep the popup wide enough for the centered slider and range labels
+    // without forcing every slider dialog to open at an oversized fixed width.
+    const float popupWidth = std::min(std::max(uiScaled(320.0f), uiScaled(cfg.sliderWidth + 48.0f)), maxWidth);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(popupWidth, maxWidth), 0), ImVec2(maxWidth, maxHeight));
     ImGui::SetNextWindowSize(ImVec2(popupWidth, 0), ImGuiCond_Always);
 
     PopupStyleScope style;
