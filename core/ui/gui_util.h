@@ -469,7 +469,8 @@ struct PopupSliderConfig {
     // Optional: Callback for value change
     std::function<void()> onValueChange = nullptr;
 
-    // Spacing/sizing
+    // Spacing/sizing values are base UI units. RenderSliderPopup() applies uiScaled()
+    // when these fields are consumed, so call sites should not pre-scale them.
     float iconSize = 20.0f;
     float iconSpacing = 8.0f;
     float valueWidth = 100.0f;
