@@ -193,7 +193,7 @@ public:
 		os_notify(buf, 6000);
 	}
 
-	const char* getName() const override {
+	const char* getProductName() const override {
 		return "DreamConn";
 	}
 

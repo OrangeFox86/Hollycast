@@ -78,6 +78,7 @@
         },
 
 
+        // Required extension: vadimcn.vscode-lldb
         {
             "name": "(macOS) Attach",
             "type": "lldb",

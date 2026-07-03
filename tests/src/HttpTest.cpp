@@ -1,3 +1,6 @@
+// These tests won't compile on Windows
+#ifndef _WIN32
+
 #include "gtest/gtest.h"
 #include "oslib/http_client.h"
 #include "json.hpp"
@@ -176,3 +179,5 @@ TEST_F(HttpTest, postContent)
 	ASSERT_EQ("text/plain; charset=x-sjis", contentType);
 	// can't check the payload for the same reason
 }
+
+#endif // #ifndef _WIN32

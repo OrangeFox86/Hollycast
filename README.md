@@ -33,8 +33,38 @@ Hollycast aims to support every platform and release offered by Flycast. If Flyc
 
 > **Note:** Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/pYVqGqvFJW) and open a Feature Request to discuss your plans before submitting code.
 
-### Build instructions:
-The following assumes prerequisites are already installed. Refer to the [c-cpp CI file](https://github.com/OrangeFox86/Hollycast/blob/master/.github/workflows/c-cpp.yml) under `Set up build environment` for your specific operating system.
+### Build Prerequisites for Windows
+
+1. Install Visual Studio with MSVC and C++ CMake tools (under `Desktop development with C++` within the installer)
+2. Add the location of cmake.exe to your PATH environment variable (ex: C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\)
+
+### Build Prerequisites for Linux
+
+Run the following to install all prerequisites.
+
+```
+sudo apt-get update
+sudo apt-get -y install ccache libao-dev libasound2-dev libevdev-dev libgl1-mesa-dev liblua5.3-dev libminiupnpc-dev libpulse-dev libsdl2-dev libudev-dev libzip-dev ninja-build libcurl4-openssl-dev libcdio-dev libfuse2 locales
+sudo apt-get -y install libwayland-dev libdecor-0-dev libaudio-dev libjack-dev libsndio-dev libsamplerate0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev
+```
+
+### Build Prerequisites for macOS
+
+1. Install Xcode application from app store
+2. Accept licensing for Xcode and do first run initialization
+3. Execute:
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+4. Install Homebrew
+5. Execute:
+```bash
+brew install cmake
+brew install molten-vk
+```
+
+### Build Instructions
+The following assumes prerequisites are already installed.
 
 ```bash
 # Clone repo
@@ -49,4 +79,20 @@ $ cmake -B build-debug/
 
 # Run the build
 $ cmake --build build-debug/
+```
+
+### Build Instructions for Android
+
+Ensure Android Studio is installed, and then execute the following.
+
+On Linux or macOS:
+```bash
+cd shell/android-studio
+./gradlew
+```
+
+On Windows:
+```cmd
+cd shell/android-studio
+./gradlew.bat
 ```

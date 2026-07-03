@@ -277,7 +277,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 		CMAKE_CXX_STANDARD 20
 		CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(NOT LIBRETRO AND (WIN32 OR APPLE))
+if(NOT LIBRETRO)
 	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast")
 endif()
 
@@ -526,7 +526,7 @@ if(NOT LIBRETRO)
 		endif()
 
 		if(USE_HOST_SDL)
-			find_package(SDL2 2.0.9)
+			find_package(SDL2 2.0.18)
 		endif()
 		if(NOT SDL2_FOUND)
 			set(SDL_TEST_ENABLED_BY_DEFAULT OFF)
@@ -1263,7 +1263,7 @@ if(NOT LIBRETRO)
 		add_subdirectory(core/deps/gamesdk/games-frame-pacing EXCLUDE_FROM_ALL)
 		target_compile_options(swappy_static PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-vla-cxx-extension>)
 		target_compile_definitions(swappy_static PRIVATE ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE)
-	
+
 		target_include_directories(${PROJECT_NAME} PRIVATE core/deps/gamesdk/games-frame-pacing/include)
 		target_link_libraries(${PROJECT_NAME} PRIVATE swappy_static)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE SWAPPY)
@@ -1417,8 +1417,25 @@ if(NOT LIBRETRO)
 				${IOSURFACE_LIBRARY}
 				${MULTITOUCH_SUPPORT_LIBRARY})
 
+			# Determine the source path of MoltenVK
+			if(NOT "$ENV{VULKAN_SDK}" STREQUAL "")
+				message(STATUS "Searching for MoltenVK under VULKAN_SDK: $ENV{VULKAN_SDK}")
+				set(MOLTENVK_SRC "$ENV{VULKAN_SDK}/lib/libMoltenVK.dylib")
+			else()
+				# Fallback assumption (default location after: brew install molten-vk)
+				set(MOLTENVK_SRC "/usr/local/lib/libMoltenVK.dylib")
+			endif()
+
+			if(NOT EXISTS "${MOLTENVK_SRC}")
+				message(
+					FATAL_ERROR
+					"MoltenVK library not found! Set VULKAN_SDK in environment or install with: brew install molten-vk"
+				)
+			endif()
+			message(STATUS "Found MoltenVK at: ${MOLTENVK_SRC}")
+
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy "$ENV{VULKAN_SDK}/lib/libMoltenVK.dylib"
+				COMMAND ${CMAKE_COMMAND} -E copy "${MOLTENVK_SRC}"
 				$<TARGET_FILE_DIR:flycast>/../Frameworks/libvulkan.dylib)
 		endif()
 	elseif(UNIX)
@@ -1498,7 +1515,7 @@ endif()
 if(IOS)
 	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.ipa" TYPE BIN)
 elseif(NINTENDO_SWITCH AND NOT LIBRETRO)
-	install(FILES ${CMAKE_BINARY_DIR}/flycast.nro DESTINATION "${CMAKE_INSTALL_BINDIR}")
+	install(FILES ${CMAKE_BINARY_DIR}/Hollycast.nro DESTINATION "${CMAKE_INSTALL_BINDIR}")
 elseif(LIBRETRO)
 	install(TARGETS ${PROJECT_NAME} DESTINATION "${CMAKE_INSTALL_LIBDIR}/libretro")
 else()

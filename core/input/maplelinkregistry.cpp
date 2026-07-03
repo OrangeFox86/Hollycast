@@ -65,7 +65,7 @@ std::size_t MapleLinkRegistry::registerLinks(const DreamLink::Ptr& dreamlink, u3
         {
             DreamLink::Ptr link = links[bus][port].lock();
 
-            if (link.get() != dreamlink.get() && dreamlink->isGameRunning())
+            if (link.get() != dreamlink.get() && EventManager::isGameRunning())
             {
                 portReconnectMasks[bus] |= (1 << port);
             }
@@ -92,7 +92,7 @@ std::size_t MapleLinkRegistry::unregisterLinks(const DreamLink* dreamlink)
             DreamLink::Ptr link = wptr.lock();
             if (link && link.get() == dreamlink)
             {
-                const bool reconnect = link->isGameRunning();
+                const bool reconnect = EventManager::isGameRunning();
                 wptr.reset();
                 link.reset();
 

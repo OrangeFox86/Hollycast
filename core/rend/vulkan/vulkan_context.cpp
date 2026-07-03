@@ -298,6 +298,7 @@ bool VulkanContext::InitInstance(const char** extensions, uint32_t extensions_co
 
 		uniformBufferAlignment = properties.limits.minUniformBufferOffsetAlignment;
 		storageBufferAlignment = properties.limits.minStorageBufferOffsetAlignment;
+		maxStorageBufferRange = properties.limits.maxStorageBufferRange;
 		maxSamplerAnisotropy =  properties.limits.maxSamplerAnisotropy;
 		vendorID = properties.vendorID;
 		NOTICE_LOG(RENDERER, "Vulkan API %s. Device %s", vulkan11 ? "1.1" : "1.0", properties.deviceName.data());
@@ -498,6 +499,7 @@ bool VulkanContext::InitDevice()
 		{
 			// Enable VK_EXT_provoking_vertex if available
 			provokingVertexSupported = tryAddDeviceExtension(vk::EXTProvokingVertexExtensionName);
+			bufferDeviceAddressSupported = tryAddDeviceExtension(vk::KHRBufferDeviceAddressExtensionName);
 		}
 		bool googleTimingSupported = false;
 #if defined(SWAPPY)
@@ -508,13 +510,25 @@ bool VulkanContext::InitDevice()
 
 		// Get device features
 
-		vk::PhysicalDeviceFeatures2 featuresChain{};
+		vk::StructureChain<
+			vk::PhysicalDeviceFeatures2,
+			vk::PhysicalDeviceProvokingVertexFeaturesEXT,
+			vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR
+		> featuresChainHelper;
+
+		vk::PhysicalDeviceFeatures2& featuresChain = featuresChainHelper.get();
 		vk::PhysicalDeviceFeatures& features = featuresChain.features;
 
-		vk::PhysicalDeviceProvokingVertexFeaturesEXT provokingVertexFeatures{};
-		if (provokingVertexSupported)
+		auto& provokingVertexFeatures = featuresChainHelper.get<vk::PhysicalDeviceProvokingVertexFeaturesEXT>();
+		if (!provokingVertexSupported)
 		{
-			featuresChain.pNext = &provokingVertexFeatures;
+			featuresChainHelper.unlink<vk::PhysicalDeviceProvokingVertexFeaturesEXT>();
+		}
+
+		auto& bufferDeviceAddressFeatures = featuresChainHelper.get<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>();
+		if (!bufferDeviceAddressSupported)
+		{
+			featuresChainHelper.unlink<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>();
 		}
 
 		// Get the physical device's features
@@ -530,6 +544,13 @@ bool VulkanContext::InitDevice()
 		if (provokingVertexSupported)
 		{
 			provokingVertexSupported &= provokingVertexFeatures.provokingVertexLast;
+			NOTICE_LOG(RENDERER, "provokingVertexSupported %d", provokingVertexSupported);
+		}
+
+		if (bufferDeviceAddressSupported)
+		{
+			bufferDeviceAddressSupported &= bufferDeviceAddressFeatures.bufferDeviceAddress;
+			NOTICE_LOG(RENDERER, "bufferDeviceAddressSupported %d", bufferDeviceAddressSupported);
 		}
 
 		samplerAnisotropy = features.samplerAnisotropy;
@@ -925,16 +946,8 @@ bool VulkanContext::init()
     	return false;
     }
     this->surface.reset(vk::SurfaceKHR(surface));
-    SDL_Window *sdlWin = (SDL_Window *)window;
-    int w, h;
-    SDL_GetWindowSize(sdlWin, &w, &h);
-    SDL_Vulkan_GetDrawableSize(sdlWin, &settings.display.width, &settings.display.height);
-    settings.display.pointScale = (float)settings.display.width / w;
-	float hdpi, vdpi;
-	if (!SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(sdlWin), nullptr, &hdpi, &vdpi))
-		settings.display.dpi = roundf(std::max(hdpi, vdpi));
-
-	sdl_fix_steamdeck_dpi(sdlWin);
+	SDL_Window *sdlWin = (SDL_Window *)window;
+	sdl_update_display_metrics(sdlWin, SDL_WINDOW_VULKAN);
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
 	vk::Win32SurfaceCreateInfoKHR createInfo(vk::Win32SurfaceCreateFlagsKHR(), GetModuleHandle(NULL), (HWND)window);
 	surface = instance->createWin32SurfaceKHRUnique(createInfo);
