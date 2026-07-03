@@ -117,64 +117,68 @@ static void applyLightTheme()
 	style.Colors[ImGuiCol_Text] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
 	style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
 
-	// Warm light background.
-	style.Colors[ImGuiCol_WindowBg] = ImVec4(0.92f, 0.91f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_ChildBg] = ImVec4(0.92f, 0.91f, 0.90f, 1.00f);
+	// Neutral light gray background. This keeps the light theme from looking
+	// white-washed while still giving dark text a clear surface.
+	style.Colors[ImGuiCol_WindowBg] = ImVec4(0.88f, 0.88f, 0.89f, 1.00f);
+	style.Colors[ImGuiCol_ChildBg] = ImVec4(0.88f, 0.88f, 0.89f, 1.00f);
 
-	// Popup background uses a darker tone than the window background.
-	style.Colors[ImGuiCol_PopupBg] = ImVec4(0.77f, 0.76f, 0.75f, 1.00f);
+	// Keep dialogs on the light side too. PopupStyleScope derives popup text from
+	// this surface, so a mid/dark popup color can make theme-switched dialogs look
+	// muddy or leave text with poor contrast.
+	style.Colors[ImGuiCol_PopupBg] = ImVec4(0.92f, 0.91f, 0.94f, 1.00f);
 
-	style.Colors[ImGuiCol_Border] = ImVec4(0.60f, 0.60f, 0.65f, 0.50f);
+	style.Colors[ImGuiCol_Border] = ImVec4(0.56f, 0.56f, 0.64f, 0.60f);
 	style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
-	// Frame backgrounds - lighter purple (same as menu bar for consistency)
-	style.Colors[ImGuiCol_FrameBg] = ImVec4(0.85f, 0.82f, 0.88f, 1.00f);
-	style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.75f, 0.75f, 0.85f, 1.00f);
+	// Light lavender controls preserve the theme accent while staying safely
+	// behind dark text in rows, inputs, sliders, and popup selections.
+	style.Colors[ImGuiCol_FrameBg] = ImVec4(0.82f, 0.82f, 0.91f, 1.00f);
+	style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.76f, 0.77f, 0.88f, 1.00f);
+	style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.68f, 0.70f, 0.82f, 1.00f);
 
 	style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.85f, 1.00f);
 	style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.60f, 0.60f, 0.80f, 1.00f);
 	style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.80f, 0.80f, 0.90f, 0.75f);
 
-	// Menu bar - lighter purple (top toolbar color)
-	style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
+	// Menu bar - lighter purple (top toolbar color).
+	style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.76f, 0.76f, 0.88f, 1.00f);
 
-	style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.88f, 0.87f, 0.86f, 1.00f);
-	style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.70f, 0.70f, 0.80f, 1.00f);
-	style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.65f, 0.65f, 0.78f, 1.00f);
-	style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.60f, 0.60f, 0.75f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.84f, 0.84f, 0.85f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.58f, 0.58f, 0.72f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.50f, 0.52f, 0.68f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.42f, 0.46f, 0.62f, 1.00f);
 
 	style.Colors[ImGuiCol_CheckMark] = ImVec4(0.00f, 0.35f, 0.75f, 1.00f);
 
-	style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.55f, 0.55f, 0.75f, 1.00f);
-	style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.45f, 0.45f, 0.65f, 1.00f);
+	style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.36f, 0.45f, 0.78f, 1.00f);
+	style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.24f, 0.34f, 0.66f, 1.00f);
 
-	style.Colors[ImGuiCol_Button] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.75f, 0.75f, 0.87f, 1.00f);
-	style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.70f, 0.70f, 0.85f, 1.00f);
+	style.Colors[ImGuiCol_Button] = ImVec4(0.78f, 0.78f, 0.90f, 1.00f);
+	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.70f, 0.72f, 0.86f, 1.00f);
+	style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.60f, 0.64f, 0.80f, 1.00f);
 
-	// Header colors tuned for readability on light theme.
-	style.Colors[ImGuiCol_Header] = ImVec4(0.92f, 0.92f, 0.96f, 1.00f);
-	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.90f, 0.90f, 0.95f, 1.00f);
-	style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.85f, 0.85f, 0.92f, 1.00f);
+	// Header colors are row fills under normal text, including popup choices.
+	style.Colors[ImGuiCol_Header] = ImVec4(0.78f, 0.80f, 0.91f, 1.00f);
+	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.68f, 0.72f, 0.86f, 1.00f);
+	style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.56f, 0.62f, 0.78f, 1.00f);
 
-	style.Colors[ImGuiCol_Separator] = ImVec4(0.60f, 0.60f, 0.70f, 0.60f);
+	style.Colors[ImGuiCol_Separator] = ImVec4(0.58f, 0.58f, 0.70f, 0.70f);
 
 	// Tabs - using lighter purple for active tabs
-	style.Colors[ImGuiCol_Tab] = ImVec4(0.85f, 0.82f, 0.88f, 1.00f);
-	style.Colors[ImGuiCol_TabHovered] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_TabActive] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.88f, 0.87f, 0.86f, 1.00f);
-	style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.82f, 0.80f, 0.85f, 1.00f);
+	style.Colors[ImGuiCol_Tab] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
+	style.Colors[ImGuiCol_TabHovered] = ImVec4(0.70f, 0.72f, 0.86f, 1.00f);
+	style.Colors[ImGuiCol_TabActive] = ImVec4(0.64f, 0.68f, 0.84f, 1.00f);
+	style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.84f, 0.84f, 0.86f, 1.00f);
+	style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.74f, 0.76f, 0.86f, 1.00f);
 
-	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.80f, 0.80f, 0.90f, 0.50f);
+	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.58f, 0.66f, 0.88f, 0.45f);
 
 	// Table colors
-	style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.80f, 0.80f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.60f, 0.60f, 0.75f, 1.00f);
-	style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.70f, 0.70f, 0.82f, 0.70f);
-	style.Colors[ImGuiCol_TableRowBg] = ImVec4(0.92f, 0.91f, 0.90f, 1.00f);
-	style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.90f, 0.89f, 0.88f, 1.00f);
+	style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.76f, 0.76f, 0.88f, 1.00f);
+	style.Colors[ImGuiCol_TableBorderStrong] = ImVec4(0.56f, 0.56f, 0.72f, 1.00f);
+	style.Colors[ImGuiCol_TableBorderLight] = ImVec4(0.70f, 0.70f, 0.82f, 0.80f);
+	style.Colors[ImGuiCol_TableRowBg] = ImVec4(0.88f, 0.88f, 0.89f, 1.00f);
+	style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.84f, 0.84f, 0.86f, 1.00f);
 
 	style.TabBorderSize = 0.0f;
 	style.FrameBorderSize = 0.0f;

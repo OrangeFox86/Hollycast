@@ -2076,12 +2076,12 @@ static float SettingsNavigationWidth(const char* exitLabel)
 	// clipped inside the existing rail instead of making the content column shrink.
 	(void)exitLabel;
 	const float minWidth = SettingsFixedNavigationScaled(136.0f);
-	const float maxWidth = std::max(minWidth, std::min(SettingsFixedNavigationScaled(310.0f), displaySize.x * 0.20f));
+	const float maxWidth = std::clamp(displaySize.x * 0.20f, minWidth, SettingsFixedNavigationScaled(310.0f));
 	const float desiredWidth = UseCompactSettingsLayout() ? displaySize.x * 0.16f : SettingsFixedNavigationScaled(225.0f);
 	return std::clamp(desiredWidth, minWidth, maxWidth);
 #else
 	const float minWidth = 136.0f;
-	const float maxWidth = std::max(minWidth, std::min(310.0f, displaySize.x * 0.20f));
+	const float maxWidth = std::clamp(displaySize.x * 0.20f, minWidth, 310.0f);
 	const float layoutWidth = UseCompactSettingsLayout() ? displaySize.x * 0.16f : uiScaled(225.0f);
 
 	ImFont* navFont = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
@@ -2113,10 +2113,9 @@ static bool SettingsBackButton(const char* icon, const char* label)
 	const ImVec2 textSize = textFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, label);
 	const ImVec2 iconSize = iconFont != nullptr ? iconFont->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon) : ImVec2();
 	const float gap = iconFont != nullptr ? SettingsLayoutScaled(8.0f) : 0.0f;
-	const float totalWidth = iconSize.x + gap + textSize.x;
-	float x = min.x + (max.x - min.x - totalWidth) * 0.5f;
-	if (x < min.x)
-		x = min.x + SettingsLayoutScaled(6.0f);
+	const float contentWidth = iconSize.x + gap + textSize.x;
+	const float minTextX = min.x + SettingsLayoutScaled(6.0f);
+	float x = std::max(minTextX, min.x + (max.x - min.x - contentWidth) * 0.5f);
 	const float y = min.y + (max.y - min.y - textSize.y) * 0.5f;
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
@@ -2733,18 +2732,22 @@ void renderGeneralTab()
 	if (RenderCollapsingHeader("UISettingsSection", ICON_FA_GEAR, T("UI Settings"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		const char* themes[] = { T("Dark"), T("Light"), T("Dreamcast"), T("High Contrast"), T("Nintendo"), T("Aqua Chill") };
+		bool applyThemeAfterPopup = false;
 		SettingsUI::PopupConfig themeCfg {};
 		themeCfg.type = SettingsUI::PopupType::Options;
 		themeCfg.options.label = T("UI Theme");
 		themeCfg.options.icon = ICON_FA_PALETTE;
 		themeCfg.options.popupID = Tnop("UIThemePopup");
-			themeCfg.options.options = themes;
-			themeCfg.options.optionCount = IM_ARRAYSIZE(themes);
-			themeCfg.options.currentValue = &config::UITheme.get();
-			themeCfg.options.valueWidth = 220.0f;
-			themeCfg.options.onChange = [](int) {
-				applyCurrentTheme();
-				return true;
+		themeCfg.options.options = themes;
+		themeCfg.options.optionCount = IM_ARRAYSIZE(themes);
+		themeCfg.options.currentValue = &config::UITheme.get();
+		themeCfg.options.valueWidth = 220.0f;
+		themeCfg.options.onChange = [&applyThemeAfterPopup](int) {
+			// The option popup pushes temporary popup text/header colors. Applying
+			// a full theme inside that style scope lets the later pop restore stale
+			// colors over the new theme, leaving light backgrounds with dark-theme text.
+			applyThemeAfterPopup = true;
+			return true;
 		};
 
 		RenderGeneralPopupSettingRow(
@@ -2757,6 +2760,8 @@ void renderGeneralTab()
 				"If readability is an issue, try High Contrast."
 			)
 		);
+		if (applyThemeAfterPopup)
+			applyCurrentTheme();
 
 		static bool showApplyButtonForUIScaling = false;
 		if (uiUserScaleUpdated && !showApplyButtonForUIScaling)
