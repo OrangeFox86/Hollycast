@@ -106,14 +106,16 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 	const ImVec2 parentPos = ImGui::GetWindowPos();
 	const ImVec2 parentSize = ImGui::GetWindowSize();
 	const ImVec2 popupPos(parentPos.x + windowInset, parentPos.y + windowInset);
-	const ImVec2 visibleSize = ImGui::GetIO().DisplaySize;
-	const ImVec2 maxVisibleSize(
-			std::max(uiScaled(320.0f), visibleSize.x - popupPos.x - windowInset),
-			std::max(uiScaled(240.0f), visibleSize.y - popupPos.y - windowInset));
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+	const ImVec2 desiredSize(parentSize.x - windowInset * 2.0f, parentSize.y - windowInset * 2.0f);
+	const ImVec2 minSize(uiScaled(320.0f), uiScaled(240.0f));
+	const ImVec2 maxSize(
+			std::max(minSize.x, displaySize.x - popupPos.x - windowInset),
+			std::max(minSize.y, displaySize.y - popupPos.y - windowInset));
 	ImGui::SetNextWindowPos(popupPos, ImGuiCond_Always);
 	ImGui::SetNextWindowSize(ImVec2(
-			std::min(std::max(uiScaled(320.0f), parentSize.x - windowInset * 2.0f), maxVisibleSize.x),
-			std::min(std::max(uiScaled(240.0f), parentSize.y - windowInset * 2.0f), maxVisibleSize.y)),
+			ImClamp(desiredSize.x, minSize.x, maxSize.x),
+			ImClamp(desiredSize.y, minSize.y, maxSize.y)),
 			ImGuiCond_Always);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ImVec2(4, 3)); // default
