@@ -113,10 +113,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			std::max(minSize.x, displaySize.x - popupPos.x - windowInset),
 			std::max(minSize.y, displaySize.y - popupPos.y - windowInset));
 	ImGui::SetNextWindowPos(popupPos, ImGuiCond_Always);
-	ImGui::SetNextWindowSize(ImVec2(
-			ImClamp(desiredSize.x, minSize.x, maxSize.x),
-			ImClamp(desiredSize.y, minSize.y, maxSize.y)),
-			ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImClamp(desiredSize, minSize, maxSize), ImGuiCond_Always);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ImVec2(4, 3)); // default
 
