@@ -121,49 +121,44 @@
         {
             "name": "windows",
             "configurePreset": "windows",
-            "jobs": 8,
             "configuration": "Release"
         },
         {
             "name": "linux",
             "configurePreset": "linux",
-            "jobs": 8,
+            "environment": {
+                "MAKEFLAGS": "-j" // max parallelism
+            },
             "configuration": "RelWithDebInfo"
         },
         {
             "name": "darwin",
             "configurePreset": "darwin",
-            "jobs": 8,
             "configuration": "RelWithDebInfo"
         },
         {
             "name": "windows-debug",
             "configurePreset": "windows-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "linux-debug",
             "configurePreset": "linux-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "darwin-debug",
             "configurePreset": "darwin-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "windows-unit-tests-debug",
             "configurePreset": "windows-unit-tests-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "linux-unit-tests-debug",
             "configurePreset": "linux-unit-tests-debug",
-            "jobs": 8,
             "configuration": "Debug"
         }
     ]
