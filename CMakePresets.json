@@ -48,6 +48,16 @@
             "generator": "Xcode"
         },
         {
+            "name": "windows-debug",
+            "description": "Convenience alias for windows preset.",
+            "inherits": ["windows"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
             "name": "linux-debug",
             "inherits": ["linux"],
             "condition": {
@@ -61,8 +71,18 @@
             }
         },
         {
+            "name": "darwin-debug",
+            "description": "Convenience alias for darwin preset.",
+            "inherits": ["darwin"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "windows-unit-tests-debug",
-            "inherits": ["windows"],
+            "inherits": ["windows-debug"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -75,7 +95,7 @@
         },
         {
             "name": "linux-unit-tests-debug",
-            "inherits": ["linux"],
+            "inherits": ["linux-debug"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -97,7 +117,7 @@
             "name": "linux",
             "configurePreset": "linux",
             "environment": {
-                "MAKEFLAGS": "-j" // max parallelism
+                "MAKEFLAGS": "-j", "$comment": "max parallelism"
             }
         },
         {
@@ -108,7 +128,7 @@
         {
             "name": "windows-debug",
             "inherits": ["windows"],
-            "configurePreset": "windows",
+            "configurePreset": "windows-debug",
             "configuration": "Debug"
         },
         {
@@ -119,7 +139,7 @@
         {
             "name": "darwin-debug",
             "inherits": ["darwin"],
-            "configurePreset": "darwin",
+            "configurePreset": "darwin-debug",
             "configuration": "Debug"
         },
         {
