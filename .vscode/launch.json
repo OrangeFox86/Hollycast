@@ -5,16 +5,16 @@
             "name": "(Windows) Attach",
             "type": "cppvsdbg",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.exe"
+            "program": "${workspaceFolder}/build/Debug/Hollycast.exe"
         },
         {
             "name": "(Windows) Debug Hollycast",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.exe",
+            "program": "${workspaceFolder}/build/Debug/Hollycast.exe",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build-debug/Debug/",
+            "cwd": "${workspaceFolder}/build/Debug/",
             "environment": [],
             "console": "internalConsole",
             "preLaunchTask": "Build Debug"
@@ -83,7 +83,7 @@
             "name": "(macOS) Attach",
             "type": "lldb",
             "request": "attach",
-            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.app/Contents/MacOS/Hollycast",
+            "program": "${workspaceFolder}/build/Debug/Hollycast.app/Contents/MacOS/Hollycast",
             "initCommands": [
                 "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
             ]
@@ -92,9 +92,9 @@
             "name": "(macOS) Debug Hollycast",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/Debug/Hollycast.app/Contents/MacOS/Hollycast",
+            "program": "${workspaceFolder}/build/Debug/Hollycast.app/Contents/MacOS/Hollycast",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
-            "cwd": "${workspaceFolder}/build-debug",
+            "cwd": "${workspaceFolder}/build",
             "preLaunchTask": "Build Debug",
             "initCommands": [
                 "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
