@@ -17,9 +17,6 @@
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
-            },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
@@ -43,26 +40,12 @@
                 "rhs": "Darwin"
             },
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_XCODE_GENERATE_SCHEME": "YES",
                 "USE_BREAKPAD": "NO"
             },
             "generator": "Xcode"
-        },
-        {
-            "name": "windows-debug",
-            "inherits": ["windows"],
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
-            },
-            "binaryDir": "build-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
         },
         {
             "name": "linux-debug",
@@ -78,21 +61,8 @@
             }
         },
         {
-            "name": "darwin-debug",
-            "inherits": ["darwin"],
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Darwin"
-            },
-            "binaryDir": "build-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
             "name": "windows-unit-tests-debug",
-            "inherits": ["windows-debug"],
+            "inherits": ["windows"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -105,7 +75,7 @@
         },
         {
             "name": "linux-unit-tests-debug",
-            "inherits": ["linux-debug"],
+            "inherits": ["linux"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -121,15 +91,14 @@
         {
             "name": "windows",
             "configurePreset": "windows",
-            "configuration": "Release"
+            "configuration": "RelWithDebInfo"
         },
         {
             "name": "linux",
             "configurePreset": "linux",
             "environment": {
                 "MAKEFLAGS": "-j" // max parallelism
-            },
-            "configuration": "RelWithDebInfo"
+            }
         },
         {
             "name": "darwin",
@@ -138,17 +107,19 @@
         },
         {
             "name": "windows-debug",
-            "configurePreset": "windows-debug",
+            "inherits": ["windows"],
+            "configurePreset": "windows",
             "configuration": "Debug"
         },
         {
             "name": "linux-debug",
-            "configurePreset": "linux-debug",
-            "configuration": "Debug"
+            "inherits": ["linux"],
+            "configurePreset": "linux-debug"
         },
         {
             "name": "darwin-debug",
-            "configurePreset": "darwin-debug",
+            "inherits": ["darwin"],
+            "configurePreset": "darwin",
             "configuration": "Debug"
         },
         {

@@ -74,12 +74,31 @@ $ cd hollycast
 # Update submodules (this needs to be manually performed when submodule versions are updated)
 $ git submodule update --init --recursive
 
-# Configure the build (make sln file, etc., depending on your platform)
-$ cmake -B build-debug/
+# Find your desired CMake configure preset (see "About CMake Configure" below for more details).
+$ cmake --list-presets
 
-# Run the build
-$ cmake --build build-debug/
+# Run CMake configure.
+$ cmake --preset <PRESET>
+
+# Find your desired CMake build preset. The name should match with the configure preset.
+$ cmake --build --list-presets
+
+# Run the build.
+$ cmake --build --preset <PRESET>
 ```
+
+#### About CMake Configure
+
+[CMake Configure](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html) is when CMake
+generates a platform-specific project file which you can use to build the project afterwards.
+For example, an MSBuild project on Windows, or a `Makefile` project on Linux.
+
+Configure only needs to run occasionally, e.g. when CMakeLists.txt changes.
+
+Note that Linux chooses the build configuration (Debug vs Release mode) during the configure.
+If you want to run both Debug and Release builds, you will need to use different `build/` directories for each.
+
+Windows and macOS configure once, and then can build any number of configurations under a single `build/` directory.
 
 ### Build Instructions for Android
 
