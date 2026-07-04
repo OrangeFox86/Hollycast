@@ -77,7 +77,7 @@ $ git submodule update --init --recursive
 # Find the desired CMake preset for the current platform
 $ cmake --list-presets
 
-# Run CMake configure
+# Run CMake configure. Rerunning this is usually only necessary when certain files like CMakeLists.txt change.
 $ cmake --preset <PRESET>
 
 # Run the build. Using the same preset name as for the configure will generally work.
