@@ -70,7 +70,7 @@ Run the following to pull down the repository and all submodules.
 
 ```bash
 # Clone repo
-git clone --recursive https://github.com/OrangeFox86/Hollycast.git
+git clone https://github.com/OrangeFox86/Hollycast.git
 cd Hollycast
 
 # Ensure symlinks are enabled for this project
