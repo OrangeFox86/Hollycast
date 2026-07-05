@@ -104,12 +104,7 @@ Your working directory must be changed to shell/android-studio before building.
 cd shell/android-studio
 ```
 
-Then run the following to build for release.
-```bash
-./gradlew assembleRelease bundleRelease --parallel
-```
-
-Or run the following to build for debug.
+Then run the following to build for debug.
 ```bash
 ./gradlew assembleDebug bundleDebug --parallel
 ```
