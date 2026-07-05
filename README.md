@@ -77,7 +77,7 @@ cd Hollycast
 git config core.symlinks true
 
 # Update submodules (this needs to be manually performed when submodule versions are updated)
-git submodule update --init --recursive
+git submodule update --init --recursive --force
 ```
 
 ### Build Instructions for Windows/Linux/macOS
