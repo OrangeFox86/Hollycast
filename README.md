@@ -97,14 +97,12 @@ cmake --build --preset <PRESET>
 
 ### Build Instructions for Android
 
-First ensure Android Studio is installed.
+Ensure Android Studio is installed, and then execute the following.
 
-Your working directory must be changed to shell/android-studio before building.
 ```bash
+# Your working directory must be changed to shell/android-studio before building.
 cd shell/android-studio
-```
 
-Then run the following to build for debug.
-```bash
+# Run the following to build for debug.
 ./gradlew assembleDebug bundleDebug --parallel
 ```
