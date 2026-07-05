@@ -37,6 +37,7 @@ Hollycast aims to support every platform and release offered by Flycast. If Flyc
 
 1. Install Visual Studio with MSVC and C++ CMake tools (under `Desktop development with C++` within the installer)
 2. Add the location of cmake.exe to your PATH environment variable (ex: C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\)
+3. Enable `Developer Mode` under System->Advanced within your Windows Settings in order to allow symlink creation without needing administrative privileges. **Warning:** this is generally considered to be a [vulnerability on Windows](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/create-symbolic-links#vulnerability), and it is currently only necessary to build for Android.
 
 ### Build Prerequisites for Linux
 
@@ -63,17 +64,27 @@ brew install cmake
 brew install molten-vk
 ```
 
-### Build Instructions
-The following assumes prerequisites are already installed.
+### Repository Setup
+
+Run the following to pull down the repository and all submodules.
 
 ```bash
 # Clone repo
-git clone --recursive https://github.com/OrangeFox86/hollycast.git
-cd hollycast
+git clone --recursive https://github.com/OrangeFox86/Hollycast.git
+cd Hollycast
+
+# Ensure symlinks are enabled for this project
+git config core.symlinks true
 
 # Update submodules (this needs to be manually performed when submodule versions are updated)
 git submodule update --init --recursive
+```
 
+### Build Instructions for Windows/Linux/macOS
+
+The following assumes prerequisites are already installed and working directory is Hollycast.
+
+```bash
 # Find the desired CMake preset for the current platform
 cmake --list-presets
 
@@ -87,12 +98,6 @@ cmake --build --preset <PRESET>
 ### Build Instructions for Android
 
 First ensure Android Studio is installed.
-
-On Windows, symlinks need to manually be enabled when pulling down the gamesdk submodule. This requires core.symlinks=true to be set. The following will need to be run from a terminal run as administrator to setup the submodule properly.
-```bash
-git submodule deinit --force core/deps/gamesdk
-git -c core.symlinks=true submodule update --init --recursive --force core/deps/gamesdk
-```
 
 Your working directory must be changed to shell/android-studio before building.
 ```bash
