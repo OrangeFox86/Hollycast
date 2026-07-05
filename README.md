@@ -68,34 +68,43 @@ The following assumes prerequisites are already installed.
 
 ```bash
 # Clone repo
-$ git clone --recursive https://github.com/OrangeFox86/hollycast.git
-$ cd hollycast
+git clone --recursive https://github.com/OrangeFox86/hollycast.git
+cd hollycast
 
 # Update submodules (this needs to be manually performed when submodule versions are updated)
-$ git submodule update --init --recursive
+git submodule update --init --recursive
 
 # Find the desired CMake preset for the current platform
-$ cmake --list-presets
+cmake --list-presets
 
 # Run CMake configure. Rerunning this is usually only necessary when certain files like CMakeLists.txt change.
-$ cmake --preset <PRESET>
+cmake --preset <PRESET>
 
 # Run the build. Using the same preset name as for the configure will generally work.
-$ cmake --build --preset <PRESET>
+cmake --build --preset <PRESET>
 ```
 
 ### Build Instructions for Android
 
-Ensure Android Studio is installed, and then execute the following.
+First ensure Android Studio is installed.
 
-On Linux or macOS:
+On Windows, symlinks need to manually be enabled when pulling down the gamesdk submodule. This requires core.symlinks=true to be set. The following will need to be run from a terminal run as administrator to setup the submodule properly.
 ```bash
-cd shell/android-studio
-./gradlew
+git submodule deinit --force core/deps/gamesdk
+git -c core.symlinks=true submodule update --init --recursive --force core/deps/gamesdk
 ```
 
-On Windows:
-```cmd
+Your working directory must be changed to shell/android-studio before building.
+```bash
 cd shell/android-studio
-./gradlew.bat
+```
+
+Then run the following to build for release.
+```bash
+./gradlew assembleRelease bundleRelease --parallel
+```
+
+Or run the following to build for debug.
+```bash
+./gradlew assembleDebug bundleDebug --parallel
 ```
