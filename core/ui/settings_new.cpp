@@ -125,6 +125,9 @@ static bool g_focusSettingsNavigation = false;
 static bool g_focusSettingsContent = false;
 static std::string g_settingsFooterText;
 static constexpr float kSettingsFooterHeightPx = 152.0f;
+#if defined(__ANDROID__)
+static bool g_settingsUiScaleReinitPending = false;
+#endif
 
 #if defined(__ANDROID__)
 struct SettingsAndroidScaleState
@@ -132,21 +135,35 @@ struct SettingsAndroidScaleState
 	float activeUiScale = 0.0f;
 	float baseScale = 1.0f;
 	float appliedUserScale = 1.0f;
+	bool waitingForUiScaleRebuild = false;
 };
+
+static float SettingsCurrentUserScale()
+{
+	return std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+}
 
 static SettingsAndroidScaleState& SettingsAndroidScaleStateCache()
 {
 	static SettingsAndroidScaleState state;
 
-	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
 	if (state.activeUiScale != settings.display.uiScale)
 	{
+		if (!state.waitingForUiScaleRebuild)
+			state.appliedUserScale = SettingsCurrentUserScale();
 		state.activeUiScale = settings.display.uiScale;
-		state.baseScale = settings.display.uiScale / userScale;
-		state.appliedUserScale = userScale;
+		state.baseScale = settings.display.uiScale / std::max(0.01f, state.appliedUserScale);
+		state.waitingForUiScaleRebuild = false;
 	}
 
 	return state;
+}
+
+static void SettingsAndroidMarkUserScaleApplied()
+{
+	SettingsAndroidScaleState& state = SettingsAndroidScaleStateCache();
+	state.appliedUserScale = SettingsCurrentUserScale();
+	state.waitingForUiScaleRebuild = true;
 }
 
 static float SettingsAndroidBaseScale()
@@ -158,7 +175,7 @@ static float SettingsAndroidBaseScale()
 static float SettingsTextPreviewScale()
 {
 #if defined(__ANDROID__)
-	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+	const float userScale = SettingsCurrentUserScale();
 	const float appliedUserScale = std::max(0.01f, SettingsAndroidScaleStateCache().appliedUserScale);
 	// Font atlas rebuilds only happen on Apply. This preview scale lets Android
 	// Settings text grow while dragging without also widening the nav rail or
@@ -178,12 +195,11 @@ static float SettingsPreviewFontSize(ImFont* font)
 static float SettingsLayoutScaled(float px)
 {
 #if defined(__ANDROID__)
-	const float userScale = std::max(0.01f, static_cast<float>(config::UIScaling) / 100.0f);
+	const float userScale = SettingsCurrentUserScale();
 	const float compressedUserScale = 1.0f + (userScale - 1.0f) * 0.20f;
 	// Keep the Settings layout responsive while dragging the UI Scaling slider,
-	// but cache the applied base scale. The slider changes config::UIScaling
-	// before mainui_reinit(), so recalculating the base from every pending value
-	// makes lower percentages grow the panels instead of shrinking them.
+	// but cache the applied base scale. The slider changes config::UIScaling before
+	// mainui_reinit(), so panel math must use the last applied scale, not a pending value.
 	return px * SettingsAndroidBaseScale() * compressedUserScale;
 #else
 	return uiScaled(px);
@@ -234,7 +250,11 @@ static float SettingsFooterHeight()
 {
 	if (!UseCompactSettingsLayout())
 		return SettingsFixedFooterScaled(kSettingsFooterHeightPx);
+#if defined(__ANDROID__)
+	return std::clamp(ImGui::GetIO().DisplaySize.y * 0.16f, SettingsFixedFooterScaled(83.0f), SettingsFixedFooterScaled(109.0f));
+#else
 	return std::clamp(ImGui::GetIO().DisplaySize.y * 0.20f, SettingsFixedFooterScaled(104.0f), SettingsFixedFooterScaled(136.0f));
+#endif
 }
 
 static float SettingsFooterGap()
@@ -2075,9 +2095,9 @@ static float SettingsNavigationWidth(const char* exitLabel)
 	// On phones the navigation rail must remain a stable frame. Larger UI text is
 	// clipped inside the existing rail instead of making the content column shrink.
 	(void)exitLabel;
-	const float minWidth = SettingsFixedNavigationScaled(136.0f);
-	const float maxWidth = std::clamp(displaySize.x * 0.20f, minWidth, SettingsFixedNavigationScaled(310.0f));
-	const float desiredWidth = UseCompactSettingsLayout() ? displaySize.x * 0.16f : SettingsFixedNavigationScaled(225.0f);
+	const float minWidth = SettingsFixedNavigationScaled(91.0f);
+	const float maxWidth = std::clamp(displaySize.x * 0.134f, minWidth, SettingsFixedNavigationScaled(208.0f));
+	const float desiredWidth = UseCompactSettingsLayout() ? displaySize.x * 0.107f : SettingsFixedNavigationScaled(151.0f);
 	return std::clamp(desiredWidth, minWidth, maxWidth);
 #else
 	const float minWidth = 136.0f;
@@ -2780,7 +2800,11 @@ void renderGeneralTab()
 		uiScalingCfg.slider.valueWidth = 220.0f;
 		uiScalingCfg.slider.showApplyFlag = &showApplyButtonForUIScaling;
 		uiScalingCfg.slider.onApply = [&]() {
+#if defined(__ANDROID__)
+			g_settingsUiScaleReinitPending = true;
+#else
 			mainui_reinit();
+#endif
 			uiUserScaleUpdated = false;
 			showApplyButtonForUIScaling = false;
 		};
@@ -7029,13 +7053,22 @@ void renderSettingsNew()
 
 			SaveSettings();
 
+#if defined(__ANDROID__)
+			if (g_settingsUiScaleReinitPending)
+			{
+				SettingsAndroidMarkUserScaleApplied();
+				mainui_reinit();
+				g_settingsUiScaleReinitPending = false;
+			}
+#endif
+
 			if (game_started)
 				gui_setState(GuiState::Commands);
 			else
 				gui_setState(GuiState::Main);
 		};
 
-		const char* backLabel = game_started ? T("Back to Game") : T("Back to Library");
+		const char* backLabel = game_started ? T("Back to Game") : T("Library");
 
 		// Split into left navigation rail and right content area
 		renderNavigationRail(exitSettings, backLabel);

@@ -277,7 +277,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 		CMAKE_CXX_STANDARD 20
 		CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(NOT LIBRETRO)
+if(NOT LIBRETRO AND NOT ANDROID)
 	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast")
 endif()
 
@@ -1264,7 +1264,9 @@ if(NOT LIBRETRO)
 		target_compile_options(swappy_static PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-vla-cxx-extension>)
 		target_compile_definitions(swappy_static PRIVATE ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE core/deps/gamesdk/games-frame-pacing/include)
+		target_include_directories(${PROJECT_NAME} PRIVATE
+				core/deps/gamesdk/include
+				core/deps/gamesdk/games-frame-pacing/include)
 		target_link_libraries(${PROJECT_NAME} PRIVATE swappy_static)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE SWAPPY)
 
