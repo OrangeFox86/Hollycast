@@ -22,6 +22,7 @@
 #include "achievements.h"
 #include "serialize.h"
 #ifdef USE_RACHIEVEMENTS
+#include "cfg/cfg.h"
 #include "oslib/directory.h"
 #include "oslib/http_client.h"
 #include "hw/sh4/sh4_mem.h"
@@ -32,6 +33,13 @@
 #include "emulator.h"
 #include "stdclass.h"
 #include "oslib/i18n.h"
+#include "version.h"
+#if defined(_WIN32) && !defined(TARGET_UWP)
+#include "ui/gui.h"
+#include <rc_client_raintegration.h>
+#include "nowide/stackstring.hpp"
+HWND getNativeHwnd();
+#endif
 #include <cassert>
 #include <rc_client.h>
 #include <rc_hash.h>
@@ -63,24 +71,39 @@ public:
 	bool canPause();
 	void serialize(Serializer& ser);
 	void deserialize(Deserializer& deser);
+	bool isDevToolsLoaded() const;
+	std::vector<DevToolsMenuItem> getDevToolsMenu();
+	bool activateDevToolsMenuItem(u32 id);
 
 	static Achievements& Instance();
 	void setHostOverride(const std::string& host);
 
 private:
 	bool createClient();
+	bool shouldUseRAIntegration() const;
 	std::string getGameHash();
 	void loadGame();
 	void gameLoaded(int result, const char *errorMessage);
 	void unloadGame();
 	void pauseGame();
 	void resumeGame();
+	void beginLoginWithStoredToken();
+	void beginLoginWithPassword(const char *username, const char *password, std::promise<void> *promise);
 	void loadCache();
 	std::string getOrDownloadImage(const char *url);
 	std::pair<std::string, bool> getCachedImage(const char *url);
 	void diskChange();
 	void asyncTask(std::function<void()>&& f);
 	void stopThreads();
+	void clearPendingLogin();
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	void ensureRAIntegrationLoaded();
+	void startPendingLogin();
+	static void raintegrationLoadCallback(int result, const char *error_message, rc_client_t *client, void *userdata);
+	static void raintegrationWriteMemory(u32 address, u8 *buffer, u32 num_bytes, rc_client_t *client);
+	static void raintegrationGetGameName(char *buffer, u32 buffer_size, rc_client_t *client);
+	static void raintegrationEventHandler(const rc_client_raintegration_event_t *event, rc_client_t *client);
+#endif
 
 	static void clientLoginWithTokenCallback(int result, const char *error_message, rc_client_t *client, void *userdata);
 	static void clientLoginWithPasswordCallback(int result, const char *error_message, rc_client_t *client, void *userdata);
@@ -121,6 +144,17 @@ private:
 		if (active)
 			rc_client_idle(rc_client);
 	}};
+	enum class PendingLoginType {
+		None,
+		Token,
+		Password,
+	};
+	PendingLoginType pendingLoginType = PendingLoginType::None;
+	std::string pendingUsername;
+	std::string pendingSecret;
+	std::promise<void> *pendingLoginPromise = nullptr;
+	std::atomic_bool raintegrationLoading {};
+	bool raintegrationInitialized = false;
 };
 
 bool init() {
@@ -153,6 +187,26 @@ Game getCurrentGame() {
 
 std::vector<Achievement> getAchievementList() {
 	return Achievements::Instance().getAchievementList();
+}
+
+bool isDevToolsSupported() {
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool areDevToolsLoaded() {
+	return Achievements::Instance().isDevToolsLoaded();
+}
+
+std::vector<DevToolsMenuItem> getDevToolsMenu() {
+	return Achievements::Instance().getDevToolsMenu();
+}
+
+bool activateDevToolsMenuItem(u32 id) {
+	return Achievements::Instance().activateDevToolsMenuItem(id);
 }
 
 bool canPause() {
@@ -206,6 +260,23 @@ void Achievements::stopThreads() {
 	idleThread.stop();
 }
 
+bool Achievements::shouldUseRAIntegration() const
+{
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	return config::AchievementsUseRAIntegration.get();
+#else
+	return false;
+#endif
+}
+
+void Achievements::clearPendingLogin()
+{
+	pendingLoginType = PendingLoginType::None;
+	pendingUsername.clear();
+	pendingSecret.clear();
+	pendingLoginPromise = nullptr;
+}
+
 bool Achievements::init()
 {
 	if (rc_client != nullptr)
@@ -221,12 +292,24 @@ bool Achievements::init()
 	//rc_client_set_unofficial_enabled(rc_client, 0);
 	//rc_client_set_spectator_mode_enabled(rc_client, 0);
 	loadCache();
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	if (shouldUseRAIntegration() && !isDevToolsLoaded())
+		ensureRAIntegrationLoaded();
+#endif
 
 	if (!config::AchievementsUserName.get().empty() && !config::AchievementsToken.get().empty())
 	{
-		INFO_LOG(COMMON, "RA: Attempting login with user '%s'...", config::AchievementsUserName.get().c_str());
-		rc_client_begin_login_with_token(rc_client, config::AchievementsUserName.get().c_str(),
-				config::AchievementsToken.get().c_str(), clientLoginWithTokenCallback, nullptr);
+		if (shouldUseRAIntegration() && !isDevToolsLoaded())
+		{
+			pendingLoginType = PendingLoginType::Token;
+			pendingUsername = config::AchievementsUserName.get();
+			pendingSecret = config::AchievementsToken.get();
+			pendingLoginPromise = nullptr;
+		}
+		else
+		{
+			beginLoginWithStoredToken();
+		}
 	}
 
 	return true;
@@ -255,6 +338,18 @@ bool Achievements::createClient()
 	}
 
 	return true;
+}
+
+void Achievements::beginLoginWithStoredToken()
+{
+	INFO_LOG(COMMON, "RA: Attempting login with user '%s'...", config::AchievementsUserName.get().c_str());
+	rc_client_begin_login_with_token(rc_client, config::AchievementsUserName.get().c_str(),
+			config::AchievementsToken.get().c_str(), clientLoginWithTokenCallback, nullptr);
+}
+
+void Achievements::beginLoginWithPassword(const char *username, const char *password, std::promise<void> *promise)
+{
+	rc_client_begin_login_with_password(rc_client, username, password, clientLoginWithPasswordCallback, promise);
 }
 
 void Achievements::setHostOverride(const std::string& host)
@@ -371,6 +466,15 @@ void Achievements::term()
 		return;
 	unloadGame();
 	stopThreads();
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	if (raintegrationInitialized)
+	{
+		rc_client_unload_raintegration(rc_client);
+		raintegrationInitialized = false;
+	}
+	raintegrationLoading = false;
+	clearPendingLogin();
+#endif
 	rc_client_destroy(rc_client);
 	rc_client = nullptr;
 }
@@ -402,9 +506,11 @@ void Achievements::clientLoginWithTokenCallback(int result, const char *error_me
 	{
 		WARN_LOG(COMMON, "RA Login failed: %s", error_message);
 		notifier.notify(Notification::Login, "", i18n::Ts("RetroAchievements authentication failed"), error_message);
+		achievements->clearPendingLogin();
 		return;
 	}
 	achievements->authenticationSuccess(rc_client_get_user_info(client));
+	achievements->clearPendingLogin();
 }
 
 std::future<void> Achievements::login(const char* username, const char* password)
@@ -412,7 +518,23 @@ std::future<void> Achievements::login(const char* username, const char* password
 	init();
 	std::promise<void> *promise = new std::promise<void>();
 	auto future = promise->get_future();
-	rc_client_begin_login_with_password(rc_client, username, password, clientLoginWithPasswordCallback, promise);
+	if (shouldUseRAIntegration())
+	{
+#if defined(_WIN32) && !defined(TARGET_UWP)
+		pendingLoginType = PendingLoginType::Password;
+		pendingUsername = username;
+		pendingSecret = password;
+		pendingLoginPromise = promise;
+		if (!isDevToolsLoaded())
+			ensureRAIntegrationLoaded();
+		else
+			startPendingLogin();
+#endif
+	}
+	else
+	{
+		beginLoginWithPassword(username, password, promise);
+	}
 	return future;
 }
 
@@ -428,6 +550,7 @@ void Achievements::clientLoginWithPasswordCallback(int result, const char *error
 			errorMsg += ": " + std::string(error_message);
 		promise->set_exception(std::make_exception_ptr(FlycastException(errorMsg)));
 		delete promise;
+		achievements->clearPendingLogin();
 		WARN_LOG(COMMON, "RA Login failed: %s", errorMsg.c_str());
 		return;
 	}
@@ -438,6 +561,7 @@ void Achievements::clientLoginWithPasswordCallback(int result, const char *error
 		WARN_LOG(COMMON, "RA: rc_client_get_user_info() returned NULL");
 		promise->set_exception(std::make_exception_ptr(FlycastException(i18n::Ts("No user token returned"))));
 		delete promise;
+		achievements->clearPendingLogin();
 		return;
 	}
 
@@ -447,6 +571,7 @@ void Achievements::clientLoginWithPasswordCallback(int result, const char *error
 	achievements->authenticationSuccess(user);
 	promise->set_value();
 	delete promise;
+	achievements->clearPendingLogin();
 }
 
 void Achievements::logout()
@@ -470,7 +595,7 @@ void Achievements::clientMessageCallback(const char* message, const rc_client_t*
 
 u32 Achievements::clientReadMemory(u32 address, u8* buffer, u32 num_bytes, rc_client_t* client)
 {
-	if (address + num_bytes > RAM_SIZE)
+	if (buffer == nullptr || num_bytes > RAM_SIZE || address > RAM_SIZE - num_bytes)
 		return 0;
 	address += 0x0C000000;
 	switch (num_bytes)
@@ -485,7 +610,9 @@ u32 Achievements::clientReadMemory(u32 address, u8* buffer, u32 num_bytes, rc_cl
 		*(u32 *)buffer = ReadMem32_nommu(address);
 		break;
 	default:
-		return 0;
+		for (u32 i = 0; i < num_bytes; i++)
+			buffer[i] = ReadMem8_nommu(address + i);
+		break;
 	}
 	return num_bytes;
 }
@@ -505,7 +632,12 @@ void Achievements::clientServerCall(const rc_api_request_t *request, rc_client_s
 		int rc;
 		std::vector<u8> reply;
 		if (!payload.empty())
-			rc = http::post(url, payload.c_str(), contentType.empty() ? nullptr : contentType.c_str(), reply);
+		{
+			// RAIntegration can issue normal form POSTs without explicitly tagging the content type.
+			// The RA server may ignore the body without this and report missing request parameters.
+			const char *effectiveContentType = contentType.empty() ? "application/x-www-form-urlencoded" : contentType.c_str();
+			rc = http::post(url, payload.c_str(), effectiveContentType, reply);
+		}
 		else
 			rc = http::get(url, reply);
 		rc_api_server_response_t rr;
@@ -895,6 +1027,10 @@ void Achievements::loadGame()
 	std::string gameHash = getGameHash();
 	if (!gameHash.empty())
 	{
+#if defined(_WIN32) && !defined(TARGET_UWP)
+		if (raintegrationInitialized)
+			rc_client_raintegration_set_console_id(rc_client, settings.platform.isConsole() ? RC_CONSOLE_DREAMCAST : RC_CONSOLE_ARCADE);
+#endif
 		// settings.raHardcoreMode is set before enabling cheats and loading the initial savestate
 		// Hardcore is disabled when routing through a custom host (e.g. RAOfflineProxy).
 		bool effectiveHardcore = settings.raHardcoreMode && config::AchievementsHostUrl.get().empty();
@@ -909,6 +1045,216 @@ void Achievements::loadGame()
 		settings.raHardcoreMode = false;
 	}
 }
+
+bool Achievements::isDevToolsLoaded() const
+{
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	return raintegrationInitialized;
+#else
+	return false;
+#endif
+}
+
+static std::string sanitizeRAIntegrationLabel(const char *label)
+{
+	if (label == nullptr)
+		return {};
+	std::string sanitized;
+	for (const char *p = label; *p != '\0'; ++p)
+	{
+		if (*p == '&')
+		{
+			if (*(p + 1) == '&')
+			{
+				sanitized += '&';
+				++p;
+			}
+			continue;
+		}
+		sanitized += *p;
+	}
+	return sanitized;
+}
+
+std::vector<DevToolsMenuItem> Achievements::getDevToolsMenu()
+{
+	std::vector<DevToolsMenuItem> items;
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	if (!config::EnableAchievements.get() || !shouldUseRAIntegration())
+		return items;
+	init();
+	if (!raintegrationInitialized)
+		return items;
+	const rc_client_raintegration_menu_t *menu = rc_client_raintegration_get_menu(rc_client);
+	if (menu == nullptr)
+		return items;
+	items.reserve(menu->num_items);
+	for (u32 i = 0; i < menu->num_items; ++i)
+	{
+		const rc_client_raintegration_menu_item_t& item = menu->items[i];
+		items.push_back(DevToolsMenuItem{
+			sanitizeRAIntegrationLabel(item.label),
+			item.id,
+			item.checked != 0,
+			item.enabled != 0
+		});
+	}
+#endif
+	return items;
+}
+
+bool Achievements::activateDevToolsMenuItem(u32 id)
+{
+#if defined(_WIN32) && !defined(TARGET_UWP)
+	if (!config::EnableAchievements.get() || !shouldUseRAIntegration())
+		return false;
+	init();
+	if (!raintegrationInitialized)
+		return false;
+	return rc_client_raintegration_activate_menu_item(rc_client, id) != 0;
+#else
+	(void)id;
+	return false;
+#endif
+}
+
+#if defined(_WIN32) && !defined(TARGET_UWP)
+void Achievements::startPendingLogin()
+{
+	PendingLoginType loginType = pendingLoginType;
+	pendingLoginType = PendingLoginType::None;
+	switch (loginType)
+	{
+	case PendingLoginType::Token:
+		beginLoginWithStoredToken();
+		clearPendingLogin();
+		break;
+	case PendingLoginType::Password:
+		// RAIntegration may keep the provided strings alive until its async login callback.
+		// Keep pendingUsername/pendingSecret valid until clientLoginWithPasswordCallback clears them.
+		beginLoginWithPassword(pendingUsername.c_str(), pendingSecret.c_str(), pendingLoginPromise);
+		break;
+	case PendingLoginType::None:
+		break;
+	}
+}
+
+void Achievements::ensureRAIntegrationLoaded()
+{
+	if (!shouldUseRAIntegration() || rc_client == nullptr || loggedOn || raintegrationInitialized || raintegrationLoading.exchange(true))
+		return;
+
+	std::string dllPath = get_readonly_data_path("RA_Integration-x64.dll");
+	if (!file_exists(dllPath))
+		dllPath = get_readonly_data_path("RA_Integration.dll");
+	std::string searchDirectory = dllPath;
+	size_t sep = get_last_slash_pos(searchDirectory);
+	if (sep != std::string::npos)
+		searchDirectory.resize(sep);
+	else
+		searchDirectory = get_readonly_data_path("");
+
+	nowide::wstackstring wSearchDirectory;
+	const wchar_t *searchDirectoryPtr = nullptr;
+	if (!searchDirectory.empty() && wSearchDirectory.convert(searchDirectory.c_str()))
+		searchDirectoryPtr = wSearchDirectory.get();
+
+	rc_client_begin_load_raintegration(rc_client, searchDirectoryPtr, getNativeHwnd(),
+		"Hollycast", GIT_VERSION, raintegrationLoadCallback, this);
+}
+
+void Achievements::raintegrationLoadCallback(int result, const char *error_message, rc_client_t *client, void *userdata)
+{
+	Achievements *achievements = static_cast<Achievements *>(userdata);
+	achievements->raintegrationLoading = false;
+	if (result != RC_OK)
+	{
+		std::string error = error_message != nullptr ? error_message : rc_error_str(result);
+		WARN_LOG(COMMON, "RAIntegration load failed: %s", error.c_str());
+		notifier.notify(Notification::Error, "", i18n::Ts("RetroAchievements dev tools unavailable"), error);
+		if (achievements->pendingLoginPromise != nullptr)
+		{
+			achievements->pendingLoginPromise->set_exception(std::make_exception_ptr(FlycastException(error)));
+			delete achievements->pendingLoginPromise;
+		}
+		achievements->clearPendingLogin();
+		return;
+	}
+
+	achievements->raintegrationInitialized = true;
+	rc_client_raintegration_set_write_memory_function(client, raintegrationWriteMemory);
+	rc_client_raintegration_set_get_game_name_function(client, raintegrationGetGameName);
+	rc_client_raintegration_set_event_handler(client, raintegrationEventHandler);
+	rc_client_raintegration_set_console_id(client, settings.platform.isConsole() ? RC_CONSOLE_DREAMCAST : RC_CONSOLE_ARCADE);
+	achievements->startPendingLogin();
+}
+
+void Achievements::raintegrationWriteMemory(u32 address, u8 *buffer, u32 num_bytes, rc_client_t *client)
+{
+	(void)client;
+	if (buffer == nullptr || num_bytes > RAM_SIZE || address > RAM_SIZE - num_bytes)
+		return;
+	address += 0x0C000000;
+	switch (num_bytes)
+	{
+	case 1:
+		WriteMem8_nommu(address, *buffer);
+		break;
+	case 2:
+		{
+			u16 value;
+			memcpy(&value, buffer, sizeof(value));
+			WriteMem16_nommu(address, value);
+		}
+		break;
+	case 4:
+		{
+			u32 value;
+			memcpy(&value, buffer, sizeof(value));
+			WriteMem32_nommu(address, value);
+		}
+		break;
+	default:
+		for (u32 i = 0; i < num_bytes; i++)
+			WriteMem8_nommu(address + i, buffer[i]);
+		break;
+	}
+}
+
+void Achievements::raintegrationGetGameName(char *buffer, u32 buffer_size, rc_client_t *client)
+{
+	(void)client;
+	if (buffer == nullptr || buffer_size == 0)
+		return;
+	const std::string& title = settings.content.title.empty() ? settings.content.fileName : settings.content.title;
+	snprintf(buffer, buffer_size, "%s", title.c_str());
+}
+
+void Achievements::raintegrationEventHandler(const rc_client_raintegration_event_t *event, rc_client_t *client)
+{
+	if (event == nullptr)
+		return;
+	switch (event->type)
+	{
+	case RC_CLIENT_RAINTEGRATION_EVENT_HARDCORE_CHANGED:
+		config::AchievementsHardcoreMode = rc_client_get_hardcore_enabled(client) != 0;
+		settings.raHardcoreMode = config::AchievementsHardcoreMode;
+		SaveSettings();
+		break;
+	case RC_CLIENT_RAINTEGRATION_EVENT_PAUSE:
+		gui_runOnUiThread([]() {
+			if (gui_state == GuiState::Closed)
+				gui_togglePause();
+		});
+		break;
+	case RC_CLIENT_RAINTEGRATION_EVENT_MENUITEM_CHECKED_CHANGED:
+	case RC_CLIENT_RAINTEGRATION_EVENT_MENU_CHANGED:
+	case RC_CLIENT_RAINTEGRATION_EVENT_TYPE_NONE:
+	default:
+		break;
+	}
+}
+#endif
 
 void Achievements::gameLoaded(int result, const char *errorMessage)
 {

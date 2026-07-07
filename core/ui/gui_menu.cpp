@@ -21,6 +21,7 @@
 #include "gui.h"
 #include "gui_util.h"
 #include "cfg/cfg.h"
+#include "achievements/achievements.h"
 #include "emulator.h"
 #include "log/LogManager.h"
 #include "imgui.h"
@@ -434,6 +435,27 @@ void renderToolsMenu()
 		{
 			openCustomBoxartSettings();
 		}
+
+#if defined(_WIN32) && !defined(TARGET_UWP)
+		ImGui::Separator();
+		const bool showDevTools = config::EnableAchievements.get()
+			&& config::AchievementsUseRAIntegration.get()
+			&& achievements::isDevToolsSupported();
+		std::vector<achievements::DevToolsMenuItem> devToolsMenu;
+		if (showDevTools)
+			devToolsMenu = achievements::getDevToolsMenu();
+		if (ImGui::BeginMenu(T("RetroAchievements Dev Tools"), showDevTools && !devToolsMenu.empty()))
+		{
+			for (const achievements::DevToolsMenuItem& item : devToolsMenu)
+			{
+				if (item.id == 0)
+					ImGui::Separator();
+				else if (ImGui::MenuItem(item.label.c_str(), nullptr, item.checked, item.enabled))
+					achievements::activateDevToolsMenuItem(item.id);
+			}
+			ImGui::EndMenu();
+		}
+#endif
 
 		ImGui::EndMenu();
 	}

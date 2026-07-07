@@ -585,6 +585,7 @@ extern Option<std::string, false> LuaFileName;
 
 extern Option<bool> EnableAchievements;
 extern Option<bool> AchievementsHardcoreMode;
+extern Option<bool, false> AchievementsUseRAIntegration;
 extern OptionString AchievementsUserName;
 extern OptionString AchievementsToken;
 extern OptionString AchievementsHostUrl;

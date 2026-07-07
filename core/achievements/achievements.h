@@ -23,6 +23,14 @@
 
 namespace achievements
 {
+struct DevToolsMenuItem
+{
+	std::string label;
+	u32 id = 0;
+	bool checked = false;
+	bool enabled = false;
+};
+
 #ifdef USE_RACHIEVEMENTS
 
 struct Game
@@ -55,6 +63,10 @@ bool isLoggedOn();
 bool isActive();
 Game getCurrentGame();
 std::vector<Achievement> getAchievementList();
+bool isDevToolsSupported();
+bool areDevToolsLoaded();
+std::vector<DevToolsMenuItem> getDevToolsMenu();
+bool activateDevToolsMenuItem(u32 id);
 bool canPause();
 void setHostOverride(const std::string& host);
 
@@ -65,6 +77,18 @@ static inline bool isActive() {
 }
 static inline bool canPause() {
 	return true;
+}
+static inline bool isDevToolsSupported() {
+	return false;
+}
+static inline bool areDevToolsLoaded() {
+	return false;
+}
+static inline std::vector<DevToolsMenuItem> getDevToolsMenu() {
+	return {};
+}
+static inline bool activateDevToolsMenuItem(u32) {
+	return false;
 }
 
 #endif

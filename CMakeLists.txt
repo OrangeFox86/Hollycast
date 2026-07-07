@@ -1058,6 +1058,9 @@ if(NOT LIBRETRO)
 			core/deps/rcheevos/src/rurl/url.c)
 	target_include_directories(${PROJECT_NAME} PRIVATE core/deps/rcheevos/include)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE USE_RACHIEVEMENTS RC_DISABLE_LUA)
+	if(WIN32 AND NOT TARGET_UWP)
+		target_compile_definitions(${PROJECT_NAME} PRIVATE RC_CLIENT_SUPPORTS_RAINTEGRATION)
+	endif()
 endif()
 
 target_sources(${PROJECT_NAME} PRIVATE

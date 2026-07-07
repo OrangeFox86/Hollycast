@@ -269,6 +269,7 @@ Option<std::string, false> LuaFileName("LuaFileName", "flycast.lua");
 
 Option<bool> EnableAchievements("Enabled", false, "achievements");
 Option<bool> AchievementsHardcoreMode("HardcoreMode", false, "achievements");
+Option<bool, false> AchievementsUseRAIntegration("UseRAIntegration", false, "achievements");
 OptionString AchievementsUserName("UserName", "", "achievements");
 OptionString AchievementsToken("Token", "", "achievements");
 OptionString AchievementsHostUrl("HostUrl", "", "achievements");
