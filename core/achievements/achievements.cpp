@@ -293,25 +293,22 @@ bool Achievements::init()
 	//rc_client_set_unofficial_enabled(rc_client, 0);
 	//rc_client_set_spectator_mode_enabled(rc_client, 0);
 	loadCache();
+	const bool hasStoredLogin = !config::AchievementsUserName.get().empty() && !config::AchievementsToken.get().empty();
+	const bool deferStoredLogin = hasStoredLogin && shouldUseRAIntegration() && !isDevToolsLoaded();
+	if (deferStoredLogin)
+	{
+		pendingLoginType = PendingLoginType::Token;
+		pendingUsername = config::AchievementsUserName.get();
+		pendingSecret = config::AchievementsToken.get();
+		pendingLoginPromise = nullptr;
+	}
 #if defined(_WIN32) && !defined(TARGET_UWP)
 	if (shouldUseRAIntegration() && !isDevToolsLoaded())
 		ensureRAIntegrationLoaded();
 #endif
 
-	if (!config::AchievementsUserName.get().empty() && !config::AchievementsToken.get().empty())
-	{
-		if (shouldUseRAIntegration() && !isDevToolsLoaded())
-		{
-			pendingLoginType = PendingLoginType::Token;
-			pendingUsername = config::AchievementsUserName.get();
-			pendingSecret = config::AchievementsToken.get();
-			pendingLoginPromise = nullptr;
-		}
-		else
-		{
-			beginLoginWithStoredToken();
-		}
-	}
+	if (hasStoredLogin && !deferStoredLogin)
+		beginLoginWithStoredToken();
 
 	return true;
 }
