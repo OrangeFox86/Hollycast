@@ -19,6 +19,7 @@
 #pragma once
 #include "types.h"
 #include <future>
+#include <string>
 #include <vector>
 
 namespace achievements

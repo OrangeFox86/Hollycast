@@ -46,6 +46,7 @@ HWND getNativeHwnd();
 #include <unordered_map>
 #include <sstream>
 #include <atomic>
+#include <cstring>
 #include <utility>
 #include <xxhash.h>
 #include <functional>
