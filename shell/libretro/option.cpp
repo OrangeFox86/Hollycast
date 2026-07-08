@@ -134,7 +134,13 @@ OptionString ISPUsername("", "flycast1");
 // Maple
 
 Option<int> MouseSensitivity("", 100);
+Option<bool> VirtualGamepadEnabled("", true);
+Option<bool> VirtualGamepadHapticFeedback("", true);
+Option<bool> VirtualGamepadVisualFeedback("", true);
 Option<int> VirtualGamepadVibration("", 20);
+Option<int> VirtualGamepadTransparency("", 0);
+Option<int> VirtualGamepadIdleTimeout("", 10);
+Option<int> VirtualGamepadFingerSize("", 0);
 
 std::array<Option<MapleDeviceType>, 4> MapleMainDevices {
 	Option<MapleDeviceType>("", MDT_None),

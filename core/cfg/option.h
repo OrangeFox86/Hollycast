@@ -559,8 +559,13 @@ extern Option<bool> OmxAudioHdmi;
 // Maple
 
 extern Option<int> MouseSensitivity;
+extern Option<bool> VirtualGamepadEnabled;
+extern Option<bool> VirtualGamepadHapticFeedback;
+extern Option<bool> VirtualGamepadVisualFeedback;
 extern Option<int> VirtualGamepadVibration;
 extern Option<int> VirtualGamepadTransparency;
+extern Option<int> VirtualGamepadIdleTimeout;
+extern Option<int> VirtualGamepadFingerSize;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;

@@ -1041,8 +1041,6 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 				header(T("Haptic"));
 				OptionSlider(T("Power"), config::VirtualGamepadVibration, 0, 100, T("Haptic feedback power"), "%d%%");
 			}
-			header(T("View"));
-			OptionSlider(T("Transparency"), config::VirtualGamepadTransparency, 0, 100, T("Virtual gamepad buttons transparency"), "%d%%");
 
 #if defined(__ANDROID__) || defined(TARGET_IPHONE)
 			vgamepad::ImguiVGamepadTexture tex;
@@ -4968,8 +4966,17 @@ void renderControlsTab()
 					ImGui::SameLine(0, uiScaled(16.0f));
 					if (ImGui::Button(T("Settings"), deviceButtonSize))
 					{
-						g_currentGamepadForSettings = gamepad;
-						ImGui::OpenPopup(T("Gamepad Settings"));
+						if (gamepad->is_virtual_gamepad())
+						{
+							vgamepad::startEditing();
+							vgamepad::pauseEditing();
+							gui_setState(GuiState::VJoyEditCommands);
+						}
+						else
+						{
+							g_currentGamepadForSettings = gamepad;
+							ImGui::OpenPopup(T("Gamepad Settings"));
+						}
 					}
 				}
 

@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -268,6 +269,8 @@ public class VirtualJoystickDelegate implements TouchEventHandler
     {
         VGamepad.show();
         this.handler.removeCallbacks(hideVGamepadRunnable);
-        this.handler.postDelayed(hideVGamepadRunnable, 10000);
+        int timeoutSeconds = VGamepad.getIdleTimeoutSeconds();
+        if (timeoutSeconds > 0)
+            this.handler.postDelayed(hideVGamepadRunnable, timeoutSeconds * 1000L);
     }
 }

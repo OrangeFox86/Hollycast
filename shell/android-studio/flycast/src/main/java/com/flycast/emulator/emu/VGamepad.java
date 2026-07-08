@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,7 @@ public class VGamepad
     static { System.loadLibrary("flycast"); }
 
     public static native int getVibrationPower();
+    public static native int getIdleTimeoutSeconds();
 
     public static native void show();
     public static native void hide();
