@@ -1,5 +1,6 @@
 /*
 	Copyright 2018 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -32,7 +33,7 @@ GLuint texSamplers[2];
 static gl4PipelineShader *gl4GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 							bool pp_Texture, bool pp_UseAlpha, bool pp_IgnoreTexA, u32 pp_ShadInstr, bool pp_Offset,
 							u32 pp_FogCtrl, bool pp_TwoVolumes, bool pp_Gouraud, bool pp_BumpMap, bool fog_clamping,
-							int palette, bool naomi2, Pass pass)
+							int palette, int sampleTextureFilter, int maxFilteredTextureSize, bool naomi2, Pass pass)
 {
 	u32 rv=0;
 
@@ -49,6 +50,8 @@ static gl4PipelineShader *gl4GetProgram(bool cp_AlphaTest, bool pp_InsideClippin
 	rv <<= 1; rv |= (int)pp_BumpMap;
 	rv <<= 1; rv |= (int)fog_clamping;
 	rv <<= 2; rv |= palette;
+	rv <<= 5; rv |= sampleTextureFilter;
+	rv <<= 4; rv |= maxFilteredTextureSize >= 1024 ? 8 : std::min<int>(maxFilteredTextureSize / 8, 7);
 	rv <<= 1; rv |= (int)naomi2;
 	rv <<= 2; rv |= (int)pass;
 	rv <<= 1; rv |= (int)(!settings.platform.isNaomi2() && config::NativeDepthInterpolation);
@@ -69,6 +72,8 @@ static gl4PipelineShader *gl4GetProgram(bool cp_AlphaTest, bool pp_InsideClippin
 		shader->pp_BumpMap = pp_BumpMap;
 		shader->fog_clamping = fog_clamping;
 		shader->palette = palette;
+		shader->sampleTextureFilter = sampleTextureFilter;
+		shader->maxFilteredTextureSize = maxFilteredTextureSize;
 		shader->naomi2 = naomi2;
 		shader->pass = pass;
 		shader->divPosZ = !settings.platform.isNaomi2() && config::NativeDepthInterpolation;
@@ -84,6 +89,18 @@ static void SetTextureRepeatMode(int index, GLuint dir, u32 clamp, u32 mirror)
 		glSamplerParameteri(texSamplers[index], dir, GL_CLAMP_TO_EDGE);
 	else
 		glSamplerParameteri(texSamplers[index], dir, mirror ? GL_MIRRORED_REPEAT : GL_REPEAT);
+}
+
+static bool isSampleTextureFilterEligible(const TextureCacheData* texture)
+{
+	int sampleTextureFilter = config::SampleTextureFilter.get();
+	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
+		sampleTextureFilter = 0;
+	if (maxFilteredTextureSize <= 0)
+		sampleTextureFilter = 0;
+	return sampleTextureFilter != 0 &&
+		(maxFilteredTextureSize >= 1024 || texture->width <= (u32)maxFilteredTextureSize);
 }
 
 static void SetBaseClipping()
@@ -122,6 +139,10 @@ static void SetGPState(const PolyParam* gp)
 		else if (config::TextureFiltering == 2)
 			gpuPalette = 2; // force linear
 	}
+	int sampleTextureFilter = config::SampleTextureFilter.get();
+	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 18 || maxFilteredTextureSize <= 0)
+		sampleTextureFilter = 0;
 
 	if (pass == Pass::Depth)
 	{
@@ -140,6 +161,8 @@ static void SetGPState(const PolyParam* gp)
 				false,
 				false,
 				gpuPalette,
+				sampleTextureFilter,
+				maxFilteredTextureSize,
 				gp->isNaomi2(),
 				pass);
 	}
@@ -163,6 +186,8 @@ static void SetGPState(const PolyParam* gp)
 				gp->tcw.PixelFmt == PixelBumpMap,
 				color_clamp,
 				gpuPalette,
+				sampleTextureFilter,
+				maxFilteredTextureSize,
 				gp->isNaomi2(),
 				pass);
 	}
@@ -228,6 +253,8 @@ static void SetGPState(const PolyParam* gp)
 
 				bool nearest_filter;
 				if (gpuPalette != 0)
+					nearest_filter = true;
+				else if (isSampleTextureFilterEligible(texture))
 					nearest_filter = true;
 				else if (config::TextureFiltering == 0)
 					nearest_filter = tsp.FilterMode == 0;
