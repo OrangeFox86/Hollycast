@@ -2,6 +2,7 @@
     Created on: Nov 6, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -271,6 +272,14 @@ void main()
 	#if pp_Texture==1
 	{
 		vec4 texcol;
+		#if pp_SampleTextureFilter != 0
+			#if pp_TwoVolumes == 1
+				if (area1)
+					texcol = filteredTextureSample(tex1, vec3(vtx_uv1, vtx_uv.z));
+				else
+			#endif
+			texcol = filteredTextureSample(tex0, vtx_uv);
+		#else
 		#if pp_TwoVolumes == 1
 			if (area1)
 				#if DIV_POS_Z == 1
@@ -290,6 +299,7 @@ void main()
 				texcol = palettePixel(tex0, vtx_uv);
 		#else
 				texcol = palettePixelBilinear(tex0, vtx_uv);
+		#endif
 		#endif
 		#if pp_BumpMap == 1
 			float s = PI / 2.0 * (texcol.a * 15.0 * 16.0 + texcol.r * 15.0) / 255.0;
@@ -769,6 +779,8 @@ vk::UniqueShaderModule OITShaderManager::compileShader(const FragmentShaderParam
 		.addConstant("pp_BumpMap", (int)params.bumpmap)
 		.addConstant("ColorClamping", (int)params.clamping)
 		.addConstant("pp_Palette", params.palette)
+		.addConstant("pp_SampleTextureFilter", params.sampleTextureFilter)
+		.addConstant("pp_MaxFilteredTextureSize", params.maxFilteredTextureSize)
 		.addConstant("DIV_POS_Z", (int)params.divPosZ)
 		.addConstant("PASS", (int)params.pass)
 		.addConstant("USE_BDA", (int)params.useBDA)

@@ -4291,7 +4291,7 @@ void renderVideoTab()
 				));
 		}
 
-		// Texture Filtering
+		// Texture Sampling (legacy sampler override)
 		const std::array<const char*, 3> textureFilterLabels {
 			T("Default"),
 			T("Force Nearest-Neighbor"),
@@ -4303,7 +4303,7 @@ void renderVideoTab()
 
 		SettingsUI::PopupConfig textureFilterCfg {};
 		textureFilterCfg.type = SettingsUI::PopupType::Options;
-		textureFilterCfg.options.label = T("Filtering Mode");
+		textureFilterCfg.options.label = T("Sampler Override");
 		textureFilterCfg.options.icon = ICON_FA_FILTER;
 		textureFilterCfg.options.popupID = Tnop("TextureFilteringPopup");
 		textureFilterCfg.options.options = textureFilterLabels.data();
@@ -4319,14 +4319,194 @@ void renderVideoTab()
 
 		RenderGeneralPopupSettingRow(
 			Tnop("TextureFilteringSetting"),
-			T("Override how textures are filtered (sampled)."),
+			T("Override the sampler mode used when textures are sampled."),
 			textureFilterCfg,
 			T(
-				"Texture Filtering\n"
+				"Texture Sampling Override\n"
 				"Default: uses game behavior.\n"
 				"Force Nearest-Neighbor: crisp/pixelated look.\n"
 				"Force Linear: smoother/blurrier look.\n\n"
 				"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer."
+			));
+
+		const std::array<const char*, 19> sampleTextureFilterLabels {
+			T("Disabled"),
+			T("Bilinear"),
+			T("Bilinear / No Edge Blending"),
+			T("Jinc2"),
+			T("Jinc2 / No Edge Blending"),
+			T("MMPX"),
+			T("MMPX Enhanced"),
+			T("MMPX Advanced"),
+			T("Jinc2 Anti-Ring"),
+			T("Jinc2 Sharp Anti-Ring"),
+			T("EWA Lanczos / Jinc"),
+			T("EWA Lanczos Sharp Anti-Ring"),
+			T("Lanczos2 Anti-Ring"),
+			T("Lanczos3 Anti-Ring"),
+			T("Spline36"),
+			T("Robidoux"),
+			T("Robidoux Sharp"),
+			T("Bicubic Catmull-Rom"),
+			T("Bicubic Mitchell")
+		};
+		const std::array<const char*, 19> sampleTextureFilterDescriptions {
+			T(
+				"Sample Texture Filter: Disabled\n"
+				"Uses HollyCast's legacy texture sampling behavior."
+			),
+			T(
+				"Sample Texture Filter: Bilinear\n"
+				"Smooths texture samples with alpha-weighted bilinear interpolation. Good simple baseline."
+			),
+			T(
+				"Sample Texture Filter: Bilinear / No Edge Blending\n"
+				"Smooth bilinear filtering with harder alpha edges to reduce transparent-edge bleeding."
+			),
+			T(
+				"Sample Texture Filter: Jinc2\n"
+				"Windowed Jinc-style reconstruction. Premium smooth option, but sharp edges can show mild ringing."
+			),
+			T(
+				"Sample Texture Filter: Jinc2 / No Edge Blending\n"
+				"Jinc2 reconstruction with harder alpha edges for sprites, UI, and texture-sheet borders."
+			),
+			T(
+				"Sample Texture Filter: MMPX\n"
+				"Pixel-art style reconstruction that preserves hard shapes. Best for 2D artwork, not natural textures."
+			),
+			T(
+				"Sample Texture Filter: MMPX Enhanced\n"
+				"Softer MMPX variant that blends reconstructed pixels back toward the source."
+			),
+			T(
+				"Sample Texture Filter: MMPX Advanced\n"
+				"More aggressive MMPX edge rules. Useful for pixel-art tests, but can be stylized."
+			),
+			T(
+				"Sample Texture Filter: Jinc2 Anti-Ring\n"
+				"Jinc2-style reconstruction with halo clamping. Better for signs, logos, HUD art, decals, and alpha edges."
+			),
+			T(
+				"Sample Texture Filter: Jinc2 Sharp Anti-Ring\n"
+				"Sharper Jinc2-style reconstruction with anti-ringing. Advanced option for crisp Dreamcast-era texture sheets."
+			),
+			T(
+				"Sample Texture Filter: EWA Lanczos / Jinc\n"
+				"Jinc-style premium scaler inspired by EWA Lanczos behavior. Smooth high-quality whole-texture option."
+			),
+			T(
+				"Sample Texture Filter: EWA Lanczos Sharp Anti-Ring\n"
+				"Sharper Jinc/EWA-style option with anti-ringing. Good for users who want crisp textures without MMPX-style edges."
+			),
+			T(
+				"Sample Texture Filter: Lanczos2 Anti-Ring\n"
+				"Sharp sinc/Lanczos reconstruction with a smaller radius and halo clamp. Strong everyday texture option."
+			),
+			T(
+				"Sample Texture Filter: Lanczos3 Anti-Ring\n"
+				"Sharper larger-radius Lanczos reconstruction with halo clamp. High quality, but more likely to emphasize edges."
+			),
+			T(
+				"Sample Texture Filter: Spline36\n"
+				"High-quality spline reconstruction with less ringing than sharper Lanczos-style filters."
+			),
+			T(
+				"Sample Texture Filter: Robidoux\n"
+				"Balanced cubic reconstruction. Good compromise for painted or photographic Dreamcast-era textures."
+			),
+			T(
+				"Sample Texture Filter: Robidoux Sharp\n"
+				"Sharper Robidoux-style cubic filter. A good candidate for texture packs and detailed environment art."
+			),
+			T(
+				"Sample Texture Filter: Bicubic Catmull-Rom\n"
+				"Classic sharper bicubic reconstruction. Crisp, familiar, and cheaper than the heavier premium filters."
+			),
+			T(
+				"Sample Texture Filter: Bicubic Mitchell\n"
+				"Softer Mitchell-Netravali bicubic reconstruction. Smooth low-ringing option for UI and texture sheets."
+			)
+		};
+		int sampleTextureFilterSelection = config::SampleTextureFilter.get();
+		if (sampleTextureFilterSelection < 0 || sampleTextureFilterSelection >= static_cast<int>(sampleTextureFilterLabels.size()))
+			sampleTextureFilterSelection = 0;
+
+		SettingsUI::PopupConfig sampleTextureFilterCfg {};
+		sampleTextureFilterCfg.type = SettingsUI::PopupType::Options;
+		sampleTextureFilterCfg.options.label = T("Sample Texture Filter");
+		sampleTextureFilterCfg.options.icon = ICON_FA_FILTER;
+		sampleTextureFilterCfg.options.popupID = Tnop("SampleTextureFilterPopup");
+		sampleTextureFilterCfg.options.options = sampleTextureFilterLabels.data();
+		sampleTextureFilterCfg.options.optionCount = static_cast<int>(sampleTextureFilterLabels.size());
+		sampleTextureFilterCfg.options.currentValue = &sampleTextureFilterSelection;
+		sampleTextureFilterCfg.options.valueWidth = 270.0f;
+		sampleTextureFilterCfg.options.description = sampleTextureFilterDescriptions[sampleTextureFilterSelection];
+		sampleTextureFilterCfg.options.onOptionHighlight = [&](int selectedIndex, const char*) {
+			if (selectedIndex >= 0 && selectedIndex < static_cast<int>(sampleTextureFilterDescriptions.size()))
+				SetSettingsFooterText(sampleTextureFilterDescriptions[selectedIndex]);
+		};
+		sampleTextureFilterCfg.options.onChange = [&](int selectedIndex) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(sampleTextureFilterLabels.size()))
+				return false;
+			config::SampleTextureFilter.set(selectedIndex);
+			return true;
+		};
+
+		RenderGeneralPopupSettingRow(
+			Tnop("SampleTextureFilterSetting"),
+			T("Choose the sample-time texture filtering algorithm."),
+			sampleTextureFilterCfg,
+			sampleTextureFilterDescriptions[sampleTextureFilterSelection]);
+
+		const std::array<int, 8> maxFilteredTextureSizeValues {
+			8, 16, 32, 64, 128, 256, 512, 1024
+		};
+		const std::array<const char*, 8> maxFilteredTextureSizeLabels {
+			T("8x8"),
+			T("16x16"),
+			T("32x32"),
+			T("64x64"),
+			T("128x128"),
+			T("256x256"),
+			T("512x512"),
+			T("1024x1024+")
+		};
+		int maxFilteredTextureSizeSelection = 5;
+		for (size_t i = 0; i < maxFilteredTextureSizeValues.size(); i++)
+		{
+			if (maxFilteredTextureSizeValues[i] == config::MaxFilteredTextureSize.get())
+			{
+				maxFilteredTextureSizeSelection = static_cast<int>(i);
+				break;
+			}
+		}
+
+		SettingsUI::PopupConfig maxFilteredTextureSizeCfg {};
+		maxFilteredTextureSizeCfg.type = SettingsUI::PopupType::Options;
+		maxFilteredTextureSizeCfg.options.label = T("Max Filtered Texture Size");
+		maxFilteredTextureSizeCfg.options.icon = ICON_FA_EXPAND;
+		maxFilteredTextureSizeCfg.options.popupID = Tnop("MaxFilteredTextureSizePopup");
+		maxFilteredTextureSizeCfg.options.options = maxFilteredTextureSizeLabels.data();
+		maxFilteredTextureSizeCfg.options.optionCount = static_cast<int>(maxFilteredTextureSizeLabels.size());
+		maxFilteredTextureSizeCfg.options.currentValue = &maxFilteredTextureSizeSelection;
+		maxFilteredTextureSizeCfg.options.valueWidth = 170.0f;
+		maxFilteredTextureSizeCfg.options.onChange = [&](int selectedIndex) {
+			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(maxFilteredTextureSizeValues.size()))
+				return false;
+			config::MaxFilteredTextureSize.set(maxFilteredTextureSizeValues[selectedIndex]);
+			return true;
+		};
+
+		RenderGeneralPopupSettingRow(
+			Tnop("MaxFilteredTextureSizeSetting"),
+			T("Limit filtering to smaller texture groups."),
+			maxFilteredTextureSizeCfg,
+			T(
+				"Max Filtered Texture Size\n"
+				"Controls the largest texture group affected by texture upscaling and sample texture filters.\n"
+				"Buckets use texture width, so 8x8 includes 8x16 and 8x32, while 16x16 includes 16x8.\n"
+				"1024x1024+ includes larger texture-pack assets."
 			));
 
 		// Show FPS Counter

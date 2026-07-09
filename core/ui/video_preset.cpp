@@ -212,6 +212,9 @@ static void applySetting(const PresetSetting& setting) {
 	else if (name == "TextureFiltering") {
 		config::TextureFiltering.set(std::get<int>(setting.value));
 	}
+	else if (name == "SampleTextureFilter") {
+		config::SampleTextureFilter.set(std::get<int>(setting.value));
+	}
 	else if (name == "TextureUpscale") {
 		config::TextureUpscale.set(std::get<int>(setting.value));
 	}
@@ -350,6 +353,10 @@ VideoPresetLevel detectCurrentPreset() {
 			}
 			else if (name == "TextureFiltering") {
 				if (config::TextureFiltering.get() != std::get<int>(setting.value))
+					match = false;
+			}
+			else if (name == "SampleTextureFilter") {
+				if (config::SampleTextureFilter.get() != std::get<int>(setting.value))
 					match = false;
 			}
 			else if (name == "TextureUpscale") {

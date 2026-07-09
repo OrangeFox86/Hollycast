@@ -1,5 +1,6 @@
 /*
 	This file is part of Flycast.
+	Portions Copyright 2026 The Hollycast Authors
 
     Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -535,9 +536,11 @@ bool BaseTextureCacheData::Update()
 	PixelBuffer<u8> pb8;
 
 	// Figure out if we really need to use a 32-bit pixel buffer
+	const int maxFilteredTextureSize = config::MaxFilteredTextureSize.get();
 	bool textureUpscaling = config::TextureUpscale > 1
-			// Don't process textures that are too big
-			&& (int)(width * height) <= config::MaxFilteredTextureSize * config::MaxFilteredTextureSize
+			// Bucket by texture width so 8x16 sprites match 8x8, while 16x8 sprites match 16x16.
+			&& maxFilteredTextureSize > 0
+			&& (maxFilteredTextureSize >= 1024 || width <= (u32)maxFilteredTextureSize)
 			// Don't process YUV textures
 			&& tcw.PixelFmt != PixelYUV;
 	bool need_32bit_buffer = true;

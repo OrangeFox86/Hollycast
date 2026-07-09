@@ -1,5 +1,6 @@
 /*
     This file is part of Flycast.
+    Portions Copyright 2026 The Hollycast Authors
 
     Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -557,13 +558,18 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       CORE_OPTION_NAME "_texupscale_max_filtered_texture_size",
       "Texture Upscaling Max. Filtered Size",
       NULL,
-      "Select a maximum size value for a texture to be upscaled, if the texture size is higher than the selected value then it will not be upscaled.",
+      "Select the largest filtered texture bucket. Buckets use texture width, so 8x8 also includes 8x16 and 8x32, while 16x16 includes 16x8. 1024x1024+ includes larger texture-pack assets.",
       NULL,
       "video",
       {
-         { "256",  NULL },
-         { "512",  NULL },
-         { "1024", NULL },
+         { "8",    "8x8" },
+         { "16",   "16x16" },
+         { "32",   "32x32" },
+         { "64",   "64x64" },
+         { "128",  "128x128" },
+         { "256",  "256x256" },
+         { "512",  "512x512" },
+         { "1024", "1024x1024+" },
          { NULL, NULL },
       },
       "256",

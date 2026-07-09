@@ -2,6 +2,7 @@
  *  Created on: Oct 3, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -104,8 +105,18 @@ public:
 	vk::Sampler GetSampler(const PolyParam& poly, bool punchThrough, bool texture1 = false)
 	{
 		TSP tsp = texture1 ? poly.tsp1 : poly.tsp;
-		if (poly.texture != nullptr && poly.texture->gpuPalette)
+		BaseTextureCacheData *texture = texture1 ? poly.texture1 : poly.texture;
+		if (texture != nullptr && texture->gpuPalette)
 			tsp.FilterMode = 0;
+		else if (texture != nullptr)
+		{
+			int sampleTextureFilter = config::SampleTextureFilter.get();
+			int maxFilteredTextureSize = config::MaxFilteredTextureSize.get();
+			if (sampleTextureFilter > 0 && sampleTextureFilter <= 18
+					&& maxFilteredTextureSize > 0
+					&& (maxFilteredTextureSize >= 1024 || texture->width <= (u32)maxFilteredTextureSize))
+				tsp.FilterMode = 0;
+		}
 		else if (config::TextureFiltering == 1)
 			tsp.FilterMode = 0;
 		else if (config::TextureFiltering == 2)
@@ -115,7 +126,7 @@ public:
 
 	vk::Sampler GetSampler(TSP tsp, bool punchThrough = false)
 	{
-		const u32 samplerHash = (tsp.full & TSP_Mask) | punchThrough;	// MipMapD, FilterMode, ClampU, ClampV, FlipU, FlipV
+		const u32 samplerHash = (tsp.full & TSP_Mask) | (punchThrough ? 1u : 0u);	// MipMapD, FilterMode, ClampU, ClampV, FlipU, FlipV
 		const auto& it = samplers.find(samplerHash);
 		if (it != samplers.end())
 			return it->second.get();
