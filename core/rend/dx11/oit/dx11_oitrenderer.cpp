@@ -1,6 +1,5 @@
 /*
 	Copyright 2021 flyinghead
-	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -167,16 +166,6 @@ struct DX11OITRenderer : public DX11Renderer
 		ComPtr<ID3D11VertexShader> vertexShader = shaders.getVertexShader(gp->pcw.Gouraud, gp->isNaomi2(), false, pass != DX11OITShaders::Depth);
 		deviceContext->VSSetShader(vertexShader, nullptr, 0);
 
-		int sampleTextureFilter = gp->pcw.Texture ? config::SampleTextureFilter.get() : 0;
-		if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
-			sampleTextureFilter = 0;
-		int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
-		if (maxFilteredTextureSize <= 0)
-		{
-			sampleTextureFilter = 0;
-			maxFilteredTextureSize = 0;
-		}
-
 		PixelPolyConstants constants;
 		if (gp->pcw.Texture && gp->tsp.FilterMode > 1 && Type != ListType_Punch_Through && gp->tcw.MipMapped == 1)
 		{
@@ -222,9 +211,7 @@ struct DX11OITRenderer : public DX11Renderer
 					useTexture,
 					clipmode == TileClipping::Inside,
 					two_volumes_mode,
-					pass,
-					useTexture ? sampleTextureFilter : 0,
-					useTexture ? maxFilteredTextureSize : 0);
+					pass);
 		}
 		else
 		{
@@ -247,9 +234,7 @@ struct DX11OITRenderer : public DX11Renderer
 					Type == ListType_Punch_Through,
 					clipmode == TileClipping::Inside,
 					two_volumes_mode,
-					pass,
-					useTexture ? sampleTextureFilter : 0,
-					useTexture ? maxFilteredTextureSize : 0);
+					pass);
 
 		}
 		deviceContext->PSSetShader(pixelShader, nullptr, 0);
@@ -313,9 +298,6 @@ struct DX11OITRenderer : public DX11Renderer
 				TSP tsp = i == 0 ? gp->tsp : gp->tsp1;
 				bool linearFiltering;
 				if (gpuPalette != 0)
-					linearFiltering = false;
-				else if (sampleTextureFilter != 0
-						&& (maxFilteredTextureSize >= 1024 || texture->width <= (u32)maxFilteredTextureSize))
 					linearFiltering = false;
 				else if (config::TextureFiltering == 0)
 					linearFiltering = tsp.FilterMode != 0;

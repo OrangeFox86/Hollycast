@@ -1,6 +1,5 @@
 /*
 	Copyright 2018 flyinghead
-	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -126,8 +125,6 @@ struct gl4PipelineShader
 	bool pp_BumpMap;
 	bool fog_clamping;
 	int palette;
-	int sampleTextureFilter;
-	int maxFilteredTextureSize;
 	bool naomi2;
 	bool divPosZ;
 };
