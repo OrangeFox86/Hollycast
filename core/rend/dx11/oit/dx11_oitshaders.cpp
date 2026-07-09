@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -19,8 +20,10 @@
 #include "dx11_oitshaders.h"
 #include "../dx11context.h"
 #include "../dx11_naomi2.h"
+#include <algorithm>
+#include <cstdio>
 
-extern const char * const PixelShaderCommon;
+extern const std::string PixelShaderCommon;
 
 const char * const VertexShader = R"(
 #if pp_Gouraud == 1
@@ -405,15 +408,23 @@ PSO main(in VertexIn inpix)
 		float4 texcol;
 		#if pp_TwoVolumes == 1
 			if (area1)
+			#if pp_SampleTextureFilter != 0
+				texcol = filteredTextureSample(texture1, sampler1, uv);
+			#else
 				texcol = texture1.Sample(sampler1, uv);
+			#endif
 			else
 		#endif
+		#if pp_SampleTextureFilter != 0
+				texcol = filteredTextureSample(texture0, sampler0, uv);
+		#else
 		#if pp_Palette == 0
 				texcol = texture0.Sample(sampler0, uv);
 		#elif pp_Palette == 1
 				texcol = palettePixel(texture0, sampler0, uv);
 		#else
 				texcol = palettePixelBilinear(texture0, sampler0, uv);
+		#endif
 		#endif
 		#if pp_BumpMap == 1
 			float s = PI / 2.0f * (texcol.a * 15.0f * 16.0f + texcol.r * 15.0f) / 255.0f;
@@ -750,7 +761,7 @@ struct OITIncludeManager : public ID3DInclude
 		if (!strcmp(pFileName, "oit_header.hlsl"))
 			src = OITShaderHeader;
 		else if (!strcmp(pFileName, "pixel_common.hlsl"))
-			src = PixelShaderCommon;
+			src = PixelShaderCommon.c_str();
 		if (src != nullptr)
 		{
 			*ppData = src;
@@ -799,7 +810,9 @@ enum PixelMacroEnum {
 	MacroPalette,
 	MacroAlphaTest,
 	MacroClipInside,
-	MacroPass
+	MacroPass,
+	MacroSampleTextureFilter,
+	MacroMaxFilteredTextureSize,
 };
 
 static D3D_SHADER_MACRO PixelMacros[]
@@ -819,14 +832,18 @@ static D3D_SHADER_MACRO PixelMacros[]
 	{ "cp_AlphaTest", "0" },
 	{ "pp_ClipInside", "0" },
 	{ "PASS", "0" },
+	{ "pp_SampleTextureFilter", "0" },
+	{ "pp_MaxFilteredTextureSize", "0" },
 	{ nullptr, nullptr }
 };
 
 const ComPtr<ID3D11PixelShader>& DX11OITShaders::getShader(bool pp_Texture, bool pp_UseAlpha, bool pp_IgnoreTexA, u32 pp_ShadInstr,
 		bool pp_Offset, u32 pp_FogCtrl, bool pp_BumpMap, bool fog_clamping,
-		int palette, bool gouraud, bool alphaTest, bool clipInside, bool twoVolumes, Pass pass)
+		int palette, bool gouraud, bool alphaTest, bool clipInside, bool twoVolumes, Pass pass,
+		int sampleTextureFilter, int maxFilteredTextureSize)
 {
 	bool divPosZ = !settings.platform.isNaomi2() && config::NativeDepthInterpolation;
+	const u32 maxFilteredTextureBucket = maxFilteredTextureSize >= 1024 ? 8 : std::min<int>(maxFilteredTextureSize / 8, 7);
 	const u32 hash = (int)pp_Texture
 			| ((int)pp_UseAlpha << 1)
 			| ((int)pp_IgnoreTexA << 2)
@@ -841,13 +858,20 @@ const ComPtr<ID3D11PixelShader>& DX11OITShaders::getShader(bool pp_Texture, bool
 			| ((int)clipInside << 14)
 			| ((int)twoVolumes << 15)
 			| ((int)pass << 16)
-			| ((int)divPosZ << 18);
+			| ((int)divPosZ << 18)
+			| (sampleTextureFilter << 19)
+			| (maxFilteredTextureBucket << 24);
 	auto& shader = shaders[hash];
 	if (shader == nullptr)
 	{
 		verify(pp_ShadInstr < std::size(MacroValues));
 		verify(pp_FogCtrl < std::size(MacroValues));
 		verify(pass < (int)std::size(MacroValues));
+		verify(sampleTextureFilter >= 0 && sampleTextureFilter <= 18);
+		char sampleFilterMacro[4];
+		char maxFilteredTextureMacro[8];
+		snprintf(sampleFilterMacro, sizeof(sampleFilterMacro), "%d", sampleTextureFilter);
+		snprintf(maxFilteredTextureMacro, sizeof(maxFilteredTextureMacro), "%d", maxFilteredTextureSize);
 		PixelMacros[MacroGouraud].Definition = MacroValues[gouraud];
 		PixelMacros[MacroTexture].Definition = MacroValues[pp_Texture];
 		PixelMacros[MacroUseAlpha].Definition = MacroValues[pp_UseAlpha];
@@ -863,6 +887,8 @@ const ComPtr<ID3D11PixelShader>& DX11OITShaders::getShader(bool pp_Texture, bool
 		PixelMacros[MacroTwoVolumes].Definition = MacroValues[twoVolumes];
 		PixelMacros[MacroDivPosZ].Definition = MacroValues[divPosZ];
 		PixelMacros[MacroPass].Definition = MacroValues[pass];
+		PixelMacros[MacroSampleTextureFilter].Definition = sampleFilterMacro;
+		PixelMacros[MacroMaxFilteredTextureSize].Definition = maxFilteredTextureMacro;
 
 		shader = compilePS(PixelShader, "main", PixelMacros);
 		verify(shader != nullptr);

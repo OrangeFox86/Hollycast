@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #pragma once
 #include "hw/pvr/ta_structs.h"
 #include "hw/pvr/ta_ctx.h"
@@ -115,6 +116,8 @@ struct PipelineShader
 	bool fog_clamping;
 	bool trilinear;
 	int palette;	// 1 if nearest, 2 if bilinear
+	int sampleTextureFilter;
+	int maxFilteredTextureSize;
 	bool naomi2;
 	bool divPosZ;
 	bool dithering;
@@ -388,7 +391,7 @@ void writeFramebufferToVRAM();
 PipelineShader *GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 		bool pp_Texture, bool pp_UseAlpha, bool pp_IgnoreTexA, u32 pp_ShadInstr, bool pp_Offset,
 		u32 pp_FogCtrl, bool pp_Gouraud, bool pp_BumpMap, bool fog_clamping, bool trilinear,
-		int palette, bool naomi2, bool dithering);
+		int palette, int sampleTextureFilter, int maxFilteredTextureSize, bool naomi2, bool dithering);
 
 GLuint gl_CompileShader(const char* shader, GLuint type);
 GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader);

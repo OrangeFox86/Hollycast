@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
@@ -250,6 +251,348 @@ lowp vec4 palettePixelBilinear(highp vec3 coords)
 
 #endif
 
+#if pp_Texture == 1 && pp_SampleTextureFilter != 0 && TARGET_GL != GLES2 && TARGET_GL != GL2
+
+highp vec2 projectTextureCoords(highp vec3 coords)
+{
+#if DIV_POS_Z == 0
+	return coords.xy / coords.z;
+#else
+	return coords.xy;
+#endif
+}
+
+lowp vec4 sampleSourceTexel(highp vec2 uv)
+{
+#if pp_Palette == 0
+	return texture(tex, uv);
+#else
+	return getPaletteEntry(texture(tex, uv).FOG_CHANNEL);
+#endif
+}
+
+lowp vec4 legacyTextureSample(highp vec3 coords)
+{
+#if pp_Palette == 0
+	#if DIV_POS_Z == 1
+		return texture(tex, coords.xy);
+	#else
+		return textureProj(tex, coords);
+	#endif
+#elif pp_Palette == 1
+	return palettePixel(coords);
+#else
+	return palettePixelBilinear(coords);
+#endif
+}
+
+bool sampleTextureFilterEligible()
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	// Match the xBRZ width buckets: 8x16 matches 8x8, while 16x8 matches 16x16.
+	return pp_MaxFilteredTextureSize >= 1024 || sourceTexSize.x <= float(pp_MaxFilteredTextureSize);
+}
+
+highp float jincDistance(highp vec2 a, highp vec2 b)
+{
+	highp vec2 v = b - a;
+	return sqrt(dot(v, v));
+}
+
+highp vec4 jincResampler(highp vec4 x)
+{
+	const highp float wa = 1.382300768;
+	const highp float wb = 2.576105976;
+	const highp float wawb = wa * wb;
+	highp vec4 a = sin(x * wa) * sin(x * wb) / (x * x);
+	bvec4 zero = equal(x, vec4(0.0));
+	return vec4(zero.x ? wawb : a.x, zero.y ? wawb : a.y, zero.z ? wawb : a.z, zero.w ? wawb : a.w);
+}
+
+lowp vec4 alphaWeightedBilinear(highp vec2 uv, bool noEdgeBlend)
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 pixCoord = uv * sourceTexSize - 0.5;
+	highp vec2 originPixCoord = floor(pixCoord);
+	highp vec2 sampleUV = (originPixCoord + 0.5) / sourceTexSize;
+	highp vec2 texelStep = vec2(1.0) / sourceTexSize;
+
+	lowp vec4 c00 = sampleSourceTexel(sampleUV);
+	lowp vec4 c10 = sampleSourceTexel(sampleUV + vec2(texelStep.x, 0.0));
+	lowp vec4 c01 = sampleSourceTexel(sampleUV + vec2(0.0, texelStep.y));
+	lowp vec4 c11 = sampleSourceTexel(sampleUV + texelStep);
+
+	highp vec2 weight = pixCoord - originPixCoord;
+	highp vec4 color = mix(mix(vec4(c00.rgb * c00.a, c00.a), vec4(c10.rgb * c10.a, c10.a), weight.x),
+			mix(vec4(c01.rgb * c01.a, c01.a), vec4(c11.rgb * c11.a, c11.a), weight.x), weight.y);
+
+	if (color.a > 0.0)
+		color.rgb /= color.a;
+	if (noEdgeBlend)
+		color.a = color.a >= 0.5 ? 1.0 : 0.0;
+	return color;
+}
+
+lowp vec4 jinc2Sample(highp vec2 uv, bool noEdgeBlend)
+{
+	const highp float arStrength = 0.8;
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 pc = uv * sourceTexSize;
+	highp vec2 tc = floor(pc - vec2(0.5)) + vec2(0.5);
+	highp vec2 dx = vec2(1.0, 0.0);
+	highp vec2 dy = vec2(0.0, 1.0);
+
+	highp vec4 w0 = jincResampler(vec4(jincDistance(pc, tc - dx - dy), jincDistance(pc, tc - dy), jincDistance(pc, tc + dx - dy), jincDistance(pc, tc + dx * 2.0 - dy)));
+	highp vec4 w1 = jincResampler(vec4(jincDistance(pc, tc - dx), jincDistance(pc, tc), jincDistance(pc, tc + dx), jincDistance(pc, tc + dx * 2.0)));
+	highp vec4 w2 = jincResampler(vec4(jincDistance(pc, tc - dx + dy), jincDistance(pc, tc + dy), jincDistance(pc, tc + dx + dy), jincDistance(pc, tc + dx * 2.0 + dy)));
+	highp vec4 w3 = jincResampler(vec4(jincDistance(pc, tc - dx + dy * 2.0), jincDistance(pc, tc + dy * 2.0), jincDistance(pc, tc + dx + dy * 2.0), jincDistance(pc, tc + dx * 2.0 + dy * 2.0)));
+
+	highp vec2 baseUV = tc / sourceTexSize;
+	dx /= sourceTexSize;
+	dy /= sourceTexSize;
+
+	highp vec4 c00 = sampleSourceTexel(baseUV - dx - dy);
+	highp vec4 c10 = sampleSourceTexel(baseUV - dy);
+	highp vec4 c20 = sampleSourceTexel(baseUV + dx - dy);
+	highp vec4 c30 = sampleSourceTexel(baseUV + dx * 2.0 - dy);
+	highp vec4 c01 = sampleSourceTexel(baseUV - dx);
+	highp vec4 c11 = sampleSourceTexel(baseUV);
+	highp vec4 c21 = sampleSourceTexel(baseUV + dx);
+	highp vec4 c31 = sampleSourceTexel(baseUV + dx * 2.0);
+	highp vec4 c02 = sampleSourceTexel(baseUV - dx + dy);
+	highp vec4 c12 = sampleSourceTexel(baseUV + dy);
+	highp vec4 c22 = sampleSourceTexel(baseUV + dx + dy);
+	highp vec4 c32 = sampleSourceTexel(baseUV + dx * 2.0 + dy);
+	highp vec4 c03 = sampleSourceTexel(baseUV - dx + dy * 2.0);
+	highp vec4 c13 = sampleSourceTexel(baseUV + dy * 2.0);
+	highp vec4 c23 = sampleSourceTexel(baseUV + dx + dy * 2.0);
+	highp vec4 c33 = sampleSourceTexel(baseUV + dx * 2.0 + dy * 2.0);
+
+	c00.rgb *= c00.a; c10.rgb *= c10.a; c20.rgb *= c20.a; c30.rgb *= c30.a;
+	c01.rgb *= c01.a; c11.rgb *= c11.a; c21.rgb *= c21.a; c31.rgb *= c31.a;
+	c02.rgb *= c02.a; c12.rgb *= c12.a; c22.rgb *= c22.a; c32.rgb *= c32.a;
+	c03.rgb *= c03.a; c13.rgb *= c13.a; c23.rgb *= c23.a; c33.rgb *= c33.a;
+
+	highp float wsum = max(dot(w0, vec4(1.0)) + dot(w1, vec4(1.0)) + dot(w2, vec4(1.0)) + dot(w3, vec4(1.0)), 0.000001);
+	highp vec4 color = vec4(
+		dot(w0, vec4(c00.r, c10.r, c20.r, c30.r)) + dot(w1, vec4(c01.r, c11.r, c21.r, c31.r)) + dot(w2, vec4(c02.r, c12.r, c22.r, c32.r)) + dot(w3, vec4(c03.r, c13.r, c23.r, c33.r)),
+		dot(w0, vec4(c00.g, c10.g, c20.g, c30.g)) + dot(w1, vec4(c01.g, c11.g, c21.g, c31.g)) + dot(w2, vec4(c02.g, c12.g, c22.g, c32.g)) + dot(w3, vec4(c03.g, c13.g, c23.g, c33.g)),
+		dot(w0, vec4(c00.b, c10.b, c20.b, c30.b)) + dot(w1, vec4(c01.b, c11.b, c21.b, c31.b)) + dot(w2, vec4(c02.b, c12.b, c22.b, c32.b)) + dot(w3, vec4(c03.b, c13.b, c23.b, c33.b)),
+		dot(w0, vec4(c00.a, c10.a, c20.a, c30.a)) + dot(w1, vec4(c01.a, c11.a, c21.a, c31.a)) + dot(w2, vec4(c02.a, c12.a, c22.a, c32.a)) + dot(w3, vec4(c03.a, c13.a, c23.a, c33.a))) / wsum;
+
+	color = mix(color, clamp(color, min(min(c11, c21), min(c12, c22)), max(max(c11, c21), max(c12, c22))), arStrength);
+	if (color.a > 0.0)
+		color.rgb /= color.a;
+	if (noEdgeBlend)
+		color.a = color.a >= 0.5 ? 1.0 : 0.0;
+	return color;
+}
+
+bool colorEq(lowp vec4 a, lowp vec4 b) { return distance(a, b) < 0.001; }
+bool mmpxAllEq2(lowp vec4 value, lowp vec4 a, lowp vec4 b) { return colorEq(value, a) && colorEq(value, b); }
+bool mmpxAllEq3(lowp vec4 value, lowp vec4 a, lowp vec4 b, lowp vec4 c) { return colorEq(value, a) && colorEq(value, b) && colorEq(value, c); }
+bool mmpxAllEq4(lowp vec4 value, lowp vec4 a, lowp vec4 b, lowp vec4 c, lowp vec4 d) { return colorEq(value, a) && colorEq(value, b) && colorEq(value, c) && colorEq(value, d); }
+bool mmpxAnyEq3(lowp vec4 value, lowp vec4 a, lowp vec4 b, lowp vec4 c) { return colorEq(value, a) || colorEq(value, b) || colorEq(value, c); }
+bool mmpxNoneEq4(lowp vec4 value, lowp vec4 a, lowp vec4 b, lowp vec4 c, lowp vec4 d) { return !colorEq(value, a) && !colorEq(value, b) && !colorEq(value, c) && !colorEq(value, d); }
+highp float mmpxLuma(lowp vec4 color) { return dot(color.rgb, vec3(255.0)) * (1.0 - color.a); }
+lowp vec4 mmpxResultColor(lowp vec4 result, lowp vec4 center) { return pp_SampleTextureFilter == 6 && !colorEq(result, center) ? mix(result, center, 0.25) : result; }
+
+lowp vec4 mmpxSample(highp vec2 uv)
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 bcoords = floor(uv * sourceTexSize);
+	highp vec2 baseUV = (bcoords + 0.5) / sourceTexSize;
+	highp vec2 invTexSize = vec2(1.0) / sourceTexSize;
+
+	// MMPX is a MIT-licensed style-preserving pixel-art magnifier by Morgan McGuire and Mara Gagiu.
+	lowp vec4 A = sampleSourceTexel(baseUV + vec2(-1.0, -1.0) * invTexSize);
+	lowp vec4 B = sampleSourceTexel(baseUV + vec2( 0.0, -1.0) * invTexSize);
+	lowp vec4 C = sampleSourceTexel(baseUV + vec2( 1.0, -1.0) * invTexSize);
+	lowp vec4 D = sampleSourceTexel(baseUV + vec2(-1.0,  0.0) * invTexSize);
+	lowp vec4 E = sampleSourceTexel(baseUV);
+	lowp vec4 F = sampleSourceTexel(baseUV + vec2( 1.0,  0.0) * invTexSize);
+	lowp vec4 G = sampleSourceTexel(baseUV + vec2(-1.0,  1.0) * invTexSize);
+	lowp vec4 H = sampleSourceTexel(baseUV + vec2( 0.0,  1.0) * invTexSize);
+	lowp vec4 I = sampleSourceTexel(baseUV + vec2( 1.0,  1.0) * invTexSize);
+	lowp vec4 J = E, K = E, L = E, M = E;
+
+	if (!mmpxAllEq4(E, A, B, C, D) || !mmpxAllEq4(E, F, G, H, I))
+	{
+		lowp vec4 P = sampleSourceTexel(baseUV + vec2( 0.0, -2.0) * invTexSize);
+		lowp vec4 Q = sampleSourceTexel(baseUV + vec2(-2.0,  0.0) * invTexSize);
+		lowp vec4 R = sampleSourceTexel(baseUV + vec2( 2.0,  0.0) * invTexSize);
+		lowp vec4 S = sampleSourceTexel(baseUV + vec2( 0.0,  2.0) * invTexSize);
+		highp float Bl = mmpxLuma(B), Dl = mmpxLuma(D), El = mmpxLuma(E), Fl = mmpxLuma(F), Hl = mmpxLuma(H);
+
+		if ((colorEq(D, B) && !colorEq(D, H) && !colorEq(D, F)) && (El >= Dl || colorEq(E, A)) && mmpxAnyEq3(E, A, C, G) && ((El < Dl) || !colorEq(A, D) || !colorEq(E, P) || !colorEq(E, Q))) J = D;
+		if ((colorEq(B, F) && !colorEq(B, D) && !colorEq(B, H)) && (El >= Bl || colorEq(E, C)) && mmpxAnyEq3(E, A, C, I) && ((El < Bl) || !colorEq(C, B) || !colorEq(E, P) || !colorEq(E, R))) K = B;
+		if ((colorEq(H, D) && !colorEq(H, F) && !colorEq(H, B)) && (El >= Hl || colorEq(E, G)) && mmpxAnyEq3(E, A, G, I) && ((El < Hl) || !colorEq(G, H) || !colorEq(E, S) || !colorEq(E, Q))) L = H;
+		if ((colorEq(F, H) && !colorEq(F, B) && !colorEq(F, D)) && (El >= Fl || colorEq(E, I)) && mmpxAnyEq3(E, C, G, I) && ((El < Fl) || !colorEq(I, H) || !colorEq(E, R) || !colorEq(E, S))) M = F;
+
+		if (pp_SampleTextureFilter == 7)
+		{
+			if ((!colorEq(E, F) && mmpxAllEq4(E, C, I, D, Q) && mmpxAllEq2(F, B, H)) && !colorEq(F, sampleSourceTexel(baseUV + vec2( 3.0,  0.0) * invTexSize))) K = M = F;
+			if ((!colorEq(E, D) && mmpxAllEq4(E, A, G, F, R) && mmpxAllEq2(D, B, H)) && !colorEq(D, sampleSourceTexel(baseUV + vec2(-3.0,  0.0) * invTexSize))) J = L = D;
+			if ((!colorEq(E, H) && mmpxAllEq4(E, G, I, B, P) && mmpxAllEq2(H, D, F)) && !colorEq(H, sampleSourceTexel(baseUV + vec2( 0.0,  3.0) * invTexSize))) L = M = H;
+			if ((!colorEq(E, B) && mmpxAllEq4(E, A, C, H, S) && mmpxAllEq2(B, D, F)) && !colorEq(B, sampleSourceTexel(baseUV + vec2( 0.0, -3.0) * invTexSize))) J = K = B;
+			if (Bl < El && mmpxAllEq4(E, G, H, I, S) && mmpxNoneEq4(E, A, D, C, F)) J = K = B;
+			if (Hl < El && mmpxAllEq4(E, A, B, C, P) && mmpxNoneEq4(E, D, G, I, F)) L = M = H;
+			if (Fl < El && mmpxAllEq4(E, A, D, G, Q) && mmpxNoneEq4(E, B, C, I, H)) K = M = F;
+			if (Dl < El && mmpxAllEq4(E, C, F, I, R) && mmpxNoneEq4(E, B, A, G, H)) J = L = D;
+		}
+	}
+
+	highp vec2 fpart = fract(uv * sourceTexSize);
+	lowp vec4 result = (fpart.x < 0.5) ? ((fpart.y < 0.5) ? J : L) : ((fpart.y < 0.5) ? K : M);
+	return mmpxResultColor(result, E);
+}
+
+)" R"(
+
+lowp vec4 clampToSourceNeighborhood(highp vec2 uv, lowp vec4 color)
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 base = floor(uv * sourceTexSize);
+	highp vec2 invTexSize = vec2(1.0) / sourceTexSize;
+	lowp vec4 minColor = vec4(1.0);
+	lowp vec4 maxColor = vec4(0.0);
+
+	for (int y = -1; y <= 1; y++)
+		for (int x = -1; x <= 1; x++)
+		{
+			lowp vec4 sampleColor = sampleSourceTexel((base + vec2(x, y) + 0.5) * invTexSize);
+			minColor = min(minColor, sampleColor);
+			maxColor = max(maxColor, sampleColor);
+		}
+	return clamp(color, minColor, maxColor);
+}
+
+lowp vec4 sharpenAgainstCenter(highp vec2 uv, lowp vec4 color, highp float strength)
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 centerUV = (floor(uv * sourceTexSize) + 0.5) / sourceTexSize;
+	lowp vec4 center = sampleSourceTexel(centerUV);
+	color.rgb += (color.rgb - center.rgb) * strength;
+	return color;
+}
+
+lowp vec4 jinc2AntiRingSample(highp vec2 uv, highp float sharpness)
+{
+	lowp vec4 color = jinc2Sample(uv, false);
+	if (sharpness > 0.0)
+		color = sharpenAgainstCenter(uv, color, sharpness);
+	return clampToSourceNeighborhood(uv, color);
+}
+
+highp float sincWeight(highp float x)
+{
+	x = abs(x);
+	if (x < 0.00001)
+		return 1.0;
+	highp float pix = PI * x;
+	return sin(pix) / pix;
+}
+
+highp float lanczosWeight(highp float x, highp float radius)
+{
+	x = abs(x);
+	if (x >= radius)
+		return 0.0;
+	return sincWeight(x) * sincWeight(x / radius);
+}
+
+highp float spline36Weight(highp float x)
+{
+	x = abs(x);
+	if (x < 1.0)
+		return ((13.0 / 11.0 * x - 453.0 / 209.0) * x) * x + 1.0;
+	if (x < 2.0)
+		return ((-6.0 / 11.0 * x + 270.0 / 209.0) * x - 156.0 / 209.0) * x - 3.0 / 209.0;
+	if (x < 3.0)
+		return ((1.0 / 11.0 * x - 45.0 / 209.0) * x + 26.0 / 209.0) * x - 1.0 / 209.0;
+	return 0.0;
+}
+
+highp float cubicWeight(highp float x, highp float b, highp float c)
+{
+	x = abs(x);
+	if (x < 1.0)
+		return ((12.0 - 9.0 * b - 6.0 * c) * x * x * x + (-18.0 + 12.0 * b + 6.0 * c) * x * x + (6.0 - 2.0 * b)) / 6.0;
+	if (x < 2.0)
+		return ((-b - 6.0 * c) * x * x * x + (6.0 * b + 30.0 * c) * x * x + (-12.0 * b - 48.0 * c) * x + (8.0 * b + 24.0 * c)) / 6.0;
+	return 0.0;
+}
+
+highp float reconstructionWeight(highp float x, int filterMode)
+{
+	if (filterMode == 0) return lanczosWeight(x, 2.0);
+	if (filterMode == 1) return lanczosWeight(x, 3.0);
+	if (filterMode == 2) return spline36Weight(x);
+	if (filterMode == 3) return cubicWeight(x, 0.378215755, 0.310892122);
+	if (filterMode == 4) return cubicWeight(x, 0.262014512, 0.368992744);
+	if (filterMode == 5) return cubicWeight(x, 0.0, 0.5);
+	return cubicWeight(x, 1.0 / 3.0, 1.0 / 3.0);
+}
+
+lowp vec4 separableReconstructionSample(highp vec2 uv, int filterMode, bool antiRing)
+{
+	highp vec2 sourceTexSize = vec2(textureSize(tex, 0));
+	highp vec2 pc = uv * sourceTexSize - 0.5;
+	highp vec2 base = floor(pc);
+	highp vec2 f = pc - base;
+	highp vec2 invTexSize = vec2(1.0) / sourceTexSize;
+	highp vec4 color = vec4(0.0);
+	highp float weightSum = 0.0;
+
+	for (int y = -2; y <= 3; y++)
+	{
+		highp float wy = reconstructionWeight(float(y) - f.y, filterMode);
+		for (int x = -2; x <= 3; x++)
+		{
+			highp float weight = reconstructionWeight(float(x) - f.x, filterMode) * wy;
+			lowp vec4 sampleColor = sampleSourceTexel((base + vec2(x, y) + 0.5) * invTexSize);
+			sampleColor.rgb *= sampleColor.a;
+			color += sampleColor * weight;
+			weightSum += weight;
+		}
+	}
+
+	if (abs(weightSum) > 0.00001)
+		color /= weightSum;
+	if (color.a > 0.0)
+		color.rgb /= color.a;
+	color = clamp(color, 0.0, 1.0);
+	if (antiRing)
+		color = clampToSourceNeighborhood(uv, color);
+	return color;
+}
+
+lowp vec4 filteredTextureSample(highp vec3 coords)
+{
+	if (!sampleTextureFilterEligible())
+		return legacyTextureSample(coords);
+
+	highp vec2 uv = projectTextureCoords(coords);
+	if (pp_SampleTextureFilter == 1) return alphaWeightedBilinear(uv, false);
+	if (pp_SampleTextureFilter == 2) return alphaWeightedBilinear(uv, true);
+	if (pp_SampleTextureFilter == 3) return jinc2Sample(uv, false);
+	if (pp_SampleTextureFilter == 4) return jinc2Sample(uv, true);
+	if (pp_SampleTextureFilter == 5 || pp_SampleTextureFilter == 6 || pp_SampleTextureFilter == 7) return mmpxSample(uv);
+	if (pp_SampleTextureFilter == 8) return jinc2AntiRingSample(uv, 0.0);
+	if (pp_SampleTextureFilter == 9) return jinc2AntiRingSample(uv, 0.18);
+	if (pp_SampleTextureFilter == 10) return jinc2AntiRingSample(uv, 0.08);
+	if (pp_SampleTextureFilter == 11) return jinc2AntiRingSample(uv, 0.22);
+	if (pp_SampleTextureFilter == 12) return separableReconstructionSample(uv, 0, true);
+	if (pp_SampleTextureFilter == 13) return separableReconstructionSample(uv, 1, true);
+	if (pp_SampleTextureFilter == 14) return separableReconstructionSample(uv, 2, false);
+	if (pp_SampleTextureFilter == 15) return separableReconstructionSample(uv, 3, false);
+	if (pp_SampleTextureFilter == 16) return separableReconstructionSample(uv, 4, false);
+	if (pp_SampleTextureFilter == 17) return separableReconstructionSample(uv, 5, false);
+	return separableReconstructionSample(uv, 6, false);
+}
+
+#endif
+
 #if TARGET_GL == GLES2
 #define depth gl_FragCoord.w
 #else
@@ -279,7 +622,9 @@ void main()
 	#endif
 	#if pp_Texture==1
 	{
-		#if pp_Palette == 0
+		#if pp_SampleTextureFilter != 0 && TARGET_GL != GLES2 && TARGET_GL != GL2
+			lowp vec4 texcol = filteredTextureSample(vtx_uv);
+		#elif pp_Palette == 0
 		  #if TARGET_GL == GLES2 || TARGET_GL == GL2 || DIV_POS_Z == 1
 			lowp vec4 texcol = texture(tex, vtx_uv.xy);
 		  #else
@@ -713,7 +1058,7 @@ GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader)
 PipelineShader *GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 		bool pp_Texture, bool pp_UseAlpha, bool pp_IgnoreTexA, u32 pp_ShadInstr, bool pp_Offset,
 		u32 pp_FogCtrl, bool pp_Gouraud, bool pp_BumpMap, bool fog_clamping, bool trilinear,
-		int palette, bool naomi2, bool dithering)
+		int palette, int sampleTextureFilter, int maxFilteredTextureSize, bool naomi2, bool dithering)
 {
 	u32 rv=0;
 
@@ -730,6 +1075,11 @@ PipelineShader *GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 	rv <<= 1; rv |= fog_clamping;
 	rv <<= 1; rv |= trilinear;
 	rv <<= 2; rv |= palette;
+	rv <<= 5; rv |= sampleTextureFilter;
+	int maxFilteredTextureBucket = maxFilteredTextureSize >= 1024 ? 8 : maxFilteredTextureSize / 8;
+	if (maxFilteredTextureBucket > 7)
+		maxFilteredTextureBucket = 7;
+	rv <<= 4; rv |= maxFilteredTextureBucket;
 	rv <<= 1; rv |= naomi2;
 	rv <<= 1, rv |= !settings.platform.isNaomi2() && config::NativeDepthInterpolation;
 	rv <<= 1; rv |= dithering;
@@ -750,6 +1100,8 @@ PipelineShader *GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 		shader->fog_clamping = fog_clamping;
 		shader->trilinear = trilinear;
 		shader->palette = palette;
+		shader->sampleTextureFilter = sampleTextureFilter;
+		shader->maxFilteredTextureSize = maxFilteredTextureSize;
 		shader->naomi2 = naomi2;
 		shader->divPosZ = !settings.platform.isNaomi2() && config::NativeDepthInterpolation;
 		shader->dithering = dithering;
@@ -790,6 +1142,8 @@ public:
 		addConstant("FogClamping", s->fog_clamping);
 		addConstant("pp_TriLinear", s->trilinear);
 		addConstant("pp_Palette", s->palette);
+		addConstant("pp_SampleTextureFilter", s->sampleTextureFilter);
+		addConstant("pp_MaxFilteredTextureSize", s->maxFilteredTextureSize);
 		addConstant("DIV_POS_Z", s->divPosZ);
 		addConstant("DITHERING", s->dithering);
 
