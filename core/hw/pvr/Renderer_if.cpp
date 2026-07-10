@@ -211,9 +211,17 @@ private:
 			return;
 
 		int width, height;
+		int rawWidth, rawHeight;
+		getPvrFramebufferSize(taContext->rend, rawWidth, rawHeight);
 		getScaledFramebufferSize(taContext->rend, width, height);
 		taContext->rend.framebufferWidth = width;
 		taContext->rend.framebufferHeight = height;
+		#ifndef LIBRETRO
+		// Keep both values so the OSD can distinguish Dreamcast source timing
+		// from the actual scaled framebuffer allocated by the active renderer.
+		if (!taContext->rend.isRTT)
+			performance_overlay::recordRenderedResolution(rawWidth, rawHeight, width, height);
+		#endif
 		bool renderToScreen = !taContext->rend.isRTT && !config::EmulateFramebuffer;
 #ifdef LIBRETRO
 		if (renderToScreen)

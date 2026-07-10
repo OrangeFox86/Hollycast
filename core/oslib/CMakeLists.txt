@@ -19,6 +19,8 @@ if(NOT LIBRETRO)
             http_client.cpp
             http_client.h
             oslib.cpp
+            gpu_memory.cpp
+            gpu_memory.h
             process_memory.cpp
             process_memory.h)
 endif()

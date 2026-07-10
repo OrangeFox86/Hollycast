@@ -11,6 +11,7 @@
 #include "hw/pvr/spg.h"
 #include "imgui.h"
 #include "mainui.h"
+#include "oslib/gpu_memory.h"
 #include "oslib/process_memory.h"
 #include "rend/TexCache.h"
 #include "stdclass.h"
@@ -38,6 +39,10 @@ constexpr const char *Section = "rend";
 std::atomic<std::uint64_t> sh4WorkMicroseconds { 0 };
 std::atomic<std::uint64_t> pvrWorkMicroseconds { 0 };
 std::atomic<std::uint32_t> vblankCount { 0 };
+std::atomic<int> rawRenderWidth { 0 };
+std::atomic<int> rawRenderHeight { 0 };
+std::atomic<int> renderedWidth { 0 };
+std::atomic<int> renderedHeight { 0 };
 thread_local std::uint64_t lastSh4ThreadCpuTime = 0;
 
 struct Metrics {
@@ -50,6 +55,8 @@ struct Metrics {
 	float frameTimeMaximum = 0.f;
 	float textureUploadsPerSecond = 0.f;
 	std::uint64_t processResidentBytes = 0;
+	std::uint64_t gpuMemoryBytes = 0;
+	std::uint64_t gpuMemoryBudgetBytes = 0;
 	std::array<float, 120> frameTimes {};
 	std::size_t frameTimePosition = 0;
 	std::size_t frameTimeCount = 0;
@@ -59,6 +66,7 @@ struct Metrics {
 	u32 lastFrameCount = 0;
 	u64 lastTextureUploadCount = 0;
 	bool processMemoryValid = false;
+	bool gpuMemoryValid = false;
 };
 
 Metrics metrics;
@@ -76,6 +84,10 @@ void updateMetrics()
 		const process_memory::Stats memory = process_memory::queryCurrentProcess();
 		metrics.processResidentBytes = memory.residentBytes;
 		metrics.processMemoryValid = memory.valid;
+		const gpu_memory::Stats gpu = gpu_memory::queryCurrentProcess();
+		metrics.gpuMemoryBytes = gpu.usedBytes;
+		metrics.gpuMemoryBudgetBytes = gpu.budgetBytes;
+		metrics.gpuMemoryValid = gpu.valid;
 		metrics.lastMemorySampleTime = now;
 	}
 	if (metrics.lastSampleTime == 0)
@@ -119,17 +131,21 @@ std::string formatSpeed()
 
 std::string formatResolution()
 {
-	const int internalHeight = std::max(1, config::RenderResolution.get());
-	int internalWidth = static_cast<int>(std::round(640.f * internalHeight / 480.f));
-	if (config::Widescreen)
+	int width = renderedWidth.load(std::memory_order_relaxed);
+	int height = renderedHeight.load(std::memory_order_relaxed);
+	if (width <= 0 || height <= 0)
 	{
-		const float aspect = config::SuperWidescreen
-			? static_cast<float>(settings.display.width) / std::max(1, settings.display.height)
-			: 16.f / 9.f;
-		internalWidth = static_cast<int>(std::round(internalWidth * aspect / (4.f / 3.f)));
+		height = std::max(1, config::RenderResolution.get());
+		width = static_cast<int>(std::round(640.f * height / 480.f));
 	}
-	return "Resolution: " + std::to_string(internalWidth) + "x" + std::to_string(internalHeight)
-		+ " -> " + std::to_string(settings.display.width) + "x" + std::to_string(settings.display.height);
+	const int rawWidth = rawRenderWidth.load(std::memory_order_relaxed);
+	const int rawHeight = rawRenderHeight.load(std::memory_order_relaxed);
+	const std::string raw = rawWidth > 0 && rawHeight > 0
+		? std::to_string(rawWidth) + "x" + std::to_string(rawHeight)
+		: "unavailable";
+	return "Rendered: " + std::to_string(width) + "x" + std::to_string(height)
+		+ " | Raw: " + raw
+		+ " | Output: " + std::to_string(settings.display.width) + "x" + std::to_string(settings.display.height);
 }
 
 std::string formatGpuStatistics()
@@ -157,11 +173,15 @@ std::string formatBytes(std::uint64_t bytes)
 std::string formatRam()
 {
 	const std::string host = metrics.processMemoryValid ? formatBytes(metrics.processResidentBytes) : "unavailable";
-	return "Host RAM: " + host + " | DC: " + std::to_string(RAM_SIZE / 1_MB) + " MiB";
+	return "Host RAM (Working Set): " + host + " | DC: " + std::to_string(RAM_SIZE / 1_MB) + " MiB";
 }
 
 std::string formatVram()
 {
+	if (metrics.gpuMemoryValid)
+		return "GPU VRAM (App): " + formatBytes(metrics.gpuMemoryBytes) + " / " + formatBytes(metrics.gpuMemoryBudgetBytes)
+			+ " | Texture Est: " + formatBytes(getEstimatedTextureVramUsageBytes())
+			+ " | DC: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
 	return "Texture VRAM Est: " + formatBytes(getEstimatedTextureVramUsageBytes())
 		+ " | DC: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
 }
@@ -236,6 +256,14 @@ void sampleSh4Thread()
 void recordPvrWork(std::uint64_t microseconds)
 {
 	pvrWorkMicroseconds.fetch_add(microseconds, std::memory_order_relaxed);
+}
+
+void recordRenderedResolution(int rawWidth, int rawHeight, int renderedWidth, int renderedHeight)
+{
+	rawRenderWidth.store(rawWidth, std::memory_order_relaxed);
+	rawRenderHeight.store(rawHeight, std::memory_order_relaxed);
+	performance_overlay::renderedWidth.store(renderedWidth, std::memory_order_relaxed);
+	performance_overlay::renderedHeight.store(renderedHeight, std::memory_order_relaxed);
 }
 
 std::uint64_t currentThreadCpuTimeMicroseconds()
