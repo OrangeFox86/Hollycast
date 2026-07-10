@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+*/
 #include "Renderer_if.h"
 #include "spg.h"
 #include "rend/texconv.h"
@@ -11,7 +14,11 @@
 #include "hw/sh4/sh4_sched.h"
 #include "profiler/fc_profiler.h"
 #include "network/ggpo.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 
+#include <cstdint>
 #include <mutex>
 #include <deque>
 
@@ -195,6 +202,9 @@ private:
 	void render()
 	{
 		FC_PROFILE_SCOPE;
+#ifndef LIBRETRO
+		const std::uint64_t performanceStart = performance_overlay::currentThreadCpuTimeMicroseconds();
+#endif
 
 		TA_context *taContext = DequeueRender();
 		if (taContext == nullptr)
@@ -245,6 +255,10 @@ private:
 
 		//clear up & free data ..
 		FinishRender(taContext);
+#ifndef LIBRETRO
+		const std::uint64_t performanceEnd = performance_overlay::currentThreadCpuTimeMicroseconds();
+		performance_overlay::recordPvrWork(performanceEnd >= performanceStart ? performanceEnd - performanceStart : 0);
+#endif
 	}
 
 	void renderFramebuffer(const FramebufferInfo& config)

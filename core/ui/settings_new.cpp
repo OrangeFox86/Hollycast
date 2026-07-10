@@ -93,9 +93,14 @@ static void cfgSaveInt(const std::string& section, const std::string& key, int v
 	config::saveInt(section, key, value);
 }
 
+static int cfgLoadInt(const std::string& section, const std::string& key, int def)
+{
+	return config::loadInt(section, key, def);
+}
+
 static int getResourceMonitorMode()
 {
-	return config::loadInt("rend", "ResourceMonitorMode", 0);
+	return config::loadInt("rend", "ResourceMonitorMode", 2);
 }
 
 static void setResourceMonitorMode(int mode)
@@ -4342,6 +4347,131 @@ void renderVideoTab()
 				"Displays an on-screen frame rate counter.\n"
 				"Strongly recommended while tuning settings: aim for stable 30/60 FPS in real gameplay."
 			));
+
+		if (RenderCollapsingHeader("OverlaySection", ICON_FA_CHART_LINE, T("Overlay"), ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			const std::array<const char*, 3> overlayModeLabels { T("Off"), T("Minimal"), T("Full") };
+			int overlayModeSelection = std::clamp(getResourceMonitorMode(), 0, 2);
+			SettingsUI::PopupConfig overlayModeCfg {};
+			overlayModeCfg.type = SettingsUI::PopupType::Options;
+			overlayModeCfg.options.label = T("Overlay Mode");
+			overlayModeCfg.options.icon = ICON_FA_CHART_LINE;
+			overlayModeCfg.options.popupID = Tnop("ResourceMonitorModePopup");
+			overlayModeCfg.options.options = overlayModeLabels.data();
+			overlayModeCfg.options.optionCount = static_cast<int>(overlayModeLabels.size());
+			overlayModeCfg.options.currentValue = &overlayModeSelection;
+			overlayModeCfg.options.valueWidth = 220.0f;
+			overlayModeCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(overlayModeLabels.size()))
+					return false;
+				setResourceMonitorMode(selectedIndex);
+				return true;
+			};
+			RenderGeneralPopupSettingRow(
+				Tnop("ResourceMonitorMode"),
+				T("Choose the overlay density. Full uses the metric selections below."),
+				overlayModeCfg,
+				T("Overlay Mode\nMinimal shows CPU, GPU, and FPS. Full uses the individual metric selections below."));
+
+			const std::array<std::pair<const char*, const char*>, 11> overlayMetrics {
+				std::make_pair("OverlayShowFPS", T("Show FPS")),
+				std::make_pair("OverlayShowEmulationSpeed", T("Show Emulation Speed")),
+				std::make_pair("OverlayShowThreadingState", T("Show Threading State")),
+				std::make_pair("OverlayShowCpuUsage", T("Show SH4 CPU Work")),
+				std::make_pair("OverlayShowGpuUsage", T("Show PVR Renderer Work")),
+				std::make_pair("OverlayShowResolution", T("Show Resolution")),
+				std::make_pair("OverlayShowFrameTimes", T("Show Frame Times")),
+				std::make_pair("OverlayShowGpuStatistics", T("Show GPU Statistics")),
+				std::make_pair("OverlayShowLatencyStatistics", T("Show Latency Statistics")),
+				std::make_pair("OverlayShowVram", T("Show VRAM Capacity")),
+				std::make_pair("OverlayShowRam", T("Show RAM Capacity"))
+			};
+			ImGui::TextWrapped("%s", T("SH4 CPU Work measures the emulation thread. PVR Renderer Work measures CPU time spent by the renderer thread. These are not total device CPU/GPU utilization."));
+			ImGui::Columns(2, "OverlayMetrics", false);
+			for (size_t i = 0; i < overlayMetrics.size(); ++i)
+			{
+				bool enabled = cfgLoadBool("rend", overlayMetrics[i].first, true);
+				if (ImGui::Checkbox(overlayMetrics[i].second, &enabled))
+					cfgSaveBool("rend", overlayMetrics[i].first, enabled);
+				ImGui::NextColumn();
+			}
+			ImGui::Columns(1);
+
+			static int overlayTextSize = cfgLoadInt("rend", "OverlayTextSize", 18);
+			SettingsUI::PopupSliderConfig textSizeCfg {};
+			textSizeCfg.label = T("Text Size");
+			textSizeCfg.icon = ICON_FA_TEXT_HEIGHT;
+			textSizeCfg.popupID = Tnop("OverlayTextSizePopup");
+			textSizeCfg.description = T("Set the overlay text size.");
+			textSizeCfg.currentValue = &overlayTextSize;
+			textSizeCfg.minValue = 10;
+			textSizeCfg.maxValue = 48;
+			textSizeCfg.defaultValue = 18;
+			textSizeCfg.format = "%d px";
+			textSizeCfg.valueWidth = 220.0f;
+			textSizeCfg.sliderWidth = 320.0f;
+			textSizeCfg.onValueChange = [&]() { cfgSaveInt("rend", "OverlayTextSize", overlayTextSize); };
+			SettingsUI::PopupConfig textSizePopup {};
+			textSizePopup.type = SettingsUI::PopupType::Slider;
+			textSizePopup.slider = textSizeCfg;
+			RenderGeneralPopupSettingRow(Tnop("OverlayTextSizeSetting"), T("Choose the overlay font size."), textSizePopup,
+				T("Text Size\nControls the size of the overlay text."));
+
+			static int overlayTransparency = cfgLoadInt("rend", "OverlayTransparency", 85);
+			SettingsUI::PopupSliderConfig transparencyCfg {};
+			transparencyCfg.label = T("Transparency");
+			transparencyCfg.icon = ICON_FA_EYE;
+			transparencyCfg.popupID = Tnop("OverlayTransparencyPopup");
+			transparencyCfg.description = T("Set the overlay opacity.");
+			transparencyCfg.currentValue = &overlayTransparency;
+			transparencyCfg.minValue = 10;
+			transparencyCfg.maxValue = 100;
+			transparencyCfg.defaultValue = 85;
+			transparencyCfg.format = "%d%%";
+			transparencyCfg.valueWidth = 220.0f;
+			transparencyCfg.sliderWidth = 320.0f;
+			transparencyCfg.onValueChange = [&]() { cfgSaveInt("rend", "OverlayTransparency", overlayTransparency); };
+			SettingsUI::PopupConfig transparencyPopup {};
+			transparencyPopup.type = SettingsUI::PopupType::Slider;
+			transparencyPopup.slider = transparencyCfg;
+			RenderGeneralPopupSettingRow(Tnop("OverlayTransparencySetting"), T("Set the overlay opacity."), transparencyPopup,
+				T("Transparency\nControls the overlay text and background opacity."));
+
+			const std::array<const char*, 4> overlayCornerLabels { T("Top Left"), T("Top Right"), T("Bottom Left"), T("Bottom Right") };
+			int overlayCorner = std::clamp(config::loadInt("rend", "OverlayCorner", 1), 0, 3);
+			SettingsUI::PopupConfig cornerCfg {};
+			cornerCfg.type = SettingsUI::PopupType::Options;
+			cornerCfg.options.label = T("Screen Corner");
+			cornerCfg.options.icon = ICON_FA_LOCATION_DOT;
+			cornerCfg.options.popupID = Tnop("OverlayCornerPopup");
+			cornerCfg.options.options = overlayCornerLabels.data();
+			cornerCfg.options.optionCount = static_cast<int>(overlayCornerLabels.size());
+			cornerCfg.options.currentValue = &overlayCorner;
+			cornerCfg.options.valueWidth = 220.0f;
+			cornerCfg.options.onChange = [&](int selectedIndex) {
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(overlayCornerLabels.size()))
+					return false;
+				cfgSaveInt("rend", "OverlayCorner", selectedIndex);
+				return true;
+			};
+			RenderGeneralPopupSettingRow(Tnop("OverlayCornerSetting"), T("Choose where the overlay appears."), cornerCfg,
+				T("Screen Corner\nThe default is the top right corner."));
+
+			int packedColor = config::loadInt("rend", "OverlayColor", 0xFFFFFFFF);
+			float overlayColor[4] {
+				((packedColor >> 0) & 0xFF) / 255.0f,
+				((packedColor >> 8) & 0xFF) / 255.0f,
+				((packedColor >> 16) & 0xFF) / 255.0f,
+				((packedColor >> 24) & 0xFF) / 255.0f
+			};
+			if (ImGui::ColorEdit4(T("Text Color"), overlayColor))
+			{
+				cfgSaveInt("rend", "OverlayColor", static_cast<int>(std::round(overlayColor[0] * 255.f))
+					| (static_cast<int>(std::round(overlayColor[1] * 255.f)) << 8)
+					| (static_cast<int>(std::round(overlayColor[2] * 255.f)) << 16)
+					| (static_cast<int>(std::round(overlayColor[3] * 255.f)) << 24));
+			}
+		}
 	}
 
 #ifdef VIDEO_ROUTING
@@ -6718,43 +6848,6 @@ void renderAdvancedTab()
 	const std::string developerToolsHeader = std::string(T("Developer Tools")) + "##Section";
 	if (ImGui::CollapsingHeader(developerToolsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		const std::array<const char*, 3> monitorModeLabels {
-			T("Off"),
-			T("Minimal"),
-			T("Full")
-		};
-		int monitorModeSelection = getResourceMonitorMode();
-		if (monitorModeSelection < 0 || monitorModeSelection >= static_cast<int>(monitorModeLabels.size()))
-			monitorModeSelection = 0;
-
-		SettingsUI::PopupConfig monitorModeCfg {};
-		monitorModeCfg.type = SettingsUI::PopupType::Options;
-		monitorModeCfg.options.label = T("Overlay Mode");
-		monitorModeCfg.options.icon = ICON_FA_CHART_LINE;
-		monitorModeCfg.options.popupID = Tnop("ResourceMonitorModePopup");
-		monitorModeCfg.options.options = monitorModeLabels.data();
-		monitorModeCfg.options.optionCount = static_cast<int>(monitorModeLabels.size());
-		monitorModeCfg.options.currentValue = &monitorModeSelection;
-		monitorModeCfg.options.valueWidth = 220.0f;
-		monitorModeCfg.options.onChange = [&](int selectedIndex) {
-			if (selectedIndex < 0 || selectedIndex >= 3)
-				return false;
-			setResourceMonitorMode(selectedIndex);
-			return true;
-		};
-
-		RenderGeneralPopupSettingRow(
-			Tnop("ResourceMonitorMode"),
-			T("Real-time performance overlay updated once per second. Minimal: CPU/GPU/FPS. Full: CPU/GPU/frame time/FPS/VRAM/RAM."),
-			monitorModeCfg,
-			T(
-				"Resource Monitor Overlay\n"
-				"Displays a real-time performance overlay updated once per second.\n\n"
-				"Minimal shows CPU, GPU, and FPS.\n"
-				"Full also shows average frame time plus memory usage (VRAM/RAM).\n\n"
-				"Use this when tuning settings like Internal Resolution, Sorting, and Frame Skipping to keep performance stable."
-			));
-
 #ifdef USE_LUA
 		// Lua Scripting
 		ImGui::Text("%s", T("Lua Scripting"));

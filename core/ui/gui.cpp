@@ -58,6 +58,7 @@
 #include "gui_font.h"
 using namespace i18n;
 #include "gui_menu.h"
+#include "performance_overlay.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1749,7 +1750,7 @@ static float fps = -1;
 
 static std::string getFPSNotification()
 {
-	if (config::ShowFPS)
+	if (config::ShowFPS && performance_overlay::mode() == 0)
 	{
 		u64 now = getTimeMs();
 		if (now - LastFPSTime >= 1000) {
@@ -1794,6 +1795,8 @@ void gui_draw_osd()
 				dl->AddText(nullptr, uiLargeFontSize(), pos, col, &message.front(), &message.back() + 1, maxW);
 			}
 		}
+
+	performance_overlay::draw();
 
 	if (ggpo::active())
 	{

@@ -47,6 +47,7 @@
 #include <chrono>
 #ifndef LIBRETRO
 #include "ui/gui.h"
+#include "ui/performance_overlay.h"
 #endif
 #include "hw/sh4/sh4_interpreter.h"
 #include "hw/sh4/dyna/ngen.h"
@@ -1037,6 +1038,9 @@ void Emulator::start()
 		getSh4Executor()->Start();
 		threadResult = std::async(std::launch::async, [this] {
 				ThreadName _("Flycast-emu");
+#ifndef LIBRETRO
+				performance_overlay::resetSh4ThreadSample();
+#endif
 				InitAudio();
 
 				try {
@@ -1059,6 +1063,9 @@ void Emulator::start()
 	else
 	{
 		stopRequested = false;
+#ifndef LIBRETRO
+		performance_overlay::resetSh4ThreadSample();
+#endif
 		InitAudio();
 	}
 
@@ -1119,6 +1126,11 @@ bool Emulator::render()
 
 void Emulator::vblank()
 {
+#ifndef LIBRETRO
+	// Vblank runs on the SH4 execution thread in both threading modes, so it
+	// provides a live sample without waiting for the long-running CPU loop to exit.
+	performance_overlay::sampleSh4Thread();
+#endif
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());
 #ifndef LIBRETRO

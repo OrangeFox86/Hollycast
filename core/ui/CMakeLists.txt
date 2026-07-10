@@ -1,3 +1,5 @@
+# Portions Copyright 2026 The Hollycast Authors
+
 if(NOT LIBRETRO)
     target_sources(${PROJECT_NAME} PRIVATE
             game_scanner.cpp
@@ -18,6 +20,8 @@ if(NOT LIBRETRO)
             gui_util.h
             mainui.cpp
             mainui.h
+            performance_overlay.cpp
+            performance_overlay.h
             settings.cpp
             settings.h
             settings_about.cpp
