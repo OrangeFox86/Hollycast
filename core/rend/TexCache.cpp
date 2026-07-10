@@ -1,4 +1,6 @@
 /*
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of Flycast.
 
     Flycast is free software: you can redistribute it and/or modify
@@ -27,6 +29,25 @@
 #endif
 
 extern bool pal_needs_update;
+
+static std::atomic<u64> estimatedTextureVramBytes { 0 };
+static std::atomic<u32> trackedTextureCount { 0 };
+static std::atomic<u64> textureUploadCount { 0 };
+
+u64 getEstimatedTextureVramUsageBytes()
+{
+	return estimatedTextureVramBytes.load(std::memory_order_relaxed);
+}
+
+u32 getTrackedTextureCount()
+{
+	return trackedTextureCount.load(std::memory_order_relaxed);
+}
+
+u64 getTextureUploadCount()
+{
+	return textureUploadCount.load(std::memory_order_relaxed);
+}
 
 // Rough approximation of LoD bias from D adjust param, only used to increase LoD
 const std::array<f32, 16> D_Adjust_LoD_Bias = {
@@ -396,6 +417,42 @@ BaseTextureCacheData::BaseTextureCacheData(TSP tsp, TCW tcw, int area)
 	}
 }
 
+BaseTextureCacheData::~BaseTextureCacheData()
+{
+	if (estimatedVramBytes != 0)
+	{
+		estimatedTextureVramBytes.fetch_sub(estimatedVramBytes, std::memory_order_relaxed);
+		trackedTextureCount.fetch_sub(1, std::memory_order_relaxed);
+	}
+}
+
+void BaseTextureCacheData::updateEstimatedVramUsage(u32 textureWidth, u32 textureHeight, bool mipmapped)
+{
+	u64 bytesPerPixel = 2;
+	if (tex_type == TextureType::_8888)
+		bytesPerPixel = 4;
+	else if (tex_type == TextureType::_8)
+		bytesPerPixel = 1;
+
+	u64 bytes = 0;
+	do
+	{
+		bytes += static_cast<u64>(textureWidth) * textureHeight * bytesPerPixel;
+		if (!mipmapped || (textureWidth == 1 && textureHeight == 1))
+			break;
+		textureWidth = std::max(1u, textureWidth / 2);
+		textureHeight = std::max(1u, textureHeight / 2);
+	} while (true);
+
+	if (estimatedVramBytes == 0 && bytes != 0)
+		trackedTextureCount.fetch_add(1, std::memory_order_relaxed);
+	if (bytes > estimatedVramBytes)
+		estimatedTextureVramBytes.fetch_add(bytes - estimatedVramBytes, std::memory_order_relaxed);
+	else if (bytes < estimatedVramBytes)
+		estimatedTextureVramBytes.fetch_sub(estimatedVramBytes - bytes, std::memory_order_relaxed);
+	estimatedVramBytes = bytes;
+}
+
 void BaseTextureCacheData::ComputeHash()
 {
 	// Include everything but texaddr, reserved and stride. Palette textures don't have ScanOrder
@@ -680,6 +737,10 @@ bool BaseTextureCacheData::Update()
 	protectVRam();
 
 	UploadToGPU(upscaled_w, upscaled_h, (const u8 *)temp_tex_buffer, IsMipmapped(), mipmapped);
+	textureUploadCount.fetch_add(1, std::memory_order_relaxed);
+	// This tracks the logical size of live Dreamcast texture cache allocations.
+	// Driver overhead, render targets, buffers, and allocator padding are intentionally excluded.
+	updateEstimatedVramUsage(upscaled_w, upscaled_h, IsMipmapped());
 	if (config::DumpTextures)
 	{
 		ComputeHash();
@@ -701,6 +762,8 @@ void BaseTextureCacheData::CheckCustomTexture()
 		gpuPalette = false;
 		is_custom_replaced = true;
 		UploadToGPU(custom_width, custom_height, custom_image_data, IsMipmapped(), false);
+		textureUploadCount.fetch_add(1, std::memory_order_relaxed);
+		updateEstimatedVramUsage(custom_width, custom_height, IsMipmapped());
 		free(custom_image_data);
 		custom_image_data = nullptr;
 	}

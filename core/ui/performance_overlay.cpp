@@ -11,6 +11,8 @@
 #include "hw/pvr/spg.h"
 #include "imgui.h"
 #include "mainui.h"
+#include "oslib/process_memory.h"
+#include "rend/TexCache.h"
 #include "stdclass.h"
 #include "types.h"
 
@@ -46,12 +48,17 @@ struct Metrics {
 	float frameTimeAverage = 0.f;
 	float frameTimeMinimum = 0.f;
 	float frameTimeMaximum = 0.f;
+	float textureUploadsPerSecond = 0.f;
+	std::uint64_t processResidentBytes = 0;
 	std::array<float, 120> frameTimes {};
 	std::size_t frameTimePosition = 0;
 	std::size_t frameTimeCount = 0;
 	std::uint64_t lastFrameTime = 0;
 	std::uint64_t lastSampleTime = 0;
+	std::uint64_t lastMemorySampleTime = 0;
 	u32 lastFrameCount = 0;
+	u64 lastTextureUploadCount = 0;
+	bool processMemoryValid = false;
 };
 
 Metrics metrics;
@@ -64,10 +71,18 @@ bool show(const char *key, bool defaultValue = true)
 void updateMetrics()
 {
 	const std::uint64_t now = getTimeMs();
+	if (metrics.lastMemorySampleTime == 0 || now - metrics.lastMemorySampleTime >= 1000)
+	{
+		const process_memory::Stats memory = process_memory::queryCurrentProcess();
+		metrics.processResidentBytes = memory.residentBytes;
+		metrics.processMemoryValid = memory.valid;
+		metrics.lastMemorySampleTime = now;
+	}
 	if (metrics.lastSampleTime == 0)
 	{
 		metrics.lastSampleTime = now;
 		metrics.lastFrameCount = MainFrameCount;
+		metrics.lastTextureUploadCount = getTextureUploadCount();
 		sh4WorkMicroseconds.exchange(0);
 		pvrWorkMicroseconds.exchange(0);
 		vblankCount.exchange(0);
@@ -82,6 +97,9 @@ void updateMetrics()
 	metrics.vps = static_cast<float>(vblankCount.exchange(0)) * 1000.f / static_cast<float>(elapsed);
 	metrics.sh4Usage = std::min(100.f, static_cast<float>(sh4WorkMicroseconds.exchange(0)) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
 	metrics.pvrUsage = std::min(100.f, static_cast<float>(pvrWorkMicroseconds.exchange(0)) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
+	const u64 textureUploads = getTextureUploadCount();
+	metrics.textureUploadsPerSecond = static_cast<float>(textureUploads - metrics.lastTextureUploadCount) * 1000.f / static_cast<float>(elapsed);
+	metrics.lastTextureUploadCount = textureUploads;
 	metrics.lastSampleTime = now;
 	metrics.lastFrameCount = MainFrameCount;
 }
@@ -118,22 +136,49 @@ std::string formatGpuStatistics()
 {
 	const RenderType renderer = config::RendererType.get();
 	const char *api = isOpenGL(renderer) ? "OpenGL" : isVulkan(renderer) ? "Vulkan" : isDirectX(renderer) ? "DirectX" : "Renderer";
-	return std::string("GPU Statistics: ") + api + " | PVR renderer (hardware timing unavailable)";
+	char statistics[128];
+	std::snprintf(statistics, sizeof(statistics), "GPU: %s | Tex %u | Upload %.1f/s | Time N/A", api,
+		getTrackedTextureCount(), metrics.textureUploadsPerSecond);
+	return statistics;
+}
+
+std::string formatBytes(std::uint64_t bytes)
+{
+	char value[32];
+	constexpr double Mebibyte = 1024.0 * 1024.0;
+	constexpr double Gibibyte = 1024.0 * Mebibyte;
+	if (bytes >= static_cast<std::uint64_t>(Gibibyte))
+		std::snprintf(value, sizeof(value), "%.2f GiB", bytes / Gibibyte);
+	else
+		std::snprintf(value, sizeof(value), "%.1f MiB", bytes / Mebibyte);
+	return value;
+}
+
+std::string formatRam()
+{
+	const std::string host = metrics.processMemoryValid ? formatBytes(metrics.processResidentBytes) : "unavailable";
+	return "Host RAM: " + host + " | DC: " + std::to_string(RAM_SIZE / 1_MB) + " MiB";
+}
+
+std::string formatVram()
+{
+	return "Texture VRAM Est: " + formatBytes(getEstimatedTextureVramUsageBytes())
+		+ " | DC: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
 }
 
 std::string formatThreadingState()
 {
 	return static_cast<bool>(config::ThreadedRendering)
-		? "Threading: ON (SH4 and PVR use separate host threads)"
-		: "Threading: OFF (SH4 and PVR share the same host thread)";
+		? "Threads: ON (SH4 + PVR separate)"
+		: "Threads: OFF (SH4 + PVR shared)";
 }
 
 std::string formatSh4Work()
 {
 #if defined(_WIN32) || defined(CLOCK_THREAD_CPUTIME_ID)
 	if (config::ThreadedRendering)
-		return "SH4 Thread CPU: " + std::to_string(static_cast<int>(std::round(metrics.sh4Usage))) + "% of one core";
-	return "Combined SH4/PVR Thread CPU: " + std::to_string(static_cast<int>(std::round(metrics.sh4Usage))) + "% of one core";
+		return "SH4 Thread: " + std::to_string(static_cast<int>(std::round(metrics.sh4Usage))) + "% CPU core";
+	return "SH4 + PVR Thread: " + std::to_string(static_cast<int>(std::round(metrics.sh4Usage))) + "% CPU core";
 #else
 	return "SH4 CPU Work: unavailable (no thread CPU timer)";
 #endif
@@ -142,8 +187,8 @@ std::string formatSh4Work()
 std::string formatPvrWork()
 {
 #if defined(_WIN32) || defined(CLOCK_THREAD_CPUTIME_ID)
-	return std::string(static_cast<bool>(config::ThreadedRendering) ? "PVR Renderer Thread CPU: " : "PVR Renderer Portion: ")
-		+ std::to_string(static_cast<int>(std::round(metrics.pvrUsage))) + "% of one core";
+	return std::string(static_cast<bool>(config::ThreadedRendering) ? "PVR Thread: " : "PVR Portion: ")
+		+ std::to_string(static_cast<int>(std::round(metrics.pvrUsage))) + "% CPU core";
 #else
 	return "PVR Renderer CPU Work: unavailable (no thread CPU timer)";
 #endif
@@ -249,15 +294,16 @@ void draw()
 		add(show("OverlayShowEmulationSpeed"), formatSpeed());
 		add(show("OverlayShowThreadingState"), formatThreadingState());
 		add(show("OverlayShowCpuUsage"), formatSh4Work());
-		add(show("OverlayShowGpuUsage"), formatPvrWork());
+		add(show("OverlayShowPvrUsage"), formatPvrWork());
+		add(show("OverlayShowGpuUsage"), "Hardware GPU: N/A (backend timing needed)");
 		add(show("OverlayShowResolution"), formatResolution());
 		std::snprintf(text, sizeof(text), "Frame Times: %.2f ms avg (%.2f-%.2f)", metrics.frameTimeAverage,
 			metrics.frameTimeMinimum, metrics.frameTimeMaximum);
 		add(show("OverlayShowFrameTimes"), text);
 		add(show("OverlayShowGpuStatistics"), formatGpuStatistics());
-		add(show("OverlayShowLatencyStatistics"), "Latency Statistics: unavailable (no end-to-end probe)");
-		add(show("OverlayShowVram"), "VRAM Capacity: " + std::to_string(VRAM_SIZE / 1_MB) + " MB emulated");
-		add(show("OverlayShowRam"), "RAM Capacity: " + std::to_string(RAM_SIZE / 1_MB) + " MB emulated");
+		add(show("OverlayShowLatencyStatistics"), "Latency: N/A (no end to end probe)");
+		add(show("OverlayShowVram"), formatVram());
+		add(show("OverlayShowRam"), formatRam());
 	}
 
 	if (lines.empty())
@@ -274,19 +320,20 @@ void draw()
 	const float fontSize = uiScaled(static_cast<float>(std::clamp(config::loadInt(Section, "OverlayTextSize", 18), 10, 48)));
 	const float opacity = std::clamp(config::loadInt(Section, "OverlayTransparency", 85), 10, 100) / 100.f;
 	const ImVec2 padding(uiScaled(10.f), uiScaled(8.f));
-	const ImVec2 size = ImGui::GetFont()->CalcTextSizeA(fontSize, FLT_MAX, 0.f, message.c_str()) + padding * 2.f;
 	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 	const float margin = uiScaled(16.f);
+	const float wrapWidth = std::max(uiScaled(120.f), displaySize.x - margin * 2.f - padding.x * 2.f);
+	const ImVec2 size = ImGui::GetFont()->CalcTextSizeA(fontSize, FLT_MAX, wrapWidth, message.c_str()) + padding * 2.f;
 	const int corner = std::clamp(config::loadInt(Section, "OverlayCorner", 1), 0, 3);
 	ImVec2 pos;
 	if (corner == 0 || corner == 2)
 		pos.x = margin;
 	else
-		pos.x = displaySize.x - size.x - margin;
+		pos.x = std::max(margin, displaySize.x - size.x - margin);
 	if (corner == 0 || corner == 1)
 		pos.y = margin;
 	else
-		pos.y = displaySize.y - size.y - margin;
+		pos.y = std::max(margin, displaySize.y - size.y - margin);
 
 	const u32 packedColor = static_cast<u32>(config::loadInt(Section, "OverlayColor", 0xFFFFFFFF));
 	const ImU32 textColor = IM_COL32((packedColor >> 0) & 0xFF, (packedColor >> 8) & 0xFF, (packedColor >> 16) & 0xFF,
@@ -294,7 +341,7 @@ void draw()
 	const ImU32 backgroundColor = IM_COL32(20, 20, 20, static_cast<int>(190.f * opacity));
 	ImDrawList *drawList = ImGui::GetBackgroundDrawList();
 	drawList->AddRectFilled(pos, pos + size, backgroundColor, uiScaled(6.f));
-	drawList->AddText(nullptr, fontSize, pos + padding, textColor, message.c_str());
+	drawList->AddText(nullptr, fontSize, pos + padding, textColor, message.c_str(), nullptr, wrapWidth);
 }
 
 } // namespace performance_overlay

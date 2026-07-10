@@ -4371,22 +4371,23 @@ void renderVideoTab()
 				Tnop("ResourceMonitorMode"),
 				T("Choose the overlay density. Full uses the metric selections below."),
 				overlayModeCfg,
-				T("Overlay Mode\nMinimal shows CPU, GPU, and FPS. Full uses the individual metric selections below."));
+				T("Overlay Mode\nMinimal shows SH4 thread CPU, PVR renderer CPU, and FPS. Full uses the individual metric selections below."));
 
-			const std::array<std::pair<const char*, const char*>, 11> overlayMetrics {
+			const std::array<std::pair<const char*, const char*>, 12> overlayMetrics {
 				std::make_pair("OverlayShowFPS", T("Show FPS")),
 				std::make_pair("OverlayShowEmulationSpeed", T("Show Emulation Speed")),
 				std::make_pair("OverlayShowThreadingState", T("Show Threading State")),
 				std::make_pair("OverlayShowCpuUsage", T("Show SH4 CPU Work")),
-				std::make_pair("OverlayShowGpuUsage", T("Show PVR Renderer Work")),
+				std::make_pair("OverlayShowPvrUsage", T("Show PVR Renderer Work")),
+				std::make_pair("OverlayShowGpuUsage", T("Show Hardware GPU Usage")),
 				std::make_pair("OverlayShowResolution", T("Show Resolution")),
 				std::make_pair("OverlayShowFrameTimes", T("Show Frame Times")),
 				std::make_pair("OverlayShowGpuStatistics", T("Show GPU Statistics")),
 				std::make_pair("OverlayShowLatencyStatistics", T("Show Latency Statistics")),
-				std::make_pair("OverlayShowVram", T("Show VRAM Capacity")),
-				std::make_pair("OverlayShowRam", T("Show RAM Capacity"))
+				std::make_pair("OverlayShowVram", T("Show Texture VRAM Estimate")),
+				std::make_pair("OverlayShowRam", T("Show Host RAM Usage"))
 			};
-			ImGui::TextWrapped("%s", T("SH4 CPU Work measures the emulation thread. PVR Renderer Work measures CPU time spent by the renderer thread. These are not total device CPU/GPU utilization."));
+			ImGui::TextWrapped("%s", T("SH4 CPU Work measures the emulation thread. PVR Renderer Work measures CPU time spent by the renderer thread. Hardware GPU Usage requires renderer backend timing and reports unavailable until that support is added."));
 			ImGui::Columns(2, "OverlayMetrics", false);
 			for (size_t i = 0; i < overlayMetrics.size(); ++i)
 			{
