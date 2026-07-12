@@ -2,6 +2,7 @@
     Created on: Oct 2, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,9 @@
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "ui/gui.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 #ifdef USE_SDL
 #include <sdl/sdl.h>
 #include <SDL_vulkan.h>
@@ -1134,6 +1138,9 @@ void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& exten
 	int dx = 0;
 	int dy = 0;
 	getWindowboxDimensions(width, outheight, aspectRatio, dx, dy, config::Rotate90);
+#ifndef LIBRETRO
+	performance_overlay::recordOutputViewport(width - dx * 2, outheight - dy * 2);
+#endif
 
 	vk::Viewport viewport(dx, dy + topInset, width - dx * 2, outheight - dy * 2);
 	commandBuffer.setViewport(0, viewport);

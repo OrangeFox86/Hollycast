@@ -3709,21 +3709,22 @@ void renderVideoTab()
 			};
 
 			std::array<int, scalings.size()> horizontalRes {};
+			std::array<int, scalings.size()> verticalRes {};
 			std::array<std::string, scalings.size()> resolutionLabels {};
 			std::array<const char*, scalings.size()> resolutionLabelPtrs {};
 			int internalResSelection = 0;
 
 			for (size_t i = 0; i < scalings.size(); i++)
 			{
-				const int verticalRes = static_cast<int>(scalings[i] * 480.0f);
+				verticalRes[i] = static_cast<int>(scalings[i] * 480.0f);
 				horizontalRes[i] = !config::Widescreen
 					? static_cast<int>(scalings[i] * 640.0f)
 					: static_cast<int>(scalings[i] * 480.0f * 16.0f / 9.0f);
 
-				if (horizontalRes[i] == config::RenderResolution.get())
+				if (verticalRes[i] == config::RenderResolution.get())
 					internalResSelection = static_cast<int>(i);
 
-				resolutionLabels[i] = std::to_string(horizontalRes[i]) + "x" + std::to_string(verticalRes) + " (" + scalingNames[i] + ")";
+				resolutionLabels[i] = std::to_string(horizontalRes[i]) + "x" + std::to_string(verticalRes[i]) + " (" + scalingNames[i] + ")";
 				resolutionLabelPtrs[i] = resolutionLabels[i].c_str();
 			}
 
@@ -3737,9 +3738,11 @@ void renderVideoTab()
 			internalResCfg.options.currentValue = &internalResSelection;
 			internalResCfg.options.valueWidth = 220.0f;
 			internalResCfg.options.onChange = [&](int selectedIndex) {
-				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(horizontalRes.size()))
+				if (selectedIndex < 0 || selectedIndex >= static_cast<int>(verticalRes.size()))
 					return false;
-				config::RenderResolution.set(horizontalRes[selectedIndex]);
+				// RenderResolution is the vertical target size; the renderer derives
+				// its scale from this value relative to the native 480-line output.
+				config::RenderResolution.set(verticalRes[selectedIndex]);
 				return true;
 			};
 
@@ -4381,13 +4384,13 @@ void renderVideoTab()
 				std::make_pair("OverlayShowPvrUsage", T("Show PVR Renderer Work")),
 				std::make_pair("OverlayShowGpuUsage", T("Show Hardware GPU Usage")),
 				std::make_pair("OverlayShowResolution", T("Show Resolution")),
-				std::make_pair("OverlayShowFrameTimes", T("Show Frame Times")),
+				std::make_pair("OverlayShowFrameTimes", T("Show Present Intervals")),
 				std::make_pair("OverlayShowGpuStatistics", T("Show GPU Statistics")),
 				std::make_pair("OverlayShowLatencyStatistics", T("Show Latency Statistics")),
-				std::make_pair("OverlayShowVram", T("Show Texture VRAM Estimate")),
+				std::make_pair("OverlayShowVram", T("Show GPU VRAM Usage")),
 				std::make_pair("OverlayShowRam", T("Show Host RAM Usage"))
 			};
-			ImGui::TextWrapped("%s", T("SH4 CPU Work measures the emulation thread. PVR Renderer Work measures CPU time spent by the renderer thread. Hardware GPU Usage requires renderer backend timing and reports unavailable until that support is added."));
+			ImGui::TextWrapped("%s", T("FPS and present intervals come from successful renderer presents. SH4 and PVR values use OS thread CPU time. Resolution comes from the active PVR render context. Host RAM comes from the OS. GPU VRAM uses per-process DXGI values on Windows and reports unavailable where no authoritative query exists."));
 			ImGui::Columns(2, "OverlayMetrics", false);
 			for (size_t i = 0; i < overlayMetrics.size(); ++i)
 			{
@@ -4398,7 +4401,7 @@ void renderVideoTab()
 			}
 			ImGui::Columns(1);
 
-			static int overlayTextSize = cfgLoadInt("rend", "OverlayTextSize", 18);
+			static int overlayTextSize = cfgLoadInt("rend", "OverlayTextSize", 16);
 			SettingsUI::PopupSliderConfig textSizeCfg {};
 			textSizeCfg.label = T("Text Size");
 			textSizeCfg.icon = ICON_FA_TEXT_HEIGHT;
@@ -4407,7 +4410,7 @@ void renderVideoTab()
 			textSizeCfg.currentValue = &overlayTextSize;
 			textSizeCfg.minValue = 10;
 			textSizeCfg.maxValue = 48;
-			textSizeCfg.defaultValue = 18;
+			textSizeCfg.defaultValue = 16;
 			textSizeCfg.format = "%d px";
 			textSizeCfg.valueWidth = 220.0f;
 			textSizeCfg.sliderWidth = 320.0f;
@@ -4457,6 +4460,46 @@ void renderVideoTab()
 			};
 			RenderGeneralPopupSettingRow(Tnop("OverlayCornerSetting"), T("Choose where the overlay appears."), cornerCfg,
 				T("Screen Corner\nThe default is the top right corner."));
+
+			static int overlayOffsetX = cfgLoadInt("rend", "OverlayOffsetX", 0);
+			SettingsUI::PopupSliderConfig offsetXCfg {};
+			offsetXCfg.label = T("Horizontal Position");
+			offsetXCfg.icon = ICON_FA_ARROWS_LEFT_RIGHT;
+			offsetXCfg.popupID = Tnop("OverlayOffsetXPopup");
+			offsetXCfg.description = T("Move the complete overlay left or right.");
+			offsetXCfg.currentValue = &overlayOffsetX;
+			offsetXCfg.minValue = -1000;
+			offsetXCfg.maxValue = 1000;
+			offsetXCfg.defaultValue = 0;
+			offsetXCfg.format = "%+d px";
+			offsetXCfg.valueWidth = 220.0f;
+			offsetXCfg.sliderWidth = 320.0f;
+			offsetXCfg.onValueChange = [&]() { cfgSaveInt("rend", "OverlayOffsetX", overlayOffsetX); };
+			SettingsUI::PopupConfig offsetXPopup {};
+			offsetXPopup.type = SettingsUI::PopupType::Slider;
+			offsetXPopup.slider = offsetXCfg;
+			RenderGeneralPopupSettingRow(Tnop("OverlayOffsetXSetting"), T("Adjust the overlay's horizontal position."), offsetXPopup,
+				T("Horizontal Position\nNegative values move left. Positive values move right."));
+
+			static int overlayOffsetY = cfgLoadInt("rend", "OverlayOffsetY", 0);
+			SettingsUI::PopupSliderConfig offsetYCfg {};
+			offsetYCfg.label = T("Vertical Position");
+			offsetYCfg.icon = ICON_FA_ARROWS_UP_DOWN;
+			offsetYCfg.popupID = Tnop("OverlayOffsetYPopup");
+			offsetYCfg.description = T("Move the complete overlay up or down.");
+			offsetYCfg.currentValue = &overlayOffsetY;
+			offsetYCfg.minValue = -1000;
+			offsetYCfg.maxValue = 1000;
+			offsetYCfg.defaultValue = 0;
+			offsetYCfg.format = "%+d px";
+			offsetYCfg.valueWidth = 220.0f;
+			offsetYCfg.sliderWidth = 320.0f;
+			offsetYCfg.onValueChange = [&]() { cfgSaveInt("rend", "OverlayOffsetY", overlayOffsetY); };
+			SettingsUI::PopupConfig offsetYPopup {};
+			offsetYPopup.type = SettingsUI::PopupType::Slider;
+			offsetYPopup.slider = offsetYCfg;
+			RenderGeneralPopupSettingRow(Tnop("OverlayOffsetYSetting"), T("Adjust the overlay's vertical position."), offsetYPopup,
+				T("Vertical Position\nNegative values move up. Positive values move down."));
 
 			int packedColor = config::loadInt("rend", "OverlayColor", 0xFFFFFFFF);
 			float overlayColor[4] {

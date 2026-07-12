@@ -3,6 +3,9 @@
 #include "gles.h"
 #include "quad.h"
 #include "rend/osd.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 #include "naomi2.h"
 #ifdef LIBRETRO
 #include "postprocess.h"
@@ -774,6 +777,9 @@ bool OpenGLRenderer::renderLastFrame()
 	int dy = 0;
 	glcache.Disable(GL_SCISSOR_TEST);
 	getWindowboxDimensions(settings.display.width, outheight, gl.ofbo.aspectRatio, dx, dy, config::Rotate90);
+#ifndef LIBRETRO
+	performance_overlay::recordOutputViewport(settings.display.width - dx * 2, outheight - dy * 2);
+#endif
 
 	if (gl.bogusBlitFramebuffer || config::Rotate90)
 	{

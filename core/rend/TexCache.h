@@ -44,7 +44,6 @@ struct vram_block
 
 bool VramLockedWriteOffset(size_t offset);
 bool VramLockedWrite(u8* address);
-u64 getEstimatedTextureVramUsageBytes();
 u32 getTrackedTextureCount();
 u64 getTextureUploadCount();
 
@@ -83,8 +82,8 @@ public:
 		custom_load_in_progress = 0;
 		gpuPalette = other.gpuPalette;
 		area = other.area;
-		estimatedVramBytes = other.estimatedVramBytes;
-		other.estimatedVramBytes = 0;
+		trackedOnGpu = other.trackedOnGpu;
+		other.trackedOnGpu = false;
 	}
 
 	TSP tsp;        	//dreamcast texture parameters
@@ -185,8 +184,8 @@ public:
 	static void SetDirectXColorOrder(bool enabled);
 
 private:
-	void updateEstimatedVramUsage(u32 textureWidth, u32 textureHeight, bool mipmapped);
-	u64 estimatedVramBytes = 0;
+	void recordTextureUpload();
+	bool trackedOnGpu = false;
 };
 
 template<typename Texture>

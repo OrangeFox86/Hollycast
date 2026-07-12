@@ -22,6 +22,9 @@
 #include "hw/pvr/ta.h"
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 #include "rend/sorter.h"
 #include "rend/osd.h"
 
@@ -580,6 +583,9 @@ void DX11Renderer::displayFramebuffer()
 	float y = (float)dy;
 	float w = (float)(outwidth - leftInset - 2 * dx);
 	float h = (float)(outheight - topInset - 2 * dy);
+#ifndef LIBRETRO
+	performance_overlay::recordOutputViewport(static_cast<int>(std::round(w)), static_cast<int>(std::round(h)));
+#endif
 
 	// Normalize
 	x = x * 2.f / outwidth - 1.f;

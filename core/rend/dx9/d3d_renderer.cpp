@@ -21,6 +21,9 @@
 #include "hw/pvr/ta.h"
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 #include "rend/sorter.h"
 #include "rend/osd.h"
 #include "oslib/i18n.h"
@@ -1184,6 +1187,9 @@ void D3DRenderer::displayFramebuffer()
 	int dx = 0;
 	int dy = 0;
 	getWindowboxDimensions(settings.display.width, outheight, aspectRatio, dx, dy, config::Rotate90);
+#ifndef LIBRETRO
+	performance_overlay::recordOutputViewport(settings.display.width - dx * 2, outheight - dy * 2);
+#endif
 
 	float shiftX, shiftY;
 	getVideoShift(shiftX, shiftY);

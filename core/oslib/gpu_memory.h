@@ -6,13 +6,18 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace gpu_memory {
 
-struct Stats {
+struct AdapterStats {
+	std::uint32_t adapterIndex = 0;
 	std::uint64_t usedBytes = 0;
 	std::uint64_t budgetBytes = 0;
-	bool valid = false;
+};
+
+struct Stats {
+	std::vector<AdapterStats> adapters;
 };
 
 Stats queryCurrentProcess();

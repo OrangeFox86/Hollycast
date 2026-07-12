@@ -288,6 +288,9 @@ private:
 		if (renderer->Present())
 		{
 			presented = true;
+#ifndef LIBRETRO
+			performance_overlay::recordPresentedFrame();
+#endif
 			if (!config::ThreadedRendering && !ggpo::active())
 				emu.getSh4Executor()->Stop();
 #ifdef LIBRETRO

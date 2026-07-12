@@ -7,10 +7,10 @@
 
 #include "cfg/cfg.h"
 #include "cfg/option.h"
+#include "gui_font.h"
 #include "gui_util.h"
 #include "hw/pvr/spg.h"
 #include "imgui.h"
-#include "mainui.h"
 #include "oslib/gpu_memory.h"
 #include "oslib/process_memory.h"
 #include "rend/TexCache.h"
@@ -20,8 +20,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
+#include <mutex>
 #include <string>
 #include <vector>
 #ifdef _WIN32
@@ -43,7 +46,21 @@ std::atomic<int> rawRenderWidth { 0 };
 std::atomic<int> rawRenderHeight { 0 };
 std::atomic<int> renderedWidth { 0 };
 std::atomic<int> renderedHeight { 0 };
+std::atomic<int> outputViewportWidth { 0 };
+std::atomic<int> outputViewportHeight { 0 };
 thread_local std::uint64_t lastSh4ThreadCpuTime = 0;
+
+struct PresentSamples {
+	std::mutex mutex;
+	std::uint64_t lastPresentMicroseconds = 0;
+	std::uint64_t intervalSumMicroseconds = 0;
+	std::uint64_t intervalMinimumMicroseconds = std::numeric_limits<std::uint64_t>::max();
+	std::uint64_t intervalMaximumMicroseconds = 0;
+	std::uint32_t presentCount = 0;
+	std::uint32_t intervalCount = 0;
+};
+
+PresentSamples presentSamples;
 
 struct Metrics {
 	float fps = 0.f;
@@ -55,18 +72,12 @@ struct Metrics {
 	float frameTimeMaximum = 0.f;
 	float textureUploadsPerSecond = 0.f;
 	std::uint64_t processResidentBytes = 0;
-	std::uint64_t gpuMemoryBytes = 0;
-	std::uint64_t gpuMemoryBudgetBytes = 0;
-	std::array<float, 120> frameTimes {};
-	std::size_t frameTimePosition = 0;
-	std::size_t frameTimeCount = 0;
-	std::uint64_t lastFrameTime = 0;
+	std::vector<gpu_memory::AdapterStats> gpuAdapters;
 	std::uint64_t lastSampleTime = 0;
 	std::uint64_t lastMemorySampleTime = 0;
-	u32 lastFrameCount = 0;
 	u64 lastTextureUploadCount = 0;
 	bool processMemoryValid = false;
-	bool gpuMemoryValid = false;
+	bool frameTimeValid = false;
 };
 
 Metrics metrics;
@@ -85,15 +96,12 @@ void updateMetrics()
 		metrics.processResidentBytes = memory.residentBytes;
 		metrics.processMemoryValid = memory.valid;
 		const gpu_memory::Stats gpu = gpu_memory::queryCurrentProcess();
-		metrics.gpuMemoryBytes = gpu.usedBytes;
-		metrics.gpuMemoryBudgetBytes = gpu.budgetBytes;
-		metrics.gpuMemoryValid = gpu.valid;
+		metrics.gpuAdapters = gpu.adapters;
 		metrics.lastMemorySampleTime = now;
 	}
 	if (metrics.lastSampleTime == 0)
 	{
 		metrics.lastSampleTime = now;
-		metrics.lastFrameCount = MainFrameCount;
 		metrics.lastTextureUploadCount = getTextureUploadCount();
 		sh4WorkMicroseconds.exchange(0);
 		pvrWorkMicroseconds.exchange(0);
@@ -105,7 +113,32 @@ void updateMetrics()
 	if (elapsed < 500)
 		return;
 
-	metrics.fps = static_cast<float>(MainFrameCount - metrics.lastFrameCount) * 1000.f / static_cast<float>(elapsed);
+	std::uint32_t presentCount;
+	std::uint32_t intervalCount;
+	std::uint64_t intervalSum;
+	std::uint64_t intervalMinimum;
+	std::uint64_t intervalMaximum;
+	{
+		std::lock_guard<std::mutex> lock(presentSamples.mutex);
+		presentCount = presentSamples.presentCount;
+		intervalCount = presentSamples.intervalCount;
+		intervalSum = presentSamples.intervalSumMicroseconds;
+		intervalMinimum = presentSamples.intervalMinimumMicroseconds;
+		intervalMaximum = presentSamples.intervalMaximumMicroseconds;
+		presentSamples.presentCount = 0;
+		presentSamples.intervalCount = 0;
+		presentSamples.intervalSumMicroseconds = 0;
+		presentSamples.intervalMinimumMicroseconds = std::numeric_limits<std::uint64_t>::max();
+		presentSamples.intervalMaximumMicroseconds = 0;
+	}
+	metrics.fps = static_cast<float>(presentCount) * 1000.f / static_cast<float>(elapsed);
+	metrics.frameTimeValid = intervalCount != 0;
+	if (metrics.frameTimeValid)
+	{
+		metrics.frameTimeAverage = static_cast<float>(intervalSum) / intervalCount / 1000.f;
+		metrics.frameTimeMinimum = static_cast<float>(intervalMinimum) / 1000.f;
+		metrics.frameTimeMaximum = static_cast<float>(intervalMaximum) / 1000.f;
+	}
 	metrics.vps = static_cast<float>(vblankCount.exchange(0)) * 1000.f / static_cast<float>(elapsed);
 	metrics.sh4Usage = std::min(100.f, static_cast<float>(sh4WorkMicroseconds.exchange(0)) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
 	metrics.pvrUsage = std::min(100.f, static_cast<float>(pvrWorkMicroseconds.exchange(0)) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
@@ -113,7 +146,6 @@ void updateMetrics()
 	metrics.textureUploadsPerSecond = static_cast<float>(textureUploads - metrics.lastTextureUploadCount) * 1000.f / static_cast<float>(elapsed);
 	metrics.lastTextureUploadCount = textureUploads;
 	metrics.lastSampleTime = now;
-	metrics.lastFrameCount = MainFrameCount;
 }
 
 std::string formatSpeed()
@@ -131,21 +163,29 @@ std::string formatSpeed()
 
 std::string formatResolution()
 {
-	int width = renderedWidth.load(std::memory_order_relaxed);
-	int height = renderedHeight.load(std::memory_order_relaxed);
-	if (width <= 0 || height <= 0)
-	{
-		height = std::max(1, config::RenderResolution.get());
-		width = static_cast<int>(std::round(640.f * height / 480.f));
-	}
+	const int width = renderedWidth.load(std::memory_order_relaxed);
+	const int height = renderedHeight.load(std::memory_order_relaxed);
+	const std::string rendered = width > 0 && height > 0
+		? std::to_string(width) + "x" + std::to_string(height)
+		: "unavailable";
 	const int rawWidth = rawRenderWidth.load(std::memory_order_relaxed);
 	const int rawHeight = rawRenderHeight.load(std::memory_order_relaxed);
 	const std::string raw = rawWidth > 0 && rawHeight > 0
 		? std::to_string(rawWidth) + "x" + std::to_string(rawHeight)
 		: "unavailable";
-	return "Rendered: " + std::to_string(width) + "x" + std::to_string(height)
-		+ " | Raw: " + raw
-		+ " | Output: " + std::to_string(settings.display.width) + "x" + std::to_string(settings.display.height);
+	const std::string output = settings.display.width > 0 && settings.display.height > 0
+		? std::to_string(settings.display.width) + "x" + std::to_string(settings.display.height)
+		: "unavailable";
+	std::string value = "Rendered: " + rendered + " | Raw: " + raw;
+	if (config::IntegerScale)
+	{
+		const int viewportWidth = outputViewportWidth.load(std::memory_order_relaxed);
+		const int viewportHeight = outputViewportHeight.load(std::memory_order_relaxed);
+		if (viewportWidth > 0 && viewportHeight > 0
+				&& (viewportWidth != settings.display.width || viewportHeight != settings.display.height))
+			value += " | Viewport: " + std::to_string(viewportWidth) + "x" + std::to_string(viewportHeight);
+	}
+	return value + " | Output: " + output;
 }
 
 std::string formatGpuStatistics()
@@ -153,7 +193,7 @@ std::string formatGpuStatistics()
 	const RenderType renderer = config::RendererType.get();
 	const char *api = isOpenGL(renderer) ? "OpenGL" : isVulkan(renderer) ? "Vulkan" : isDirectX(renderer) ? "DirectX" : "Renderer";
 	char statistics[128];
-	std::snprintf(statistics, sizeof(statistics), "GPU: %s | Tex %u | Upload %.1f/s | Time N/A", api,
+	std::snprintf(statistics, sizeof(statistics), "GPU API: %s | Tracked Tex %u | Upload %.1f/s | Time unavailable", api,
 		getTrackedTextureCount(), metrics.textureUploadsPerSecond);
 	return statistics;
 }
@@ -173,17 +213,22 @@ std::string formatBytes(std::uint64_t bytes)
 std::string formatRam()
 {
 	const std::string host = metrics.processMemoryValid ? formatBytes(metrics.processResidentBytes) : "unavailable";
-	return "Host RAM (Working Set): " + host + " | DC: " + std::to_string(RAM_SIZE / 1_MB) + " MiB";
+	return "Host RAM (Resident): " + host + " | DC RAM: " + std::to_string(RAM_SIZE / 1_MB) + " MiB";
 }
 
 std::string formatVram()
 {
-	if (metrics.gpuMemoryValid)
-		return "GPU VRAM (App): " + formatBytes(metrics.gpuMemoryBytes) + " / " + formatBytes(metrics.gpuMemoryBudgetBytes)
-			+ " | Texture Est: " + formatBytes(getEstimatedTextureVramUsageBytes())
-			+ " | DC: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
-	return "Texture VRAM Est: " + formatBytes(getEstimatedTextureVramUsageBytes())
-		+ " | DC: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
+	std::string value;
+	for (const gpu_memory::AdapterStats& adapter : metrics.gpuAdapters)
+	{
+		if (!value.empty())
+			value += " | ";
+		value += "GPU " + std::to_string(adapter.adapterIndex) + " VRAM (DXGI App): "
+			+ formatBytes(adapter.usedBytes) + " / " + formatBytes(adapter.budgetBytes);
+	}
+	if (value.empty())
+		value = "GPU VRAM: unavailable (no authoritative query)";
+	return value + " | DC VRAM: " + std::to_string(VRAM_SIZE / 1_MB) + " MiB";
 }
 
 std::string formatThreadingState()
@@ -212,24 +257,6 @@ std::string formatPvrWork()
 #else
 	return "PVR Renderer CPU Work: unavailable (no thread CPU timer)";
 #endif
-}
-
-void updateFrameTime(float frameTime)
-{
-	metrics.frameTimes[metrics.frameTimePosition] = frameTime;
-	metrics.frameTimePosition = (metrics.frameTimePosition + 1) % metrics.frameTimes.size();
-	metrics.frameTimeCount = std::min(metrics.frameTimeCount + 1, metrics.frameTimes.size());
-	metrics.frameTimeAverage = 0.f;
-	metrics.frameTimeMinimum = FLT_MAX;
-	metrics.frameTimeMaximum = 0.f;
-	for (std::size_t i = 0; i < metrics.frameTimeCount; ++i)
-	{
-		metrics.frameTimeAverage += metrics.frameTimes[i];
-		metrics.frameTimeMinimum = std::min(metrics.frameTimeMinimum, metrics.frameTimes[i]);
-		metrics.frameTimeMaximum = std::max(metrics.frameTimeMaximum, metrics.frameTimes[i]);
-	}
-	if (metrics.frameTimeCount != 0)
-		metrics.frameTimeAverage /= static_cast<float>(metrics.frameTimeCount);
 }
 
 } // namespace
@@ -266,6 +293,29 @@ void recordRenderedResolution(int rawWidth, int rawHeight, int renderedWidth, in
 	performance_overlay::renderedHeight.store(renderedHeight, std::memory_order_relaxed);
 }
 
+void recordOutputViewport(int width, int height)
+{
+	outputViewportWidth.store(width, std::memory_order_relaxed);
+	outputViewportHeight.store(height, std::memory_order_relaxed);
+}
+
+void recordPresentedFrame()
+{
+	const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+	std::lock_guard<std::mutex> lock(presentSamples.mutex);
+	++presentSamples.presentCount;
+	if (presentSamples.lastPresentMicroseconds != 0 && now > presentSamples.lastPresentMicroseconds)
+	{
+		const std::uint64_t interval = now - presentSamples.lastPresentMicroseconds;
+		presentSamples.intervalSumMicroseconds += interval;
+		presentSamples.intervalMinimumMicroseconds = std::min(presentSamples.intervalMinimumMicroseconds, interval);
+		presentSamples.intervalMaximumMicroseconds = std::max(presentSamples.intervalMaximumMicroseconds, interval);
+		++presentSamples.intervalCount;
+	}
+	presentSamples.lastPresentMicroseconds = now;
+}
+
 std::uint64_t currentThreadCpuTimeMicroseconds()
 {
 #ifdef _WIN32
@@ -286,21 +336,12 @@ std::uint64_t currentThreadCpuTimeMicroseconds()
 	return 0;
 }
 
-void recordFrame()
-{
-	const std::uint64_t now = getTimeMs();
-	if (metrics.lastFrameTime != 0 && now > metrics.lastFrameTime)
-		updateFrameTime(static_cast<float>(now - metrics.lastFrameTime));
-	metrics.lastFrameTime = now;
-}
-
 void draw()
 {
 	const int overlayMode = mode();
 	if (overlayMode == 0)
 		return;
 
-	recordFrame();
 	updateMetrics();
 
 	std::vector<std::string> lines;
@@ -325,8 +366,11 @@ void draw()
 		add(show("OverlayShowPvrUsage"), formatPvrWork());
 		add(show("OverlayShowGpuUsage"), "Hardware GPU: N/A (backend timing needed)");
 		add(show("OverlayShowResolution"), formatResolution());
-		std::snprintf(text, sizeof(text), "Frame Times: %.2f ms avg (%.2f-%.2f)", metrics.frameTimeAverage,
-			metrics.frameTimeMinimum, metrics.frameTimeMaximum);
+		if (metrics.frameTimeValid)
+			std::snprintf(text, sizeof(text), "Present Intervals: %.2f ms avg (%.2f-%.2f)", metrics.frameTimeAverage,
+				metrics.frameTimeMinimum, metrics.frameTimeMaximum);
+		else
+			std::snprintf(text, sizeof(text), "Present Intervals: unavailable");
 		add(show("OverlayShowFrameTimes"), text);
 		add(show("OverlayShowGpuStatistics"), formatGpuStatistics());
 		add(show("OverlayShowLatencyStatistics"), "Latency: N/A (no end to end probe)");
@@ -337,39 +381,53 @@ void draw()
 	if (lines.empty())
 		return;
 
-	std::string message;
-	for (const std::string &line : lines)
-	{
-		if (!message.empty())
-			message += '\n';
-		message += line;
-	}
-
-	const float fontSize = uiScaled(static_cast<float>(std::clamp(config::loadInt(Section, "OverlayTextSize", 18), 10, 48)));
+	ImFont *font = settingsTitleFont != nullptr ? settingsTitleFont : ImGui::GetFont();
+	const float fontSize = uiScaled(static_cast<float>(std::clamp(config::loadInt(Section, "OverlayTextSize", 16), 10, 48)));
 	const float opacity = std::clamp(config::loadInt(Section, "OverlayTransparency", 85), 10, 100) / 100.f;
-	const ImVec2 padding(uiScaled(10.f), uiScaled(8.f));
 	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-	const float margin = uiScaled(16.f);
-	const float wrapWidth = std::max(uiScaled(120.f), displaySize.x - margin * 2.f - padding.x * 2.f);
-	const ImVec2 size = ImGui::GetFont()->CalcTextSizeA(fontSize, FLT_MAX, wrapWidth, message.c_str()) + padding * 2.f;
+	const float margin = uiScaled(12.f);
+	const float lineSpacing = uiScaled(1.f);
+	const float lineHeight = fontSize + lineSpacing;
+	const float totalHeight = lineHeight * lines.size() - lineSpacing;
+	std::vector<float> lineWidths;
+	lineWidths.reserve(lines.size());
+	float blockWidth = 0.f;
+	for (const std::string& line : lines)
+	{
+		const float width = font->CalcTextSizeA(fontSize, FLT_MAX, 0.f, line.c_str()).x;
+		lineWidths.push_back(width);
+		blockWidth = std::max(blockWidth, width);
+	}
 	const int corner = std::clamp(config::loadInt(Section, "OverlayCorner", 1), 0, 3);
-	ImVec2 pos;
-	if (corner == 0 || corner == 2)
-		pos.x = margin;
-	else
-		pos.x = std::max(margin, displaySize.x - size.x - margin);
+	const float offsetX = uiScaled(static_cast<float>(std::clamp(config::loadInt(Section, "OverlayOffsetX", 0), -1000, 1000)));
+	const float offsetY = uiScaled(static_cast<float>(std::clamp(config::loadInt(Section, "OverlayOffsetY", 0), -1000, 1000)));
+	float blockX = corner == 0 || corner == 2
+		? margin
+		: std::max(margin, displaySize.x - blockWidth - margin);
+	blockX = std::clamp(blockX + offsetX, margin, std::max(margin, displaySize.x - blockWidth - margin));
+	float y;
 	if (corner == 0 || corner == 1)
-		pos.y = margin;
+		y = margin;
 	else
-		pos.y = std::max(margin, displaySize.y - size.y - margin);
+		y = std::max(margin, displaySize.y - totalHeight - margin);
+	y = std::clamp(y + offsetY, margin, std::max(margin, displaySize.y - totalHeight - margin));
 
 	const u32 packedColor = static_cast<u32>(config::loadInt(Section, "OverlayColor", 0xFFFFFFFF));
 	const ImU32 textColor = IM_COL32((packedColor >> 0) & 0xFF, (packedColor >> 8) & 0xFF, (packedColor >> 16) & 0xFF,
 		static_cast<int>(((packedColor >> 24) & 0xFF) * opacity));
-	const ImU32 backgroundColor = IM_COL32(20, 20, 20, static_cast<int>(190.f * opacity));
+	const ImU32 shadowColor = IM_COL32(0, 0, 0, static_cast<int>(190.f * opacity));
+	const float shadowOffset = std::max(1.f, uiScaled(0.75f));
 	ImDrawList *drawList = ImGui::GetBackgroundDrawList();
-	drawList->AddRectFilled(pos, pos + size, backgroundColor, uiScaled(6.f));
-	drawList->AddText(nullptr, fontSize, pos + padding, textColor, message.c_str(), nullptr, wrapWidth);
+	for (std::size_t i = 0; i < lines.size(); ++i)
+	{
+		const float x = corner == 0 || corner == 2
+			? blockX
+			: blockX + blockWidth - lineWidths[i];
+		const ImVec2 pos(x, y);
+		drawList->AddText(font, fontSize, pos + ImVec2(shadowOffset, shadowOffset), shadowColor, lines[i].c_str());
+		drawList->AddText(font, fontSize, pos, textColor, lines[i].c_str());
+		y += lineHeight;
+	}
 }
 
 } // namespace performance_overlay
