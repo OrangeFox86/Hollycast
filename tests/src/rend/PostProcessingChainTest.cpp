@@ -224,6 +224,17 @@ TEST(PostProcessingChainTest, TranslatesPortableGlslFragmentBodiesToHlsl)
 	EXPECT_NE(std::string::npos, hlsl.find("lerp("));
 }
 
+TEST(PostProcessingChainTest, TranslatesPortableScanlineShaderToHlsl)
+{
+	std::string hlsl;
+	std::string error;
+	ASSERT_TRUE(postprocess::translateGlslFragmentToHlsl(
+			"void main() { vec4 color = texture(Source, vTexCoord); float scanlineFactor = mix(0.55, 1.0, mod(floor(vTexCoord.y * OutputSize.y), 2.0)); gl_FragColor = vec4(color.rgb * scanlineFactor, color.a); }",
+			hlsl, error)) << error;
+	EXPECT_NE(std::string::npos, hlsl.find("fmod(floor(vTexCoord.y * OutputSize.y), 2.0)"));
+	EXPECT_NE(std::string::npos, hlsl.find("float4 main(PixelInput input) : SV_TARGET"));
+}
+
 TEST(PostProcessingChainTest, RejectsUnbindableGlslResourcesForHlslTranslation)
 {
 	std::string hlsl;

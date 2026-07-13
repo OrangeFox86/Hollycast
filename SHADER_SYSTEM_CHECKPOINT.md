@@ -8,7 +8,7 @@ State: local work only; nothing staged, committed, pushed, or stashed.
 
 ## Completed before this checkpoint
 
-- Phases 1 through 4: shared ordered Slang chains, safe package-root Slang includes, GL/Vulkan/DX11 pass execution, scaling/filtering/mipmaps/frame modulo, LUTs, aliases, feedback, typed parameters, and custom Slang vertex stages.
+- Phases 1 through 4: shared ordered Slang chains, safe package-root Slang includes, GL/Vulkan/DX11 pass execution, scaling/filtering/mipmaps/frame modulo, LUTs, aliases, feedback, typed parameters, and portable custom Slang vertex stages.
 - Windows `flycast` build passed after the checkpoint changes below.
 
 ## Phase 5 through 9 work completed in this pass
@@ -38,6 +38,7 @@ State: local work only; nothing staged, committed, pushed, or stashed.
 
 1. The FX path is still a clean-room compiler, not a complete HLSL/FX implementation. It now handles substantially more preprocessing and blend state, but full overload/type/resource/control-flow lowering still needs a real backend-neutral expression IR.
 2. Slang sampler arrays, cube/3D resource execution, and arbitrary stage interfaces still need backend descriptor/view support; explicit binding metadata is retained and validated but not yet used to override each backend's safe graph bindings.
+   Standard Slang push-constant blocks, MVP uniform blocks, and custom vertex varyings also still need backend-neutral lowering before packages such as the upstream scanline preset can be claimed as supported on every backend.
 3. The source package cache is persistent and shared before compilation, but compiled GL/DX11 binaries are still driver-owned and require backend-specific disk caches keyed by driver and shader source.
 4. Run the focused unit target once the unrelated local curl/DX9 test dependencies are available, then perform live GPU validation on GL/GLES, Vulkan, and DX11 plus release builds on Windows, Android, Linux, and macOS.
 

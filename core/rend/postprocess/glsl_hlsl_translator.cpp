@@ -126,7 +126,9 @@ void removePortableVertexInterfaces(std::string& source)
 
 bool findMainBody(const std::string& source, size_t& bodyStart, size_t& bodyEnd)
 {
-	const std::regex mainPattern(R"(\bvoid\s+main\s*\(\s*\))");
+	// The first call sees GLSL's `void main()`, while the second runs after the
+	// entry point has been lowered to HLSL with typed input arguments.
+	const std::regex mainPattern(R"(\b[A-Za-z_][A-Za-z0-9_]*\s+main\s*\([^)]*\))");
 	std::smatch match;
 	if (!std::regex_search(source, match, mainPattern))
 		return false;
@@ -291,7 +293,7 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 	}
 
 	replaceAll(source, std::regex(R"(\bvoid\s+main\s*\(\s*\))"),
-			outputCount == 1 ? "float4 main(PixelInput input)" : "PixelOutput main(PixelInput input)");
+			outputCount == 1 ? "float4 main(PixelInput input) : SV_TARGET" : "PixelOutput main(PixelInput input)");
 	replaceAll(source, std::regex(R"(\bvec2\b)"), "float2");
 	replaceAll(source, std::regex(R"(\bvec3\b)"), "float3");
 	replaceAll(source, std::regex(R"(\bvec4\b)"), "float4");
