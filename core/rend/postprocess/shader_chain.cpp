@@ -392,7 +392,8 @@ bool readTextFile(const std::string& path, std::string& text, std::string& error
 			}
 		}
 	}
-	std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(path, "rt"));
+	// Read raw bytes so Windows CRLF translation cannot make the byte-count check fail.
+	std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(path, "rb"));
 	if (file == nullptr)
 		return fail(error, "Unable to open shader source: " + path);
 	text.resize(static_cast<size_t>(file->size()));
