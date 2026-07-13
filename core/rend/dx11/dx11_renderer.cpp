@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -22,6 +23,8 @@
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
 #include "rend/sorter.h"
+#include "cfg/option.h"
+#include "rend/postprocess/shader_chain.h"
 
 #include <memory>
 
@@ -156,6 +159,10 @@ bool DX11Renderer::Init()
 
 	quad = std::make_unique<Quad>();
 	quad->init(device, deviceContext, shaders);
+#ifndef LIBRETRO
+	shaderChain = std::make_unique<Dx11ShaderChain>();
+	shaderChain->init(device, deviceContext, quad.get());
+#endif
 	n2Helper.init(device, deviceContext);
 
 	updateFogTable = true;
@@ -185,6 +192,9 @@ void DX11Renderer::Term()
 	fbScaledRenderTarget.reset();
 	fbScaledTextureView.reset();
 	fbScaledTexture.reset();
+#ifndef LIBRETRO
+	shaderChain.reset();
+#endif
 	quad.reset();
 	deviceContext.reset();
 	device.reset();
@@ -535,6 +545,9 @@ bool DX11Renderer::Render()
 void DX11Renderer::displayFramebuffer()
 {
 #ifndef LIBRETRO
+	ComPtr<ID3D11ShaderResourceView> displayTexture = fbTextureView;
+	if (shaderChain)
+		shaderChain->render(fbTextureView, width, height, FrameCount, displayTexture);
 	D3D11_VIEWPORT vp{};
 	vp.Width = (FLOAT)settings.display.width;
 	vp.Height = (FLOAT)settings.display.height;
@@ -582,7 +595,7 @@ void DX11Renderer::displayFramebuffer()
 	x += shiftX;
 	y += shiftY;
 	deviceContext->OMSetBlendState(blendStates.getState(false), nullptr, 0xffffffff);
-	quad->draw(fbTextureView, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
+	quad->draw(displayTexture, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
 #endif
 }
 

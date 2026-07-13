@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -118,7 +119,10 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						std::string extension = get_file_extension(entry.name);
 						if (selectFile)
 						{
-							if (extension == selectExtension)
+							// A semicolon-delimited filter keeps the existing picker API
+							// compatible while allowing shader packages to expose their
+							// real entry-point extensions together.
+							if (extension == selectExtension || selectExtension.find(";" + extension + ";") != std::string::npos)
 								folderFiles.push_back(entry);
 						}
 						else if (extension == "zip" || extension == "7z" || extension == "chd"

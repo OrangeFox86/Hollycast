@@ -1,3 +1,5 @@
+# Portions Copyright 2026 The Hollycast Authors
+
 if(APPLE AND NOT LIBRETRO)
 	# Requirement from SDL
 	# Minimum version for $<LINK_LIBRARY:feature,library-list>
@@ -972,6 +974,7 @@ endif()
 
 add_subdirectory(core/archive)
 add_subdirectory(core/cfg)
+add_subdirectory(core/rend)
 add_subdirectory(core/hw)
 add_subdirectory(core/imgread)
 add_subdirectory(core/input)
@@ -1069,6 +1072,8 @@ if(USE_OPENGL)
 		target_sources(${PROJECT_NAME} PRIVATE
 				core/deps/imgui/backends/imgui_impl_opengl3.cpp
 				core/deps/imgui/backends/imgui_impl_opengl3.h
+				core/rend/gles/gl_shader_chain.cpp
+				core/rend/gles/gl_shader_chain.h
 				core/rend/gles/opengl_driver.cpp
 				core/rend/gles/opengl_driver.h)
 	endif()
@@ -1173,6 +1178,8 @@ if(USE_VULKAN)
 			core/rend/vulkan/overlay.cpp
 			core/rend/vulkan/overlay.h
 			core/rend/vulkan/vulkan_context.h
+			core/rend/vulkan/vulkan_shader_chain.cpp
+			core/rend/vulkan/vulkan_shader_chain.h
 			core/rend/vulkan/vulkan.h
 			core/rend/vulkan/vulkan_renderer.cpp)
 	if(LIBRETRO)
@@ -1244,6 +1251,11 @@ if(WIN32 AND USE_DX11)
 		core/rend/dx11/oit/dx11_oitrenderer.cpp
 		core/rend/dx11/oit/dx11_oitshaders.cpp
 		core/rend/dx11/oit/dx11_oitshaders.h)
+	if(NOT LIBRETRO)
+		target_sources(${PROJECT_NAME} PRIVATE
+			core/rend/dx11/dx11_shader_chain.cpp
+			core/rend/dx11/dx11_shader_chain.h)
+	endif()
 
 	target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_D3D11)
 	target_link_libraries(${PROJECT_NAME} PRIVATE d3d11 d3dcompiler dxgi)

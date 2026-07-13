@@ -27,6 +27,10 @@ public:
 	static void Init();
 	static void Term();
 	static vk::UniqueShaderModule Compile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText);
+	// User shader selection is recoverable: unlike built-in shaders, a bad file
+	// must leave the previously active post-processing program untouched.
+	static bool TryCompile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText,
+			vk::UniqueShaderModule& shaderModule, std::string& error);
 private:
 	static int initCount;
 };

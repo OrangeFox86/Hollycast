@@ -2,6 +2,7 @@
     Created on: Oct 2, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -19,6 +20,7 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "vulkan_context.h"
+#include "vulkan_shader_chain.h"
 #include "vulkan_renderer.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
@@ -575,6 +577,7 @@ bool VulkanContext::InitDevice()
 	    quadDrawer = std::make_unique<QuadDrawer>();
 	    quadRotatePipeline = std::make_unique<QuadPipeline>(true, true);
 	    quadRotateDrawer = std::make_unique<QuadDrawer>();
+	    shaderChain = std::make_unique<VulkanShaderChain>();
 
 		vk::PhysicalDeviceProperties props = physicalDevice.getProperties();
 		driverName = (const char *)props.deviceName;
@@ -1076,9 +1079,21 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 	{
 		try {
 			NewFrame();
+			bool processed = false;
+			if (image && shaderChain) {
+				vk::ImageView processedView;
+				processed = shaderChain->render(image, imageView, extent,
+						{ static_cast<int>(extent.width), static_cast<int>(extent.height), static_cast<int>(width),
+								static_cast<int>(height), static_cast<uint32_t>(FrameCount) }, processedView);
+				if (processed)
+					imageView = processedView;
+			}
+			lastFrameView = imageView;
+			lastFrameExtent = extent;
+			lastFrameAR = aspectRatio;
 			auto overlayCmdBuffer = PrepareOverlay(config::FloatVMUs, true);
 			gui_draw_osd();
-			if (GetVendorID() == VulkanContext::VENDOR_NVIDIA && image)
+			if (GetVendorID() == VulkanContext::VENDOR_NVIDIA && image && !processed)
 			{
 				vk::ImageMemoryBarrier barrier(
 						vk::AccessFlagBits::eColorAttachmentWrite,
@@ -1163,6 +1178,7 @@ void VulkanContext::term()
 	quadPipelineWithAlpha.reset();
 	quadRotateDrawer.reset();
 	quadRotatePipeline.reset();
+	shaderChain.reset();
 	shaderManager.reset();
 	descriptorPool.reset();
 	commandBuffers.clear();

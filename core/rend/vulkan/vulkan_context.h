@@ -2,6 +2,7 @@
     Created on: Nov 29, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -93,6 +94,7 @@ public:
 #include <vector>
 
 struct ImDrawData;
+class VulkanShaderChain;
 
 class VulkanContext : public GraphicsContext, public FlightManager
 {
@@ -153,6 +155,7 @@ public:
 		return vendorID == VENDOR_ATI || vendorID == VENDOR_AMD;
 	}
 	vk::Format GetDepthFormat() const { return depthFormat; }
+	ShaderManager *GetShaderManager() const { return shaderManager.get(); }
 	static VulkanContext *Instance() { return contextInstance; }
 	bool SupportsSamplerAnisotropy() const { return samplerAnisotropy; }
 	float GetMaxSamplerAnisotropy() const { return samplerAnisotropy ? maxSamplerAnisotropy : 1.f; }
@@ -268,6 +271,7 @@ private:
 	std::unique_ptr<QuadDrawer> quadDrawer;
 	std::unique_ptr<QuadDrawer> quadRotateDrawer;
 	std::unique_ptr<ShaderManager> shaderManager;
+	std::unique_ptr<VulkanShaderChain> shaderChain;
 
 	vk::ImageView lastFrameView;
 	vk::Extent2D lastFrameExtent;

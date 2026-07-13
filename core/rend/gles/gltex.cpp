@@ -456,6 +456,21 @@ GlFramebuffer::GlFramebuffer(int width, int height, bool withDepth, bool withTex
 	makeFramebuffer(withDepth);
 }
 
+GlFramebuffer::GlFramebuffer(int width, int height, bool withDepth, GLuint texture, GLenum internalFormat,
+		GLenum pixelFormat, GLenum pixelType)
+	: width(width), height(height), texture(texture)
+{
+	if (this->texture == 0)
+		this->texture = glcache.GenTexture();
+	glcache.BindTexture(GL_TEXTURE_2D, this->texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, pixelFormat, pixelType, nullptr);
+	glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	makeFramebuffer(withDepth);
+}
+
 GlFramebuffer::~GlFramebuffer()
 {
 	glDeleteFramebuffers(1, &framebuffer);

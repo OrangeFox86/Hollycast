@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -48,6 +49,7 @@
 #include "IconsFontAwesome6.h"
 #include "mainui.h"
 #include "oslib/storage.h"
+#include "rend/postprocess/shader_chain.h"
 #include "stdclass.h"
 #include "achievements/achievements.h"
 #include "vgamepad.h"
@@ -2876,6 +2878,93 @@ void renderVideoTab()
 				"The best way to figure it out: if you are having FPS issues or glitchy gameplay, change this per your hardware recommendations and see what gives you the smoothest frame rate.\n"
 				"(Enable the FPS Counter and test in actual gameplay.)",
 				apiCfg);
+		}
+
+		if (ImGui::CollapsingHeader(ICON_FA_WAND_MAGIC " Post-processing##Section", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::TextWrapped("Apply a GLSL shader, Slang stage/preset, or supported ReShade FX effect after rendering. A new chain replaces the active one only after every pass compiles successfully.");
+			const std::string& selectedPath = config::PostProcessShader.get();
+			if (ImGui::Button("Select Post-processing Shader"))
+				ImGui::OpenPopup("Select Post-processing Shader");
+			if (!selectedPath.empty())
+			{
+				ImGui::SameLine();
+				if (ImGui::Button("Reload Shader"))
+					postprocess::requestShaderChainReload();
+				ImGui::SameLine();
+				if (ImGui::Button("Clear Shader")) {
+					config::PostProcessShader.get().clear();
+					config::PostProcessShaderParameters.get().clear();
+					config::PostProcessShaderTechnique.get().clear();
+				}
+				ImGui::TextWrapped("Selected: %s", selectedPath.c_str());
+			}
+
+			select_file_popup("Select Post-processing Shader", [](bool cancelled, const std::string& selection) {
+				if (!cancelled) {
+					config::PostProcessShader.get() = selection;
+					config::PostProcessShaderParameters.get().clear();
+					config::PostProcessShaderTechnique.get().clear();
+					postprocess::requestShaderChainReload();
+				}
+				return true;
+			}, true, ";glsl;slang;slangp;fx;");
+
+			const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+			if (!status.error.empty())
+				ImGui::TextColored(ImVec4(1.f, .35f, .35f, 1.f), "Rejected: %s", status.error.c_str());
+			else if (!status.activePath.empty())
+				ImGui::TextColored(ImVec4(.35f, 1.f, .55f, 1.f), "Active: %s", status.activePath.c_str());
+			else
+				ImGui::TextDisabled("No post-processing shader active.");
+			if (status.techniques.size() > 1) {
+				const int selectedTechnique = status.selectedTechnique >= 0
+						&& status.selectedTechnique < static_cast<int>(status.techniques.size())
+						? status.selectedTechnique : 0;
+				if (ImGui::BeginCombo("Technique", status.techniques[selectedTechnique].c_str())) {
+					for (size_t index = 0; index < status.techniques.size(); ++index) {
+						const bool selected = static_cast<int>(index) == selectedTechnique;
+						if (ImGui::Selectable(status.techniques[index].c_str(), selected)
+								&& !selected) {
+							config::PostProcessShaderTechnique.get() = status.techniques[index];
+							postprocess::requestShaderChainReload();
+						}
+						if (selected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+			}
+			for (const postprocess::ShaderParameter& parameter : status.parameters) {
+				ImGui::PushID(parameter.name.c_str());
+				if (parameter.componentCount <= 1) {
+					float value = parameter.value;
+					if (parameter.minimum < parameter.maximum && parameter.step > 0.f
+							&& ImGui::SliderFloat(parameter.label.c_str(), &value, parameter.minimum, parameter.maximum)
+							&& postprocess::setShaderChainParameter(parameter.name, value))
+						config::PostProcessShaderParameters.get() = postprocess::serializeShaderChainParameterValues(
+								postprocess::getShaderChainStatus().parameters);
+					else if (parameter.minimum >= parameter.maximum || parameter.step <= 0.f)
+						ImGui::TextDisabled("%s: %.3f", parameter.label.c_str(), parameter.value);
+				}
+				else {
+					ImGui::TextUnformatted(parameter.label.c_str());
+					float values[16] {};
+					std::copy(parameter.values.begin(), parameter.values.end(), values);
+					bool changed = false;
+					for (uint32_t component = 0; component < parameter.componentCount; ++component) {
+						ImGui::PushID(static_cast<int>(component));
+						changed = ImGui::DragFloat("##component", &values[component],
+								parameter.stepValues[component] > 0.f ? parameter.stepValues[component] : 0.01f,
+								parameter.minimumValues[component], parameter.maximumValues[component]) || changed;
+						ImGui::PopID();
+					}
+					if (changed && postprocess::setShaderChainParameterComponents(parameter.name, values, parameter.componentCount))
+						config::PostProcessShaderParameters.get() = postprocess::serializeShaderChainParameterValues(
+								postprocess::getShaderChainStatus().parameters);
+				}
+				ImGui::PopID();
+			}
 		}
 
 		// Transparent Sorting section

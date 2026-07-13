@@ -27,6 +27,13 @@ public:
 		}
 	}
 
+	void BlendEquation(GLenum equation) {
+		if (equation != _blend_equation || _disable_cache) {
+			_blend_equation = equation;
+			glBlendEquation(equation);
+		}
+	}
+
 	void ClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) {
 		if (red != _clear_r || green != _clear_g || blue != _clear_b || alpha != _clear_a || _disable_cache) {
 			_clear_r = red;
@@ -175,6 +182,7 @@ public:
 		_texture_params.clear();
 		_src_blend_factor = 0xFFFFFFFFu;
 		_dst_blend_factor = 0xFFFFFFFFu;
+		_blend_equation = 0xFFFFFFFFu;
 		_clear_r = -1.f;
 		_clear_g = -1.f;
 		_clear_b = -1.f;
@@ -289,6 +297,7 @@ private:
 	GLuint _texture;
 	GLenum _src_blend_factor;
 	GLenum _dst_blend_factor;
+	GLenum _blend_equation;
 	GLclampf _clear_r;
 	GLclampf _clear_g;
 	GLclampf _clear_b;

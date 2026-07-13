@@ -1,8 +1,10 @@
+// Portions Copyright 2026 The Hollycast Authors
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
 #include "hw/pvr/ta.h"
 #ifndef LIBRETRO
+#include "gl_shader_chain.h"
 #include "ui/gui.h"
 #else
 #include "rend/gles/postprocess.h"
@@ -461,6 +463,9 @@ void termGLCommon()
 #ifdef VIDEO_ROUTING
 	os_VideoRoutingTermGL();
 #endif
+#ifndef LIBRETRO
+	gl.shaderChain.reset();
+#endif
 	gl.quad.reset();
 
 	// palette, fog
@@ -697,6 +702,11 @@ GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader)
 		// Dump the shaders source for troubleshooting
 		INFO_LOG(RENDERER, "// VERTEX SHADER\n%s\n// END", vertexShader);
 		INFO_LOG(RENDERER, "// FRAGMENT SHADER\n%s\n// END", fragmentShader);
+		// Candidate shader chains may fail during import. Release the failed
+		// program here so a rejected candidate cannot leak GL objects.
+		glDeleteProgram(program);
+		glDeleteShader(vs);
+		glDeleteShader(ps);
 		throw RendererException(i18n::T("OpenGL shader compilation failed"));
 		// FIXME MINIDUMP-8A1, MINIDUMP-8A2, MINIDUMP-7YE
 	}
@@ -922,6 +932,9 @@ static void gl_create_resources()
 	gl.vbo.idxs = std::make_unique<GlBuffer>(GL_ELEMENT_ARRAY_BUFFER);
 
 	gl.quad = std::make_unique<GlQuadDrawer>();
+#ifndef LIBRETRO
+	gl.shaderChain = std::make_unique<GlShaderChain>();
+#endif
 }
 
 GLuint gl_CompileShader(const char* shader,GLuint type);

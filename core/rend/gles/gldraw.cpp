@@ -1,8 +1,13 @@
+// Portions Copyright 2026 The Hollycast Authors
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
 #include "rend/osd.h"
 #include "naomi2.h"
+#ifndef LIBRETRO
+#include "gl_shader_chain.h"
+#include "hw/pvr/Renderer_if.h"
+#endif
 #ifdef LIBRETRO
 #include "postprocess.h"
 #include "vmu_xhair.h"
@@ -768,6 +773,21 @@ bool OpenGLRenderer::renderLastFrame()
 	int dy = 0;
 	glcache.Disable(GL_SCISSOR_TEST);
 	getWindowboxDimensions(settings.display.width, settings.display.height, gl.ofbo.aspectRatio, dx, dy, config::Rotate90);
+	const int sourceWidth = framebuffer->getWidth();
+	const int sourceHeight = framebuffer->getHeight();
+	float presentShiftX = gl.ofbo.shiftX;
+	float presentShiftY = gl.ofbo.shiftY;
+#ifndef LIBRETRO
+	if (GlFramebuffer *processed = gl.shaderChain->render(framebuffer->getTexture(),
+			{ sourceWidth, sourceHeight, settings.display.width - dx * 2, settings.display.height - dy * 2, FrameCount }))
+	{
+		framebuffer = processed;
+		// Display shifts are measured in source pixels. Scale them after a pass
+		// changes resolution so post-processing does not move the picture.
+		presentShiftX *= static_cast<float>(framebuffer->getWidth()) / sourceWidth;
+		presentShiftY *= static_cast<float>(framebuffer->getHeight()) / sourceHeight;
+	}
+#endif
 
 	if (gl.bogusBlitFramebuffer || config::Rotate90)
 	{
@@ -778,7 +798,7 @@ bool OpenGLRenderer::renderLastFrame()
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
 		float *vertices = nullptr;
-		if (gl.ofbo.shiftX != 0 || gl.ofbo.shiftY != 0)
+		if (presentShiftX != 0 || presentShiftY != 0)
 		{
 			static float sverts[20] = {
 				-1.f, -1.f, 1.f, 0.f, 1.f,
@@ -786,9 +806,9 @@ bool OpenGLRenderer::renderLastFrame()
 				 1.f, -1.f, 1.f, 1.f, 1.f,
 				 1.f,  1.f, 1.f, 1.f, 0.f,
 			};
-			sverts[0] = sverts[5] = -1.f + gl.ofbo.shiftX * 2.f / framebuffer->getWidth();
+			sverts[0] = sverts[5] = -1.f + presentShiftX * 2.f / framebuffer->getWidth();
 			sverts[10] = sverts[15] = sverts[0] + 2;
-			sverts[1] = sverts[11] = -1.f - gl.ofbo.shiftY * 2.f / framebuffer->getHeight();
+			sverts[1] = sverts[11] = -1.f - presentShiftY * 2.f / framebuffer->getHeight();
 			sverts[6] = sverts[16] = sverts[1] + 2;
 			vertices = sverts;
 		}
@@ -802,7 +822,7 @@ bool OpenGLRenderer::renderLastFrame()
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gl.ofbo.origFbo);
 		glcache.ClearColor(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f);
 		glClear(GL_COLOR_BUFFER_BIT);
-		glBlitFramebuffer(-gl.ofbo.shiftX, -gl.ofbo.shiftY, framebuffer->getWidth() - gl.ofbo.shiftX, framebuffer->getHeight() - gl.ofbo.shiftY,
+		glBlitFramebuffer(-presentShiftX, -presentShiftY, framebuffer->getWidth() - presentShiftX, framebuffer->getHeight() - presentShiftY,
 				dx, settings.display.height - dy, settings.display.width - dx, dy,
 				GL_COLOR_BUFFER_BIT, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
     	glBindFramebuffer(GL_FRAMEBUFFER, gl.ofbo.origFbo);

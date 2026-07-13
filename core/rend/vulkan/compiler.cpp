@@ -66,7 +66,8 @@ static EShLanguage translateShaderStage(vk::ShaderStageFlagBits stage)
 	}
 }
 
-static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string const& glslShader, std::vector<unsigned int> &spvShader)
+static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string const& glslShader,
+		std::vector<unsigned int>& spvShader, std::string *error = nullptr)
 {
 	EShLanguage stage = translateShaderStage(shaderType);
 
@@ -83,6 +84,8 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 	{
 		ERROR_LOG(RENDERER, "%s", shader.getInfoLog());
 		ERROR_LOG(RENDERER, "%s", shader.getInfoDebugLog());
+		if (error != nullptr)
+			*error = shader.getInfoLog();
         return false;  // something didn't work
 	}
 
@@ -97,6 +100,8 @@ static bool GLSLtoSPV(const vk::ShaderStageFlagBits shaderType, std::string cons
 	{
 		ERROR_LOG(RENDERER, "%s", shader.getInfoLog());
 		ERROR_LOG(RENDERER, "%s", shader.getInfoDebugLog());
+		if (error != nullptr)
+			*error = shader.getInfoLog();
 		return false;
 	}
 
@@ -112,4 +117,23 @@ vk::UniqueShaderModule ShaderCompiler::Compile(vk::ShaderStageFlagBits shaderSta
 
 	return VulkanContext::Instance()->GetDevice().createShaderModuleUnique
 			(vk::ShaderModuleCreateInfo(vk::ShaderModuleCreateFlags(), shaderSPV));
+}
+
+bool ShaderCompiler::TryCompile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText,
+		vk::UniqueShaderModule& shaderModule, std::string& error)
+{
+	std::vector<unsigned int> shaderSPV;
+	if (!GLSLtoSPV(shaderStage, shaderText, shaderSPV, &error)) {
+		if (error.empty())
+			error = "Vulkan GLSL compilation failed.";
+		return false;
+	}
+	try {
+		shaderModule = VulkanContext::Instance()->GetDevice().createShaderModuleUnique(
+				vk::ShaderModuleCreateInfo(vk::ShaderModuleCreateFlags(), shaderSPV));
+		return true;
+	} catch (const vk::SystemError& exception) {
+		error = exception.what();
+		return false;
+	}
 }

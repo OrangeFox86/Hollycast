@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -30,6 +31,9 @@
 #include "dx11_naomi2.h"
 #ifndef LIBRETRO
 #include "dx11_driver.h"
+#ifndef LIBRETRO
+#include "dx11_shader_chain.h"
+#endif
 #endif
 
 struct DX11Renderer : public Renderer
@@ -173,6 +177,9 @@ private:
 	DX11TextureCache texCache;
 	DX11Shaders *shaders;
 	std::unique_ptr<Quad> quad;
+#ifndef LIBRETRO
+	std::unique_ptr<Dx11ShaderChain> shaderChain;
+#endif
 	ComPtr<ID3D11Buffer> vtxConstants;
 	ComPtr<ID3D11Buffer> pxlConstants;
 	bool scissorEnable = false;

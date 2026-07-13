@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #pragma once
 #include "hw/pvr/ta_structs.h"
 #include "hw/pvr/ta_ctx.h"
@@ -166,6 +167,8 @@ class GlFramebuffer
 public:
 	GlFramebuffer(int width, int height, bool withDepth = false, GLuint texture = 0);
 	GlFramebuffer(int width, int height, bool withDepth, bool withTexture);
+	GlFramebuffer(int width, int height, bool withDepth, GLuint texture, GLenum internalFormat,
+			GLenum pixelFormat, GLenum pixelType);
 	~GlFramebuffer();
 
 	void bind(GLenum type = GL_FRAMEBUFFER) const {
@@ -223,6 +226,9 @@ protected:
 };
 
 class GlQuadDrawer;
+#ifndef LIBRETRO
+class GlShaderChain;
+#endif
 
 struct gl_ctx
 {
@@ -295,6 +301,9 @@ struct gl_ctx
 	} videorouting;
 
 	std::unique_ptr<GlQuadDrawer> quad;
+#ifndef LIBRETRO
+	std::unique_ptr<GlShaderChain> shaderChain;
+#endif
 	const char *gl_version;
 	const char *glsl_version_header;
 	int gl_major;
