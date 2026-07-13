@@ -586,10 +586,12 @@ bool setShaderChainParameterComponents(const std::string& name, const float *val
 	if (parameter == status.parameters.end() || parameter->componentCount != componentCount)
 		return false;
 	for (uint32_t index = 0; index < componentCount; ++index)
+	{
 		const float minimum = parameter->componentCount == 1 ? parameter->minimum : parameter->minimumValues[index];
 		const float maximum = parameter->componentCount == 1 ? parameter->maximum : parameter->maximumValues[index];
 		if (!std::isfinite(values[index]) || values[index] < minimum || values[index] > maximum)
 			return false;
+	}
 	std::copy_n(values, componentCount, parameter->values.begin());
 	parameter->value = parameter->values[0];
 	return true;
