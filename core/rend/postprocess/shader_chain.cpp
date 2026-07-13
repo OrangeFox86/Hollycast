@@ -76,6 +76,7 @@ ShaderParameter projectParameter(const SlangParameter& parameter)
 
 std::mutex statusMutex;
 ShaderChainStatus status;
+std::atomic<uint64_t> statusGeneration { 0 };
 std::atomic<uint64_t> reloadGeneration { 1 };
 
 bool isAbsolutePath(const std::string& path)
@@ -537,6 +538,34 @@ bool resolveTargetSize(const ShaderPass& pass, const ShaderFrameInfo& frame,
 	return true;
 }
 
+std::vector<std::vector<bool>> resolveShaderPassOutputMipmaps(const ShaderChain& chain)
+{
+	std::vector<std::vector<bool>> requirements(chain.passes.size());
+	for (size_t passIndex = 0; passIndex < chain.passes.size(); ++passIndex) {
+		const ShaderPass& pass = chain.passes[passIndex];
+		const size_t outputCount = pass.outputs.empty() ? 1 : pass.outputs.size();
+		requirements[passIndex].assign(outputCount, false);
+		for (size_t outputIndex = 0; outputIndex < pass.outputs.size(); ++outputIndex)
+			requirements[passIndex][outputIndex] = pass.outputs[outputIndex].useMipmaps;
+	}
+	for (size_t consumerIndex = 0; consumerIndex < chain.passes.size(); ++consumerIndex) {
+		const ShaderPass& consumer = chain.passes[consumerIndex];
+		if (!consumer.useMipmaps)
+			continue;
+		if (consumerIndex != 0)
+			requirements[consumerIndex - 1][0] = true;
+		for (const ShaderPassInput& input : consumer.inputs) {
+			if ((input.kind != ShaderInputKind::PassOutput && input.kind != ShaderInputKind::History
+						&& input.kind != ShaderInputKind::Feedback)
+					|| input.sourcePass >= requirements.size()
+					|| input.sourceOutput >= requirements[input.sourcePass].size())
+				continue;
+			requirements[input.sourcePass][input.sourceOutput] = true;
+		}
+	}
+	return requirements;
+}
+
 bool resolveShaderPassInputs(ShaderChain& chain, size_t passIndex,
 		const ShaderPassSource& source, std::string& error)
 {
@@ -551,6 +580,11 @@ ShaderChainStatus getShaderChainStatus()
 	return status;
 }
 
+uint64_t shaderChainStatusGeneration()
+{
+	return statusGeneration.load(std::memory_order_acquire);
+}
+
 void reportShaderChainStatus(const std::string& activePath, const std::string& error,
 		const std::vector<ShaderParameter>& parameters,
 		const std::vector<std::string>& techniques, int selectedTechnique)
@@ -561,6 +595,7 @@ void reportShaderChainStatus(const std::string& activePath, const std::string& e
 	status.parameters = parameters;
 	status.techniques = techniques;
 	status.selectedTechnique = selectedTechnique;
+	statusGeneration.fetch_add(1, std::memory_order_release);
 }
 
 bool setShaderChainParameter(const std::string& name, float value)
@@ -573,6 +608,7 @@ bool setShaderChainParameter(const std::string& name, float value)
 		return false;
 	parameter->value = value;
 	parameter->values[0] = value;
+	statusGeneration.fetch_add(1, std::memory_order_release);
 	return true;
 }
 
@@ -595,6 +631,7 @@ bool setShaderChainParameterComponents(const std::string& name, const float *val
 	}
 	std::copy_n(values, componentCount, parameter->values.begin());
 	parameter->value = parameter->values[0];
+	statusGeneration.fetch_add(1, std::memory_order_release);
 	return true;
 }
 
@@ -830,6 +867,10 @@ bool loadShaderPassSource(const ShaderPass& pass, ShaderPassSource& source, std:
 			return false;
 		source.fragment = std::move(text);
 		source.parameters.clear();
+		// Direct GLSL commonly declares HollyCast's portable interface itself.
+		// Strip those declarations so GL does not see duplicates from its
+		// compatibility preamble and DX can consume the same source.
+		removePortableInterfaceDeclarations(source.fragment, source.parameters);
 		return true;
 	case ShaderFormat::Slang: {
 		std::unordered_set<std::string> includeStack;

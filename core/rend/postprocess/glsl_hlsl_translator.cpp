@@ -10,6 +10,7 @@
 */
 #include "shader_chain.h"
 
+#include <cctype>
 #include <regex>
 #include <sstream>
 
@@ -26,7 +27,9 @@ cbuffer ShaderFrame : register(b0)
 	float2 OutputSize;
 	int FrameCount;
 	float3 ShaderFramePadding;
-	float Parameters[16];
+	// HLSL scalar arrays consume one 16-byte register per element. A float4
+	// array keeps the CPU's contiguous 16-float upload layout backend-neutral.
+	float4 Parameters[4];
 };
 
 struct PixelInput
@@ -47,7 +50,8 @@ cbuffer ShaderFrame : register(b0)
 	float2 OutputSize;
 	int FrameCount;
 	float3 ShaderFramePadding;
-	float Parameters[16];
+	// Keep this layout identical to ShaderFrameUniforms and the pixel stage.
+	float4 Parameters[4];
 };
 
 struct VertexInput
@@ -110,6 +114,59 @@ std::string stripComments(const std::string& source)
 void replaceAll(std::string& source, const std::regex& pattern, const std::string& replacement)
 {
 	source = std::regex_replace(source, pattern, replacement);
+}
+
+std::string normalizeHlslVectorConstructors(const std::string& source)
+{
+	std::string result;
+	result.reserve(source.size());
+	for (size_t index = 0; index < source.size();) {
+		uint32_t components = 0;
+		const bool startsToken = index == 0
+				|| (!std::isalnum(static_cast<unsigned char>(source[index - 1])) && source[index - 1] != '_');
+		if (startsToken && source.compare(index, 6, "float2") == 0)
+			components = 2;
+		else if (startsToken && source.compare(index, 6, "float3") == 0)
+			components = 3;
+		else if (startsToken && source.compare(index, 6, "float4") == 0)
+			components = 4;
+		if (components == 0) {
+			result += source[index++];
+			continue;
+		}
+		size_t open = index + 6;
+		while (open < source.size() && std::isspace(static_cast<unsigned char>(source[open])))
+			++open;
+		if (open == source.size() || source[open] != '(') {
+			result.append(source, index, open - index);
+			index = open;
+			continue;
+		}
+		int depth = 1;
+		bool hasTopLevelComma = false;
+		size_t close = open + 1;
+		for (; close < source.size() && depth != 0; ++close) {
+			if (source[close] == '(')
+				++depth;
+			else if (source[close] == ')')
+				--depth;
+			else if (source[close] == ',' && depth == 1)
+				hasTopLevelComma = true;
+		}
+		if (depth != 0) {
+			result.append(source, index, std::string::npos);
+			break;
+		}
+		const std::string arguments = normalizeHlslVectorConstructors(
+				source.substr(open + 1, close - open - 2));
+		const std::string type = "float" + std::to_string(components);
+		// GLSL splats a scalar in vecN(x). HLSL constructor syntax does not,
+		// but its explicit numeric cast preserves scalar splats and vector copies.
+		result += hasTopLevelComma ? type + "(" + arguments + ")"
+				: "(" + type + ")(" + arguments + ")";
+		index = close;
+	}
+	return result;
 }
 
 void removePortableVertexInterfaces(std::string& source)
@@ -195,13 +252,17 @@ uint32_t parameterComponents(SlangParameterType type)
 
 std::string hlslParameterValue(const SlangParameter& parameter, uint32_t offset)
 {
-	const std::string value = "Parameters[" + std::to_string(offset) + "]";
+	static constexpr char Components[] = { 'x', 'y', 'z', 'w' };
+	const auto component = [&](uint32_t index) {
+		return "Parameters[" + std::to_string(index / 4) + "]." + Components[index % 4];
+	};
+	const std::string value = component(offset);
 	const auto matrix = [&](const char *type, uint32_t components) {
 		std::string result = std::string(type) + "(";
 		for (uint32_t index = 0; index < components; ++index) {
 			if (index != 0)
 				result += ", ";
-			result += "Parameters[" + std::to_string(offset + index) + "]";
+			result += component(offset + index);
 		}
 		return result + ")";
 	};
@@ -210,12 +271,12 @@ std::string hlslParameterValue(const SlangParameter& parameter, uint32_t offset)
 	case SlangParameterType::Int: return "int(" + value + ")";
 	case SlangParameterType::Bool: return "(" + value + " != 0.0)";
 	case SlangParameterType::Float2:
-		return "float2(" + value + ", Parameters[" + std::to_string(offset + 1) + "])";
+		return "float2(" + value + ", " + component(offset + 1) + ")";
 	case SlangParameterType::Float3:
-		return "float3(" + value + ", Parameters[" + std::to_string(offset + 1) + "], Parameters[" + std::to_string(offset + 2) + "])";
+		return "float3(" + value + ", " + component(offset + 1) + ", " + component(offset + 2) + ")";
 	case SlangParameterType::Float4:
-		return "float4(" + value + ", Parameters[" + std::to_string(offset + 1) + "], Parameters[" + std::to_string(offset + 2)
-				+ "], Parameters[" + std::to_string(offset + 3) + "])";
+		return "float4(" + value + ", " + component(offset + 1) + ", " + component(offset + 2)
+				+ ", " + component(offset + 3) + ")";
 	case SlangParameterType::Float2x2: return matrix("float2x2", 4);
 	case SlangParameterType::Float3x3: return matrix("float3x3", 9);
 	case SlangParameterType::Float4x4: return matrix("float4x4", 16);
@@ -300,6 +361,7 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 	replaceAll(source, std::regex(R"(\bmat2\b)"), "float2x2");
 	replaceAll(source, std::regex(R"(\bmat3\b)"), "float3x3");
 	replaceAll(source, std::regex(R"(\bmat4\b)"), "float4x4");
+	source = normalizeHlslVectorConstructors(source);
 	replaceAll(source, std::regex(R"(\b(mediump|highp|lowp)\b\s*)"), "");
 	replaceAll(source, std::regex(R"(\bgl_FragColor\b)"), outputCount == 1 ? "FragColor" : "FragColor0");
 	for (uint32_t output = 0; output < outputCount; ++output)

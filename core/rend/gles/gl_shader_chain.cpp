@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <regex>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -105,11 +106,12 @@ std::string fragmentPreamble(const std::vector<postprocess::ShaderParameter>& pa
 	if (!hasUniformDeclaration(source, "SourceSize")) preamble += "uniform mediump vec2 SourceSize;\n";
 	if (!hasUniformDeclaration(source, "OutputSize")) preamble += "uniform mediump vec2 OutputSize;\n";
 	if (!hasUniformDeclaration(source, "FrameCount")) preamble += "uniform int FrameCount;\n";
+	std::unordered_set<std::string> emittedParameters;
 	for (const postprocess::ShaderParameter& parameter : parameters)
-		if (!hasUniformDeclaration(source, parameter.name))
+		if (!hasUniformDeclaration(source, parameter.name) && emittedParameters.emplace(parameter.name).second)
 			preamble += "uniform float " + parameter.name + ";\n";
 	for (const postprocess::SlangParameter& parameter : slangParameters)
-		if (!hasUniformDeclaration(source, parameter.name))
+		if (!hasUniformDeclaration(source, parameter.name) && emittedParameters.emplace(parameter.name).second)
 			preamble += "uniform " + std::string(glslType(parameter.type)) + " " + parameter.name + ";\n";
 	return preamble;
 }
@@ -491,6 +493,9 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 			return false;
 		}
 	}
+	const std::vector<std::vector<bool>> mipmapRequirements = postprocess::resolveShaderPassOutputMipmaps(chain);
+	for (size_t passIndex = 0; passIndex < candidate.size(); ++passIndex)
+		candidate[passIndex].outputNeedsMipmaps = mipmapRequirements[passIndex];
 	return true;
 }
 
@@ -503,14 +508,18 @@ bool GlShaderChain::activate(const postprocess::ShaderChain& chain, std::string&
 	deletePrograms(programs);
 	deleteLookupTextures();
 	programs = std::move(candidate);
-	historyDepth = 2;
+	historyDepth = 1;
 	needsSourceHistory = false;
 	for (const postprocess::ShaderPass& pass : chain.passes)
-		for (const postprocess::ShaderPassInput& input : pass.inputs)
+		for (const postprocess::ShaderPassInput& input : pass.inputs) {
 			if (input.kind == postprocess::ShaderInputKind::History) {
 				historyDepth = std::max(historyDepth, input.historyOffset + 1);
 				needsSourceHistory = needsSourceHistory || input.sourcePass == postprocess::InvalidShaderPass;
 			}
+			else if (input.kind == postprocess::ShaderInputKind::Feedback) {
+				historyDepth = std::max(historyDepth, 2u);
+			}
+		}
 	targets.clear();
 	sourceHistory.clear();
 	lookupTextures.reserve(chain.textures.size());
@@ -554,6 +563,7 @@ void GlShaderChain::updateConfiguredChain()
 	activePath = requestedPath;
 	postprocess::reportShaderChainStatus(activePath, {}, candidate.parameters,
 			candidate.techniques, candidate.selectedTechnique);
+	parameterGeneration = postprocess::shaderChainStatusGeneration();
 }
 
 GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::ShaderFrameInfo& frame)
@@ -569,16 +579,21 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 	}
 
 	postprocess::ShaderFrameInfo passFrame = frame;
-	const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
-	if (status.activePath == activePath && status.error.empty())
-		for (Program& program : programs)
-			for (ParameterUniform& parameter : program.parameters) {
-				auto configured = std::find_if(status.parameters.begin(), status.parameters.end(), [&](const postprocess::ShaderParameter& value) {
-					return value.name == parameter.name;
-				});
-				if (configured != status.parameters.end())
-					std::copy_n(configured->values.begin(), configured->componentCount, parameter.values.begin());
-			}
+	const uint64_t statusGeneration = postprocess::shaderChainStatusGeneration();
+	if (statusGeneration != parameterGeneration) {
+		const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+		parameterGeneration = statusGeneration;
+		if (status.activePath == activePath && status.error.empty()) {
+			for (Program& program : programs)
+				for (ParameterUniform& parameter : program.parameters) {
+					auto configured = std::find_if(status.parameters.begin(), status.parameters.end(), [&](const postprocess::ShaderParameter& value) {
+						return value.name == parameter.name;
+					});
+					if (configured != status.parameters.end())
+						std::copy_n(configured->values.begin(), configured->componentCount, parameter.values.begin());
+				}
+		}
+	}
 	if (targets.size() != programs.size())
 		targets.resize(programs.size());
 	const size_t currentTarget = frame.frameCount % historyDepth;
@@ -610,6 +625,7 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		GlVertexArray::unbind();
 	}
 	GLuint inputTexture = sourceTexture;
+	bool inputHasMipmaps = false;
 	GlFramebuffer *output = nullptr;
 	for (size_t index = 0; index < programs.size(); ++index) {
 		Program& program = programs[index];
@@ -691,8 +707,10 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 			}
 			glActiveTexture(GL_TEXTURE0 + resource.unit);
 			glcache.BindTexture(GL_TEXTURE_2D, texture);
-			if (resource.kind == postprocess::ShaderInputKind::Source && program.pass.useMipmaps)
+			if (resource.kind == postprocess::ShaderInputKind::Source && program.pass.useMipmaps && !inputHasMipmaps) {
 				glGenerateMipmap(GL_TEXTURE_2D);
+				inputHasMipmaps = true;
+			}
 			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 					lookup != nullptr ? (lookup->config.useMipmaps ? GL_LINEAR_MIPMAP_LINEAR
 							: lookup->config.linearFilter ? GL_LINEAR : GL_NEAREST)
@@ -736,9 +754,7 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		GlVertexArray::unbind();
 		for (uint32_t outputIndex = 0; outputIndex < target->outputs.size(); ++outputIndex) {
-			const bool outputUsesMipmaps = program.pass.outputs.empty()
-					? program.pass.useMipmaps : program.pass.outputs[outputIndex].useMipmaps;
-			if (outputUsesMipmaps) {
+			if (program.outputNeedsMipmaps[outputIndex]) {
 				glActiveTexture(GL_TEXTURE0);
 				glcache.BindTexture(GL_TEXTURE_2D, target->outputs[outputIndex]->getTexture());
 				glGenerateMipmap(GL_TEXTURE_2D);
@@ -746,6 +762,7 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		}
 
 		inputTexture = target->outputs[0]->getTexture();
+		inputHasMipmaps = program.outputNeedsMipmaps[0];
 		passFrame.sourceWidth = outputWidth;
 		passFrame.sourceHeight = outputHeight;
 		output = target->outputs[0].get();
@@ -768,6 +785,9 @@ void GlShaderChain::term()
 	vertexArray.term();
 	configuredPath.clear();
 	configuredGeneration = 0;
+	parameterGeneration = 0;
 	activePath.clear();
+	historyDepth = 1;
+	needsSourceHistory = false;
 	postprocess::reportShaderChainStatus({}, {});
 }

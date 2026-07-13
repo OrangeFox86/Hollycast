@@ -484,27 +484,10 @@ bool VulkanShaderChain::updateConfiguredChain()
 				postprocess::reportShaderChainStatus(activePath, error);
 				return !programs.empty();
 			}
-	for (size_t producer = 0; producer < candidate.size(); ++producer) {
-		for (Program::Output& output : candidate[producer].outputs)
-			output.needsMipmaps = output.needsMipmaps || output.config.useMipmaps;
-		for (size_t consumer = producer + 1; consumer < candidate.size(); ++consumer) {
-			if (consumer == producer + 1 && candidate[consumer].pass.useMipmaps)
-				candidate[producer].outputs[0].needsMipmaps = true;
-			for (const postprocess::ShaderPassInput& input : candidate[consumer].pass.inputs) {
-				if (input.sourcePass != producer
-						|| (input.kind != postprocess::ShaderInputKind::PassOutput
-								&& input.kind != postprocess::ShaderInputKind::History
-								&& input.kind != postprocess::ShaderInputKind::Feedback))
-					continue;
-				if (input.sourceOutput >= candidate[producer].outputs.size()) {
-					error = "Vulkan post-processing input references an unavailable render target output.";
-					postprocess::reportShaderChainStatus(activePath, error);
-					return !programs.empty();
-				}
-				candidate[producer].outputs[input.sourceOutput].needsMipmaps |= candidate[consumer].pass.useMipmaps;
-			}
-		}
-	}
+	const std::vector<std::vector<bool>> mipmapRequirements = postprocess::resolveShaderPassOutputMipmaps(chain);
+	for (size_t passIndex = 0; passIndex < candidate.size(); ++passIndex)
+		for (size_t outputIndex = 0; outputIndex < candidate[passIndex].outputs.size(); ++outputIndex)
+			candidate[passIndex].outputs[outputIndex].needsMipmaps = mipmapRequirements[passIndex][outputIndex];
 	for (const Program& program : candidate)
 		for (const Program::Output& output : program.outputs)
 			if (output.needsMipmaps && !output.supportsMipmaps) {
@@ -514,13 +497,16 @@ bool VulkanShaderChain::updateConfiguredChain()
 			}
 	programs = std::move(candidate);
 	parameters = std::move(chain.parameters);
-	historyDepth = 2;
+	historyDepth = 1;
 	needsSourceHistory = false;
 	for (const postprocess::ShaderPass& pass : chain.passes)
 		for (const postprocess::ShaderPassInput& input : pass.inputs) {
 			if (input.kind == postprocess::ShaderInputKind::History) {
 				historyDepth = std::max(historyDepth, input.historyOffset + 1);
 				needsSourceHistory = needsSourceHistory || input.sourcePass == postprocess::InvalidShaderPass;
+			}
+			else if (input.kind == postprocess::ShaderInputKind::Feedback) {
+				historyDepth = std::max(historyDepth, 2u);
 			}
 		}
 	targets.clear();
@@ -532,6 +518,7 @@ bool VulkanShaderChain::updateConfiguredChain()
 	activePath = requestedPath;
 	postprocess::reportShaderChainStatus(activePath, {}, parameters,
 			chain.techniques, chain.selectedTechnique);
+	parameterGeneration = postprocess::shaderChainStatusGeneration();
 	return true;
 }
 
@@ -722,9 +709,13 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 	if (descriptorSets[imageIndex].size() < programs.size())
 		descriptorSets[imageIndex].resize(programs.size());
 	postprocess::ShaderFrameInfo passFrame = frame;
-	const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
-	if (status.activePath == activePath && status.error.empty())
-		parameters = status.parameters;
+	const uint64_t statusGeneration = postprocess::shaderChainStatusGeneration();
+	if (statusGeneration != parameterGeneration) {
+		const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+		parameterGeneration = statusGeneration;
+		if (status.activePath == activePath && status.error.empty())
+			parameters = status.parameters;
+	}
 	vk::ImageView inputView = sourceView;
 	bool inputHasMipmaps = false;
 	const size_t currentTarget = frame.frameCount % historyDepth;
@@ -967,6 +958,9 @@ void VulkanShaderChain::term()
 	renderPass.reset();
 	configuredPath.clear();
 	configuredGeneration = 0;
+	parameterGeneration = 0;
 	activePath.clear();
+	historyDepth = 1;
+	needsSourceHistory = false;
 	postprocess::reportShaderChainStatus({}, {});
 }

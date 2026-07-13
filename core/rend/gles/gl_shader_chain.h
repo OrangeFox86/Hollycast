@@ -68,6 +68,7 @@ private:
 		GLint frameCountUniform = -1;
 		std::vector<ParameterUniform> parameters;
 		std::vector<ResourceUniform> resources;
+		std::vector<bool> outputNeedsMipmaps;
 	};
 	struct MrtTarget {
 		std::vector<std::unique_ptr<GlFramebuffer>> outputs;
@@ -94,8 +95,9 @@ private:
 	std::string activePath;
 	std::vector<MrtTargetRing> targets;
 	TargetRing sourceHistory;
-	uint32_t historyDepth = 2;
+	uint32_t historyDepth = 1;
 	bool needsSourceHistory = false;
+	uint64_t parameterGeneration = 0;
 	std::vector<LookupTexture> lookupTextures;
 	std::unique_ptr<GlBuffer> vertexBuffer;
 	GLuint copyProgram = 0;

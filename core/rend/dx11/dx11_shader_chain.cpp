@@ -348,6 +348,9 @@ bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, st
 		}
 		candidate.push_back(std::move(program));
 	}
+	const std::vector<std::vector<bool>> mipmapRequirements = postprocess::resolveShaderPassOutputMipmaps(chain);
+	for (size_t passIndex = 0; passIndex < candidate.size(); ++passIndex)
+		candidate[passIndex].outputNeedsMipmaps = mipmapRequirements[passIndex];
 	return true;
 }
 
@@ -382,11 +385,17 @@ bool Dx11ShaderChain::updateConfiguredChain()
 	}
 	programs = std::move(candidate);
 	parameters = std::move(chain.parameters);
-	historyDepth = 2;
+	historyDepth = 1;
+	needsSourceHistory = false;
 	for (const postprocess::ShaderPass& pass : chain.passes)
-		for (const postprocess::ShaderPassInput& input : pass.inputs)
-			if (input.kind == postprocess::ShaderInputKind::History)
+		for (const postprocess::ShaderPassInput& input : pass.inputs) {
+			if (input.kind == postprocess::ShaderInputKind::History) {
 				historyDepth = std::max(historyDepth, input.historyOffset + 1);
+				needsSourceHistory = needsSourceHistory || input.sourcePass == postprocess::InvalidShaderPass;
+			}
+			else if (input.kind == postprocess::ShaderInputKind::Feedback)
+				historyDepth = std::max(historyDepth, 2u);
+		}
 	targets.clear();
 	sourceHistory.clear();
 	lookupTextures.clear();
@@ -396,6 +405,7 @@ bool Dx11ShaderChain::updateConfiguredChain()
 	activePath = requestedPath;
 	postprocess::reportShaderChainStatus(activePath, {}, parameters,
 			chain.techniques, chain.selectedTechnique);
+	parameterGeneration = postprocess::shaderChainStatusGeneration();
 	return true;
 }
 
@@ -459,9 +469,9 @@ bool Dx11ShaderChain::ensureLookupTextures(std::string& error)
 	return true;
 }
 
-bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_FORMAT format)
+bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_FORMAT format, bool mipmapped)
 {
-	if (target.texture && target.width == width && target.height == height && target.format == format)
+	if (target.texture && target.width == width && target.height == height && target.format == format && target.mipmapped == mipmapped)
 		return true;
 	target.shaderView.reset();
 	target.view.reset();
@@ -469,13 +479,13 @@ bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_F
 	D3D11_TEXTURE2D_DESC description {};
 	description.Width = width;
 	description.Height = height;
-	description.MipLevels = 0;
+	description.MipLevels = mipmapped ? 0 : 1;
 	description.ArraySize = 1;
 	description.Format = format;
 	description.SampleDesc.Count = 1;
 	description.Usage = D3D11_USAGE_DEFAULT;
 	description.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-	description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+	description.MiscFlags = mipmapped ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0;
 	D3D11_RENDER_TARGET_VIEW_DESC renderTargetDescription {};
 	renderTargetDescription.Format = description.Format;
 	renderTargetDescription.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -484,7 +494,7 @@ bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_F
 	shaderResourceDescription.Format = description.Format;
 	shaderResourceDescription.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	shaderResourceDescription.Texture2D.MostDetailedMip = 0;
-	shaderResourceDescription.Texture2D.MipLevels = UINT(-1);
+	shaderResourceDescription.Texture2D.MipLevels = mipmapped ? UINT(-1) : 1;
 	if (FAILED(device->CreateTexture2D(&description, nullptr, &target.texture.get())) ||
 			FAILED(device->CreateRenderTargetView(target.texture, &renderTargetDescription, &target.view.get())) ||
 			FAILED(device->CreateShaderResourceView(target.texture, &shaderResourceDescription, &target.shaderView.get()))) {
@@ -494,11 +504,13 @@ bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_F
 		target.width = 0;
 		target.height = 0;
 		target.format = DXGI_FORMAT_UNKNOWN;
+		target.mipmapped = false;
 		return false;
 	}
 	target.width = width;
 	target.height = height;
 	target.format = format;
+	target.mipmapped = mipmapped;
 	// The alternate target is sampled by history/feedback before its first render.
 	// Define it instead of exposing driver-dependent texture contents on that frame.
 	static constexpr float clearColor[] = { 0.f, 0.f, 0.f, 0.f };
@@ -516,7 +528,7 @@ void Dx11ShaderChain::unbindPixelShaderSource() const
 bool Dx11ShaderChain::prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height,
 		ComPtr<ID3D11ShaderResourceView>& mipmappedView)
 {
-	if (!ensureTarget(mipmapSource, width, height, DXGI_FORMAT_B8G8R8A8_UNORM))
+	if (!ensureTarget(mipmapSource, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, true))
 		return false;
 
 	// The emulator framebuffer has one mip level. Blit it into an internal,
@@ -550,36 +562,41 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		return false;
 	}
 	postprocess::ShaderFrameInfo passFrame { width, height, width, height, frameCount };
-	const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
-	if (status.activePath == activePath && status.error.empty())
-		parameters = status.parameters;
+	const uint64_t statusGeneration = postprocess::shaderChainStatusGeneration();
+	if (statusGeneration != parameterGeneration) {
+		const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+		parameterGeneration = statusGeneration;
+		if (status.activePath == activePath && status.error.empty())
+			parameters = status.parameters;
+	}
 	ComPtr<ID3D11ShaderResourceView> inputView = sourceView;
 	bool inputHasMipChain = false;
 	if (targets.size() != programs.size())
 		targets.resize(programs.size());
 	const size_t currentTarget = frameCount % historyDepth;
-	if (sourceHistory.size() != historyDepth)
-		sourceHistory.resize(historyDepth);
-	if (std::any_of(sourceHistory.begin(), sourceHistory.end(), [&](Target& target) {
-		return !ensureTarget(target, width, height, DXGI_FORMAT_B8G8R8A8_UNORM);
-	})) {
-		const std::string error = "DirectX 11 post-processing source history target creation failed.";
-		postprocess::reportShaderChainStatus(activePath, error);
-		WARN_LOG(RENDERER, "%s", error.c_str());
-		return false;
+	if (needsSourceHistory) {
+		if (sourceHistory.size() != historyDepth)
+			sourceHistory.resize(historyDepth);
+		if (std::any_of(sourceHistory.begin(), sourceHistory.end(), [&](Target& target) {
+			return !ensureTarget(target, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false);
+		})) {
+			const std::string error = "DirectX 11 post-processing source history target creation failed.";
+			postprocess::reportShaderChainStatus(activePath, error);
+			WARN_LOG(RENDERER, "%s", error.c_str());
+			return false;
+		}
+		D3D11_VIEWPORT historyViewport {};
+		historyViewport.Width = static_cast<float>(width);
+		historyViewport.Height = static_cast<float>(height);
+		historyViewport.MinDepth = 0.f;
+		historyViewport.MaxDepth = 1.f;
+		unbindPixelShaderSource();
+		deviceContext->RSSetViewports(1, &historyViewport);
+		deviceContext->OMSetRenderTargets(1, &sourceHistory[currentTarget].view.get(), nullptr);
+		deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+		quad->draw(sourceView, theDX11Context.getSamplers().getSampler(false));
+		unbindPixelShaderSource();
 	}
-	D3D11_VIEWPORT historyViewport {};
-	historyViewport.Width = static_cast<float>(width);
-	historyViewport.Height = static_cast<float>(height);
-	historyViewport.MinDepth = 0.f;
-	historyViewport.MaxDepth = 1.f;
-	unbindPixelShaderSource();
-	deviceContext->RSSetViewports(1, &historyViewport);
-	deviceContext->OMSetRenderTargets(1, &sourceHistory[currentTarget].view.get(), nullptr);
-	deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	quad->draw(sourceView, theDX11Context.getSamplers().getSampler(false));
-	unbindPixelShaderSource();
-	deviceContext->GenerateMips(sourceHistory[currentTarget].shaderView);
 	for (size_t index = 0; index < programs.size(); ++index) {
 		Program& program = programs[index];
 		int outputWidth;
@@ -611,7 +628,7 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 			if (targetRing.size() != historyDepth)
 				targetRing.resize(historyDepth);
 			if (std::any_of(targetRing.begin(), targetRing.end(), [&](Target& target) {
-				return !ensureTarget(target, outputWidth, outputHeight, targetFormat);
+				return !ensureTarget(target, outputWidth, outputHeight, targetFormat, program.outputNeedsMipmaps[output]);
 			})) {
 				if (error.empty())
 					error = "DirectX 11 post-processing target creation failed.";
@@ -621,19 +638,14 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 			}
 		}
 		Target& target = passTargets[0][currentTarget];
-		if (program.pass.useMipmaps) {
-			if (!inputHasMipChain) {
-				if (!prepareMipmappedSource(inputView, passFrame.sourceWidth, passFrame.sourceHeight, inputView)) {
-					error = "DirectX 11 post-processing mip source creation failed.";
-					postprocess::reportShaderChainStatus(activePath, error);
-					WARN_LOG(RENDERER, "%s", error.c_str());
-					return false;
-				}
-				inputHasMipChain = true;
+		if (program.pass.useMipmaps && !inputHasMipChain) {
+			if (!prepareMipmappedSource(inputView, passFrame.sourceWidth, passFrame.sourceHeight, inputView)) {
+				error = "DirectX 11 post-processing mip source creation failed.";
+				postprocess::reportShaderChainStatus(activePath, error);
+				WARN_LOG(RENDERER, "%s", error.c_str());
+				return false;
 			}
-			else {
-				deviceContext->GenerateMips(inputView);
-			}
+			inputHasMipChain = true;
 		}
 		D3D11_VIEWPORT viewport {};
 		viewport.Width = static_cast<float>(outputWidth);
@@ -727,8 +739,11 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		}
 		quad->drawWithShaders(resourceViews, samplers, program.vertexShader.get(), program.pixelShader, &uniforms, sizeof(uniforms));
 		unbindPixelShaderSource();
+		for (uint32_t output = 0; output < outputCount; ++output)
+			if (program.outputNeedsMipmaps[output])
+				deviceContext->GenerateMips(passTargets[output][currentTarget].shaderView);
 		inputView = target.shaderView;
-		inputHasMipChain = true;
+		inputHasMipChain = program.outputNeedsMipmaps[0];
 		passFrame.sourceWidth = outputWidth;
 		passFrame.sourceHeight = outputHeight;
 	}
@@ -746,7 +761,10 @@ void Dx11ShaderChain::term()
 	parameters.clear();
 	configuredPath.clear();
 	configuredGeneration = 0;
+	parameterGeneration = 0;
 	activePath.clear();
+	historyDepth = 1;
+	needsSourceHistory = false;
 	quad = nullptr;
 	deviceContext.reset();
 	device.reset();

@@ -98,12 +98,13 @@ private:
 	std::vector<vk::UniqueDescriptorSet> sourceDescriptorSets;
 	std::vector<std::vector<std::vector<TargetSet>>> targets;
 	std::vector<std::vector<Target>> sourceTargets;
-	uint32_t historyDepth = 2;
+	uint32_t historyDepth = 1;
 	bool needsSourceHistory = false;
 	std::vector<Program> programs;
 	std::vector<LookupTexture> lookupTextures;
 	std::vector<postprocess::ShaderParameter> parameters;
 	std::string configuredPath;
 	uint64_t configuredGeneration = 0;
+	uint64_t parameterGeneration = 0;
 	std::string activePath;
 };

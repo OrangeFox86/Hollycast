@@ -47,6 +47,7 @@ private:
 		int width = 0;
 		int height = 0;
 		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		bool mipmapped = false;
 	};
 	struct ResourceBinding {
 		postprocess::ShaderPassInput input;
@@ -64,13 +65,14 @@ private:
 		ComPtr<ID3D11BlendState> blendState;
 		std::vector<ResourceBinding> resources;
 		std::vector<postprocess::SlangParameter> parameters;
+		std::vector<bool> outputNeedsMipmaps;
 	};
 	using TargetRing = std::vector<Target>;
 	using PassTargets = std::vector<TargetRing>;
 
 	bool updateConfiguredChain();
 	bool compileCandidate(const postprocess::ShaderChain& chain, std::vector<Program>& candidate, std::string& error) const;
-	bool ensureTarget(Target& target, int width, int height, DXGI_FORMAT format);
+	bool ensureTarget(Target& target, int width, int height, DXGI_FORMAT format, bool mipmapped);
 	bool prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height,
 			ComPtr<ID3D11ShaderResourceView>& mipmappedView);
 	bool ensureLookupTextures(std::string& error);
@@ -81,12 +83,14 @@ private:
 	std::vector<PassTargets> targets;
 	Target mipmapSource;
 	TargetRing sourceHistory;
-	uint32_t historyDepth = 2;
+	uint32_t historyDepth = 1;
+	bool needsSourceHistory = false;
 	std::vector<Program> programs;
 	std::vector<LookupTexture> lookupTextures;
 	std::vector<postprocess::ShaderParameter> parameters;
 	Quad *quad = nullptr;
 	std::string configuredPath;
 	uint64_t configuredGeneration = 0;
+	uint64_t parameterGeneration = 0;
 	std::string activePath;
 };

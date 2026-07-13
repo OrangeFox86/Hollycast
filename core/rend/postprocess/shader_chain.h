@@ -236,6 +236,9 @@ bool resolveShaderPassInputs(ShaderChain& chain, size_t passIndex,
 // Backends publish a copy so UI code can report a rejected candidate without
 // reaching into renderer-specific state or racing the render thread.
 ShaderChainStatus getShaderChainStatus();
+// Changes only when the published status or its parameter values change.
+// Renderers use this to avoid copying UI-facing vectors on every frame.
+uint64_t shaderChainStatusGeneration();
 void reportShaderChainStatus(const std::string& activePath, const std::string& error,
 		const std::vector<ShaderParameter>& parameters = {},
 		const std::vector<std::string>& techniques = {}, int selectedTechnique = -1);
@@ -261,6 +264,10 @@ bool parseSlangShader(const std::string& shaderText, SlangShaderSource& shader, 
 
 // Loads and validates a .slangp preset from HollyCast's platform-neutral storage.
 bool loadSlangPreset(const std::string& presetPath, ShaderChain& chain, std::string& error);
+
+// Returns the output mip-chain requirements for every pass. This keeps target
+// allocation and generation identical across the renderer backends.
+std::vector<std::vector<bool>> resolveShaderPassOutputMipmaps(const ShaderChain& chain);
 
 // Builds a chain from a selected GLSL, Slang, Slang preset, or ReShade FX file
 // and reflects the parameters that its backend-neutral source exposes.

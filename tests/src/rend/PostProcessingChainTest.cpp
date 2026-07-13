@@ -94,6 +94,30 @@ TEST(PostProcessingChainTest, ParsesNamedPresetResourcesAndTargetRequests)
 	EXPECT_EQ(postprocess::ShaderWrapMode::Repeat, chain.textures[0].wrapMode);
 }
 
+TEST(PostProcessingChainTest, ComputesOnlyRequiredOutputMipChains)
+{
+	postprocess::ShaderChain chain;
+	chain.passes.resize(3);
+	chain.passes[0].outputs.resize(2);
+	chain.passes[0].outputs[0].useMipmaps = true;
+	chain.passes[2].useMipmaps = true;
+	postprocess::ShaderPassInput alias;
+	alias.kind = postprocess::ShaderInputKind::PassOutput;
+	alias.sourcePass = 0;
+	alias.sourceOutput = 1;
+	chain.passes[2].inputs.push_back(alias);
+
+	const std::vector<std::vector<bool>> requirements = postprocess::resolveShaderPassOutputMipmaps(chain);
+	ASSERT_EQ(3u, requirements.size());
+	ASSERT_EQ(2u, requirements[0].size());
+	EXPECT_TRUE(requirements[0][0]);
+	EXPECT_TRUE(requirements[0][1]);
+	ASSERT_EQ(1u, requirements[1].size());
+	EXPECT_TRUE(requirements[1][0]);
+	ASSERT_EQ(1u, requirements[2].size());
+	EXPECT_FALSE(requirements[2][0]);
+}
+
 TEST(PostProcessingChainTest, RejectsUnsafeOrAmbiguousPresetResources)
 {
 	postprocess::ShaderChain chain;
@@ -233,6 +257,34 @@ TEST(PostProcessingChainTest, TranslatesPortableScanlineShaderToHlsl)
 			hlsl, error)) << error;
 	EXPECT_NE(std::string::npos, hlsl.find("fmod(floor(vTexCoord.y * OutputSize.y), 2.0)"));
 	EXPECT_NE(std::string::npos, hlsl.find("float4 main(PixelInput input) : SV_TARGET"));
+}
+
+TEST(PostProcessingChainTest, TranslatesGlslScalarVectorConstructorsToHlslCasts)
+{
+	std::string hlsl;
+	std::string error;
+	ASSERT_TRUE(postprocess::translateGlslFragmentToHlsl(
+			"void main() { float luminance = 0.5; gl_FragColor = vec4(vec3(luminance), 1.0); }",
+			hlsl, error)) << error;
+	EXPECT_NE(std::string::npos, hlsl.find("(float3)(luminance)"));
+	EXPECT_NE(std::string::npos, hlsl.find("float4((float3)(luminance), 1.0)"));
+}
+
+TEST(PostProcessingChainTest, PacksDx11ParametersContiguously)
+{
+	std::vector<postprocess::SlangParameter> parameters(3);
+	parameters[0].name = "RED";
+	parameters[1].name = "GREEN";
+	parameters[2].name = "BLUE";
+	std::string hlsl;
+	std::string error;
+	ASSERT_TRUE(postprocess::translateGlslFragmentToHlsl(
+			"void main() { gl_FragColor = texture(Source, vTexCoord) * vec4(RED, GREEN, BLUE, 1.0); }",
+			parameters, hlsl, error)) << error;
+	EXPECT_NE(std::string::npos, hlsl.find("float4 Parameters[4]"));
+	EXPECT_NE(std::string::npos, hlsl.find("#define RED Parameters[0].x"));
+	EXPECT_NE(std::string::npos, hlsl.find("#define GREEN Parameters[0].y"));
+	EXPECT_NE(std::string::npos, hlsl.find("#define BLUE Parameters[0].z"));
 }
 
 TEST(PostProcessingChainTest, RejectsUnbindableGlslResourcesForHlslTranslation)
