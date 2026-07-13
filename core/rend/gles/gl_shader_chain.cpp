@@ -33,6 +33,26 @@ void main()
 }
 )";
 
+const char *postProcessGlslVersion()
+{
+	// The normal renderer keeps a GLSL 1.30 baseline for older OpenGL drivers.
+	// Shader packages are allowed to use modern local expressions, so use the
+	// full language version when the active context is already OpenGL 4.3+.
+	if (!gl.is_gles && (gl.gl_major > 4 || (gl.gl_major == 4 && gl.gl_minor >= 3)))
+		return "#version 430";
+	return gl.glsl_version_header;
+}
+
+class PostProcessSource final : public ShaderSource
+{
+public:
+	PostProcessSource() : ShaderSource(postProcessGlslVersion())
+	{
+		addConstant("TARGET_GL", gl.gl_version);
+		addSource(ShaderCompatSource);
+	}
+};
+
 void removeVersionDirective(std::string& source)
 {
 	const size_t lineEnd = source.find_first_of("\r\n");
@@ -292,9 +312,9 @@ bool GlShaderChain::ensureResources()
 	};
 	vertexBuffer = std::make_unique<GlBuffer>(GL_ARRAY_BUFFER, GL_STATIC_DRAW);
 	vertexBuffer->update(vertices, sizeof(vertices));
-	OpenGlSource vertexSource;
+	PostProcessSource vertexSource;
 	vertexSource.addSource(VertexCompatShader).addSource(FullscreenVertexShader);
-	OpenGlSource fragmentSource;
+	PostProcessSource fragmentSource;
 	fragmentSource.addSource(PixelCompatShader)
 			.addSource("in mediump vec2 vTexCoord;\nuniform sampler2D Source;\n"
 					"void main() { gl_FragColor = texture(Source, vTexCoord); }\n");
@@ -390,7 +410,7 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 		}
 
 		try {
-			OpenGlSource vertexSource;
+			PostProcessSource vertexSource;
 			vertexSource.addSource(VertexCompatShader);
 			if (vertexBody.empty())
 				vertexSource.addSource(FullscreenVertexShader);
@@ -399,7 +419,7 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 				// This preserves custom transforms without asking shader packages for backend attributes.
 				vertexSource.addSource("#define VertexCoord in_pos\n#define Position in_pos\n#define TexCoord in_uv\n#define aTexCoord in_uv\n").addSource(vertexBody);
 			}
-			OpenGlSource fragmentSource;
+			PostProcessSource fragmentSource;
 			fragmentSource.addSource(PixelCompatShader)
 					.addSource(fragmentPreamble(chain.parameters, passSource->slangParameters, shaderBody, outputCount))
 					.addSource(shaderBody);

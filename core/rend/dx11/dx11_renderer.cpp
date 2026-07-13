@@ -548,6 +548,9 @@ void DX11Renderer::displayFramebuffer()
 	ComPtr<ID3D11ShaderResourceView> displayTexture = fbTextureView;
 	if (shaderChain)
 		shaderChain->render(fbTextureView, width, height, FrameCount, displayTexture);
+	// Shader passes bind their own intermediate render targets. The final blit
+	// and OSD must always return to the swapchain target.
+	deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
 	D3D11_VIEWPORT vp{};
 	vp.Width = (FLOAT)settings.display.width;
 	vp.Height = (FLOAT)settings.display.height;

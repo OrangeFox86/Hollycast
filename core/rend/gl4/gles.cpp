@@ -1,5 +1,6 @@
 /*
 	Copyright 2018 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,9 @@
 #include "gl4naomi2.h"
 #include "rend/gles/naomi2.h"
 #include "rend/gles/quad.h"
+#ifndef LIBRETRO
+#include "rend/gles/gl_shader_chain.h"
+#endif
 
 #ifdef LIBRETRO
 #include "rend/gles/postprocess.h"
@@ -750,6 +754,12 @@ bool OpenGL4Renderer::Init()
     //glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 
 	gl_create_resources();
+
+#ifndef LIBRETRO
+	// GL4 presents through OpenGLRenderer::renderLastFrame(), which owns the
+	// post-processing handoff shared with the GLES renderer.
+	gl.shaderChain = std::make_unique<GlShaderChain>();
+#endif
 
 	initABuffer();
 

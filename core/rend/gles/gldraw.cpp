@@ -778,14 +778,19 @@ bool OpenGLRenderer::renderLastFrame()
 	float presentShiftX = gl.ofbo.shiftX;
 	float presentShiftY = gl.ofbo.shiftY;
 #ifndef LIBRETRO
-	if (GlFramebuffer *processed = gl.shaderChain->render(framebuffer->getTexture(),
-			{ sourceWidth, sourceHeight, settings.display.width - dx * 2, settings.display.height - dy * 2, FrameCount }))
+	// GL4 shares this presentation path. During context teardown, it may reach
+	// here before the chain is recreated, so leave the unprocessed frame intact.
+	if (gl.shaderChain != nullptr)
 	{
-		framebuffer = processed;
-		// Display shifts are measured in source pixels. Scale them after a pass
-		// changes resolution so post-processing does not move the picture.
-		presentShiftX *= static_cast<float>(framebuffer->getWidth()) / sourceWidth;
-		presentShiftY *= static_cast<float>(framebuffer->getHeight()) / sourceHeight;
+		if (GlFramebuffer *processed = gl.shaderChain->render(framebuffer->getTexture(),
+				{ sourceWidth, sourceHeight, settings.display.width - dx * 2, settings.display.height - dy * 2, FrameCount }))
+		{
+			framebuffer = processed;
+			// Display shifts are measured in source pixels. Scale them after a pass
+			// changes resolution so post-processing does not move the picture.
+			presentShiftX *= static_cast<float>(framebuffer->getWidth()) / sourceWidth;
+			presentShiftY *= static_cast<float>(framebuffer->getHeight()) / sourceHeight;
+		}
 	}
 #endif
 
