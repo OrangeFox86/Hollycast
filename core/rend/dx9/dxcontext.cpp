@@ -27,12 +27,24 @@
 #include "dx9_driver.h"
 #include "imgui_impl_dx9.h"
 
-DXContext theDXContext;
+void DXContext::Create(void *window, void *display) {
+	new DXContext(window, display);
+}
+
+DXContext::DXContext(void *window, void *display)
+	: GraphicsContext(window, display)
+{
+	if (!init())
+		throw FlycastException("DX9 initialization failed");
+}
+
+DXContext::~DXContext() {
+	term();
+}
 
 bool DXContext::init(bool keepCurrentWindow)
 {
 	NOTICE_LOG(RENDERER, "DX9 Context initializing");
-	GraphicsContext::instance = this;
 #ifdef USE_SDL
 	if (!keepCurrentWindow && !sdl_recreate_window(0)) {
 		term();
@@ -40,7 +52,8 @@ bool DXContext::init(bool keepCurrentWindow)
 	}
 #endif
 
-	decltype(Direct3DCreate9) *pDirect3DCreate9 = d3d9Library.getFunc("Direct3DCreate9", pDirect3DCreate9);
+	decltype(Direct3DCreate9) *pDirect3DCreate9 = nullptr;
+	pDirect3DCreate9 = d3d9Library.getFunc("Direct3DCreate9", pDirect3DCreate9);
 	if (pDirect3DCreate9 == nullptr)
 	{
 		ERROR_LOG(RENDERER, "Cannot load D3D9.DLL");
@@ -93,7 +106,6 @@ bool DXContext::init(bool keepCurrentWindow)
 void DXContext::term()
 {
 	NOTICE_LOG(RENDERER, "DX9 Context terminating");
-	GraphicsContext::instance = nullptr;
 	overlay.term();
 	imguiDriver.reset();
 	pDevice.reset();
@@ -131,12 +143,7 @@ void DXContext::Present()
 		if (swapOnVSync != (!settings.input.fastForwardMode && config::VSync))
 		{
 			DEBUG_LOG(RENDERER, "Switch vsync %d", !swapOnVSync);
-			if (renderer != nullptr)
-			{
-				renderer->Term();
-				delete renderer;
-				renderer = nullptr;
-			}
+			rend_term_renderer();
 			term();
 			if (init(true))
 			{

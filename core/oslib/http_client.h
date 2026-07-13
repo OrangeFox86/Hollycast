@@ -1,5 +1,6 @@
 /*
 	Copyright 2022 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -86,7 +87,11 @@ static inline std::string urlEncode(const std::string& value)
 
 static inline std::string getUserAgent() {
 	std::string uaVersion(GIT_VERSION);
-	return "Flycast/" + uaVersion.substr(1); // skip 'v'
+	if (!uaVersion.empty() && (uaVersion[0] == 'v' || uaVersion[0] == 'V'))
+		uaVersion.erase(0, 1);
+	if (uaVersion.empty() || !std::isdigit(static_cast<u8>(uaVersion[0])) || uaVersion.find('.') == std::string::npos)
+		uaVersion = "2.6-dev-" + std::string(GIT_HASH);
+	return "Flycast/" + uaVersion;
 }
 
 static inline std::string urlDecode(const std::string& encoded)

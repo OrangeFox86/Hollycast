@@ -45,14 +45,14 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: flycast-switch-${{ matrix.config.name }}
+          name: Hollycast-switch-${{ matrix.config.name }}
           path: |
             artifact/bin
             artifact/lib/libretro
 
       - name: Package app
-        run: zip -m artifact/bin/flycast.nro.zip artifact/bin/flycast.nro
-        if: hashFiles('artifact/bin/flycast.nro') != ''
+        run: zip -m artifact/bin/Hollycast.nro.zip artifact/bin/Hollycast.nro
+        if: hashFiles('artifact/bin/Hollycast.nro') != ''
 
       - name: Setup Rclone
         uses: AnimMouse/setup-rclone@v1
@@ -61,5 +61,5 @@ jobs:
           version: v1.69.1
 
       - name: Upload to S3
-        run: rclone copy artifact/bin scaleway:flycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
-        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.config.destDir != ''
+        run: rclone copy artifact/bin scaleway:Hollycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
+        if: github.repository == 'OrangeFox86/Hollycast' && github.event_name == 'push' && matrix.config.destDir != ''

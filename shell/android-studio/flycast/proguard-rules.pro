@@ -20,5 +20,5 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
--keep class com.flycast.** {*;}
--keepclassmembers class com.flycast.** {*;}
+-keep class com.hollycast.** {*;}
+-keepclassmembers class com.hollycast.** {*;}

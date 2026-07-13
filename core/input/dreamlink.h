@@ -68,8 +68,6 @@ public:
 	virtual bool sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg) = 0;
 	//! @return true iff VMU reads and writes should be sent to the device
 	virtual bool storageEnabled() = 0;
-	//! @return true iff a game has been started
-	virtual bool isGameRunning() const = 0;
 	//! Attempt connection to the link
 	virtual void connect() = 0;
 	//! Disconnect from the link
@@ -83,8 +81,15 @@ public:
 	//! Do termination cleanup
 	//! @post the object may be in an invalid state and is no longer intended for use
 	virtual void term() = 0;
-	//! @return the display name of this DreamLink
-	virtual const char* getName() const = 0;
+	//! @return the display name of this DreamLink instance
+	//! @note Defaults to getProductName() if the subclass does not require unique instance naming
+	virtual const char* getName() const {
+		return getProductName();
+	}
+	//! @return The static hardware or product name characteristic of this device class
+	virtual inline const char* getProductName() const = 0;
+	//! @return the function code at the given port
+	virtual u32 getFunctionCodesMask(int forPort) const = 0;
 
 	//! Check if a given bus is valid
 	//! @param[in] bus The dreamcast bus index to test
@@ -147,8 +152,6 @@ protected:
 public:
 	//! @return true iff storage is supported AND currently enabled for this DreamLink
 	bool storageEnabled() override;
-	//! @return true iff a game has been started
-	bool isGameRunning() const;
 	//! Child may override this if it needs to report fatal errors
 	const char* getIssueDescription() const override;
 	//! Do termination cleanup
@@ -221,9 +224,6 @@ private:
 		//! @param[in] isTerminal Set to true when unregistration needs to be done due to terminal event
 		void unregisterLink(BaseDreamLink* dreamlink, bool isTerminal = false);
 
-		//! @return true iff game is currently running
-		bool isGameRunning() const;
-
 	private:
 	    //! Central event handler
 		//! @param[in] event The incoming event
@@ -246,9 +246,6 @@ private:
 		void removeLinkFromRegistry(const BaseDreamLink* dreamlink, int newBus = -1);
 
 	private:
-		//! Flag which tracks game start/termination events
-		std::atomic<bool> mIsGameRunning;
-
 		//! Mutex serializing access to Registry
 		std::recursive_mutex mMutex;
 		//! Registry of BaseDreamLink devices [bus index][priority] (front takes precedence)

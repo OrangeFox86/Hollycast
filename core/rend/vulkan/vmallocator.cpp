@@ -49,10 +49,13 @@ static const VmaDeviceMemoryCallbacks memoryCallbacks = { vmaAllocateDeviceMemor
 
 void VMAllocator::Init(vk::PhysicalDevice physicalDevice, vk::Device device, vk::Instance instance)
 {
-	verify(allocator == VK_NULL_HANDLE);
+	assert(allocator == VK_NULL_HANDLE);
+	const VulkanContext *context = VulkanContext::Instance();
 	VmaAllocatorCreateInfo allocatorInfo = { VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT };
-	if (VulkanContext::Instance()->SupportsDedicatedAllocation())
+	if (context->SupportsDedicatedAllocation())
 		allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+	if (context->SupportsBufferDeviceAddress())
+		allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
 	allocatorInfo.physicalDevice = (VkPhysicalDevice)physicalDevice;
 	// Top-out at vulkan 1.1

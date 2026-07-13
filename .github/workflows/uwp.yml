@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: UWP
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     strategy:
       matrix:
@@ -41,7 +41,7 @@ jobs:
 
       - name: Sign app
         run: signtool sign /f shell\uwp\sign_cert.pfx /p '${{ secrets.SIGN_CERT_PWD }}' /v /fd SHA256 build\artifact\flycast.appx
-        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push'
+        if: github.repository == 'OrangeFox86/Hollycast' && github.event_name == 'push'
 
       - uses: actions/upload-artifact@v6
         with:
@@ -56,4 +56,4 @@ jobs:
       - name: Upload to S3
         run: rclone copy build/artifact scaleway:flycast-builds/xbox/${GITHUB_REF#refs/}-$GITHUB_SHA
         shell: bash
-        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.arch == 'x64'
+        if: github.repository == 'OrangeFox86/Hollycast' && github.event_name == 'push' && matrix.arch == 'x64'

@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -33,12 +34,21 @@ public:
 	const char *get_button_name(u32 code) override;
 	static bool identify(int deviceIndex);
 
-    bool gamepad_btn_input(u32 code, bool pressed) override;
+	inline const std::string& sort_id() override
+	{
+		return !_sort_id.empty() ? _sort_id : DreamLinkGamepad::sort_id();
+	}
+
+	bool gamepad_btn_input(u32 code, bool pressed) override;
 
 protected:
 	void setCustomMapping(const std::shared_ptr<InputMapping>& mapping) override;
 
-    //! Dreamcast Controller USB VID:1209 PID:2f07
-    static constexpr const char* VID_PID_GUID = "09120000072f0000";
+	//! Dreamcast Controller USB VID:1209 PID:2f07
+	static constexpr const char* VID_PID_GUID = "09120000072f0000";
+
+private:
+	//! ID used for sorting on the UI
+	std::string _sort_id;
 };
 #endif // USE_DREAMLINK_DEVICES

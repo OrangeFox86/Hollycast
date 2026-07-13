@@ -30,7 +30,11 @@
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #endif
 
-VulkanContext *VulkanContext::contextInstance;
+bool VulkanContext::fragmentStoresAndAtomics = false;
+bool VulkanContext::samplerAnisotropy = false;
+bool VulkanContext::dedicatedAllocationSupported = false;
+bool VulkanContext::provokingVertexSupported = false;
+bool VulkanContext::bufferDeviceAddressSupported = false;
 
 const VkApplicationInfo* VkGetApplicationInfo()
 {
@@ -55,7 +59,7 @@ bool VkCreateDevice(retro_vulkan_context* context, VkInstance instance, VkPhysic
 	if (gpu == VK_NULL_HANDLE)
 	{
 		// Choose a discrete gpu if there's one, otherwise just pick the first one
-		verify(instance != VK_NULL_HANDLE);
+		assert(instance != VK_NULL_HANDLE);
 		vk::Instance vkinstance(instance);
 		const auto devices = vkinstance.enumeratePhysicalDevices();
 		for (const auto& phyDev : devices)
@@ -82,7 +86,7 @@ bool VkCreateDevice(retro_vulkan_context* context, VkInstance instance, VkPhysic
 			std::find_if(queueFamilyProperties.begin(), queueFamilyProperties.end(),
 					[](vk::QueueFamilyProperties const& qfp) { return (qfp.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute))
 							== (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute); }));
-	verify(context->queue_family_index < queueFamilyProperties.size());
+	assert(context->queue_family_index < queueFamilyProperties.size());
 
 	if (surface != VK_NULL_HANDLE)
 	{
@@ -153,63 +157,72 @@ bool VkCreateDevice(retro_vulkan_context* context, VkInstance instance, VkPhysic
 		};
 
 	// Required swapchain extension
-	tryAddDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	tryAddDeviceExtension(vk::KHRSwapchainExtensionName);
 
 	// Enable VK_KHR_dedicated_allocation if available
-	if (physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1)
-	{
+	if (physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1) {
 		// Core in Vulkan 1.1
-		VulkanContext::Instance()->dedicatedAllocationSupported = true;
+		VulkanContext::dedicatedAllocationSupported = true;
 	}
 	else
 	{
-		const bool getMemReq2Supported = tryAddDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+		const bool getMemReq2Supported = tryAddDeviceExtension(vk::KHRGetMemoryRequirements2ExtensionName);
 		if (getMemReq2Supported)
-		{
-			VulkanContext::Instance()->dedicatedAllocationSupported = tryAddDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
-		}
+			VulkanContext::dedicatedAllocationSupported = tryAddDeviceExtension(vk::KHRDedicatedAllocationExtensionName);
 	}
 
 	// Check for VK_KHR_get_physical_device_properties2
 	// Core as of Vulkan 1.1
 	const bool getPhysicalDeviceProperties2Supported =
 		(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_1)
-		? true : tryAddDeviceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+		? true : tryAddDeviceExtension(vk::KHRGetPhysicalDeviceProperties2ExtensionName);
 
 	if (getPhysicalDeviceProperties2Supported)
 	{
 		// Enable VK_EXT_provoking_vertex if available
-		VulkanContext::Instance()->provokingVertexSupported = tryAddDeviceExtension(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
+		VulkanContext::provokingVertexSupported = tryAddDeviceExtension(vk::EXTProvokingVertexExtensionName);
+		VulkanContext::bufferDeviceAddressSupported = tryAddDeviceExtension(vk::KHRBufferDeviceAddressExtensionName);
 	}
 
 	// Get device features
 
-	vk::PhysicalDeviceFeatures2 featuresChain{};
+	vk::StructureChain<
+		vk::PhysicalDeviceFeatures2,
+		vk::PhysicalDeviceProvokingVertexFeaturesEXT,
+		vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR
+	> featuresChainHelper;
+
+	vk::PhysicalDeviceFeatures2& featuresChain = featuresChainHelper.get();
 	vk::PhysicalDeviceFeatures& features = featuresChain.features;
 
-	vk::PhysicalDeviceProvokingVertexFeaturesEXT provokingVertexFeatures{};
-	if (VulkanContext::Instance()->provokingVertexSupported)
-	{
-		featuresChain.pNext = &provokingVertexFeatures;
-	}
+	auto& provokingVertexFeatures = featuresChainHelper.get<vk::PhysicalDeviceProvokingVertexFeaturesEXT>();
+	if (!VulkanContext::provokingVertexSupported)
+		featuresChainHelper.unlink<vk::PhysicalDeviceProvokingVertexFeaturesEXT>();
+
+	auto& bufferDeviceAddressFeatures = featuresChainHelper.get<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>();
+	if (!VulkanContext::bufferDeviceAddressSupported)
+		featuresChainHelper.unlink<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>();
 
 	// Get the physical device's features
 	if (getPhysicalDeviceProperties2Supported && featuresChain.pNext)
-	{
 		physicalDevice.getFeatures2(&featuresChain);
-	}
 	else
-	{
 		physicalDevice.getFeatures(&features);
-	}
 
-	if (VulkanContext::Instance()->provokingVertexSupported)
+	if (VulkanContext::provokingVertexSupported)
 	{
-		VulkanContext::Instance()->provokingVertexSupported &= provokingVertexFeatures.provokingVertexLast;
+		VulkanContext::provokingVertexSupported &= provokingVertexFeatures.provokingVertexLast;
+		NOTICE_LOG(RENDERER, "provokingVertexSupported %d", VulkanContext::provokingVertexSupported);
 	}
 
-	VulkanContext::Instance()->samplerAnisotropy = features.samplerAnisotropy;
-	VulkanContext::Instance()->fragmentStoresAndAtomics = features.fragmentStoresAndAtomics;
+	if (VulkanContext::bufferDeviceAddressSupported)
+	{
+		VulkanContext::bufferDeviceAddressSupported &= bufferDeviceAddressFeatures.bufferDeviceAddress;
+		NOTICE_LOG(RENDERER, "bufferDeviceAddressSupported %d", VulkanContext::bufferDeviceAddressSupported);
+	}
+
+	VulkanContext::samplerAnisotropy = features.samplerAnisotropy;
+	VulkanContext::fragmentStoresAndAtomics = features.fragmentStoresAndAtomics;
 
 	// create a Device
 	float queuePriority = 1.0f;
@@ -248,7 +261,6 @@ bool VulkanContext::init(retro_hw_render_interface_vulkan *retro_render_if)
 			|| retro_render_if->interface_version != RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION)
 		return false;
 	this->retro_render_if = retro_render_if;
-	GraphicsContext::instance = this;
 
 	instance = vk::Instance(retro_render_if->instance);
 	physicalDevice = vk::PhysicalDevice(retro_render_if->gpu);
@@ -419,7 +431,7 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 
 	retro_image.image_view = (VkImageView)colorAttachments[GetCurrentImageIndex()]->GetImageView();
 	retro_image.create_info.image = (VkImage)colorAttachments[GetCurrentImageIndex()]->GetImage();
-	retro_render_if->set_image(retro_render_if->handle, &retro_image, 0, nullptr, VK_QUEUE_FAMILY_IGNORED);
+	retro_render_if->set_image(retro_render_if->handle, &retro_image, 0, nullptr, vk::QueueFamilyIgnored);
 }
 
 void VulkanContext::beginFrame(vk::Extent2D extent, vk::Image barrierImage)
@@ -465,8 +477,8 @@ void VulkanContext::beginFrame(vk::Extent2D extent, vk::Image barrierImage)
 		        vk::AccessFlagBits::eShaderRead,
 		        vk::ImageLayout::eShaderReadOnlyOptimal,
 		        vk::ImageLayout::eShaderReadOnlyOptimal,
-		        VK_QUEUE_FAMILY_IGNORED,
-		        VK_QUEUE_FAMILY_IGNORED,
+		        vk::QueueFamilyIgnored,
+		        vk::QueueFamilyIgnored,
 				barrierImage,
 		        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 		cmdBuffer.pipelineBarrier(
@@ -491,8 +503,8 @@ void VulkanContext::endFrame(vk::Image barrierImage)
 		        vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eColorAttachmentWrite,
 		        vk::ImageLayout::eShaderReadOnlyOptimal,
 		        vk::ImageLayout::eShaderReadOnlyOptimal,
-		        VK_QUEUE_FAMILY_IGNORED,
-		        VK_QUEUE_FAMILY_IGNORED,
+		        vk::QueueFamilyIgnored,
+		        vk::QueueFamilyIgnored,
 				barrierImage,
 		        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 		cmdBuffer.pipelineBarrier(
@@ -510,7 +522,6 @@ void VulkanContext::endFrame(vk::Image barrierImage)
 
 void VulkanContext::term()
 {
-	GraphicsContext::instance = nullptr;
 	if (device)
 	{
 		device.waitIdle();
@@ -544,14 +555,17 @@ void VulkanContext::term()
 	pipelineCache.reset();
 }
 
-VulkanContext::VulkanContext()
-{
-	verify(contextInstance == nullptr);
-	contextInstance = this;
+void VulkanContext::Create(retro_hw_render_interface_vulkan *render_if) {
+	new VulkanContext(render_if);
 }
 
-VulkanContext::~VulkanContext()
+VulkanContext::VulkanContext(retro_hw_render_interface_vulkan *render_if)
+	: GraphicsContext(nullptr, nullptr)
 {
-	verify(contextInstance == this);
-	contextInstance = nullptr;
+	if (!init(render_if))
+		throw FlycastException("Vulkan initialization failed");
+}
+
+VulkanContext::~VulkanContext() {
+	term();
 }

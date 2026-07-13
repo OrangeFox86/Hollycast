@@ -2,6 +2,7 @@
 	Created on: Apr 20, 2020
 
 	Copyright 2020 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of flycast.
 
@@ -41,7 +42,10 @@ void dc_savestate(int index = 0, const u8 *pngData = nullptr, u32 pngSize = 0);
 void dc_loadstate(int index = 0);
 time_t dc_getStateCreationDate(int index);
 void dc_getStateScreenshot(int index, std::vector<u8>& pngData);
+int dc_getAutoSaveSlot();
+void dc_skipAutoSaveOnNextUnload();
 bool dc_savestateAllowed();
+inline constexpr int NUM_SAVE_SLOTS = 10;
 
 enum class Event {
 	Start,
@@ -70,7 +74,11 @@ public:
 	}
 
 	static void event(Event event) {
-		instance().broadcastEvent(event);
+		instance().handleEvent(event);
+	}
+
+	static bool isGameRunning() {
+		return instance().running;
 	}
 
 private:
@@ -82,8 +90,10 @@ private:
 
 	void registerEvent(Event event, Callback callback, void *param);
 	void unregisterEvent(Event event, Callback callback, void *param);
+	void handleEvent(Event event);
 	void broadcastEvent(Event event);
 
+	std::atomic<bool> running = false;
 	std::array<std::vector<std::pair<Callback, void *>>, static_cast<size_t>(Event::max) + 1> callbacks;
 };
 
@@ -123,7 +133,7 @@ public:
 	 * Reset the emulator in order to load another game. After calling this method, only loadGame() and term() can be called.
 	 * Does nothing if no game is loaded.
 	 */
-	void unloadGame();
+	void unloadGame(bool allowAutoSave = true);
 	/**
 	 * Run the emulator in the calling thread until a frame is rendered. A game must be loaded and start() must be called
 	 * prior to calling this method.
@@ -244,6 +254,7 @@ private:
 	bool resetRequested = false;
 	bool singleStep = false;
 	u64 startTime = 0;
+	std::chrono::steady_clock::time_point fastForwardThrottleDeadline {};
 	u32 stepRangeFrom = 0;
 	u32 stepRangeTo = 0;
 	bool stopRequested = false;

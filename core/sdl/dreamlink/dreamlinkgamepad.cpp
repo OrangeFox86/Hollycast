@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -25,6 +26,7 @@
 #include "hw/maple/maple_if.h"
 #include "ui/gui.h"
 #include "oslib/i18n.h"
+#include "oslib/oslib.h"
 #include <cfg/option.h>
 #include <SDL.h>
 #include <iomanip>
@@ -72,11 +74,21 @@ void DreamLinkGamepad::close()
 {
 	if (dreamlink != nullptr)
 	{
+		const char* const name = dreamlink->getProductName();
 		dreamlink->term();
 		dreamlink.reset();
-		// Make sure settings are open in case disconnection happened mid-game
-		if (!gui_is_open())
-			gui_open_settings();
+
+		if (!gui_is_open()) {
+			if (!settings.network.online) {
+				// Make sure settings are open in case disconnection happened mid-game
+				gui_open_settings();
+			} else {
+				// While connected online, just pop up a toast
+				char buffer[128];
+				snprintf(buffer, sizeof(buffer), i18n::T("%s was disconnected"), name);
+				os_notify(buffer, 6000);
+			}
+		}
 	}
 	SDLGamepad::close();
 }

@@ -17,9 +17,6 @@
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
-            },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
@@ -43,7 +40,6 @@
                 "rhs": "Darwin"
             },
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_XCODE_GENERATE_SCHEME": "YES",
@@ -53,15 +49,12 @@
         },
         {
             "name": "windows-debug",
+            "description": "Convenience alias for windows preset.",
             "inherits": ["windows"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
-            },
-            "binaryDir": "build-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
@@ -79,15 +72,12 @@
         },
         {
             "name": "darwin-debug",
+            "description": "Convenience alias for darwin preset.",
             "inherits": ["darwin"],
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Darwin"
-            },
-            "binaryDir": "build-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
@@ -121,49 +111,45 @@
         {
             "name": "windows",
             "configurePreset": "windows",
-            "jobs": 8,
-            "configuration": "Release"
+            "configuration": "RelWithDebInfo"
         },
         {
             "name": "linux",
             "configurePreset": "linux",
-            "jobs": 8,
-            "configuration": "RelWithDebInfo"
+            "environment": {
+                "MAKEFLAGS": "-j", "$comment": "max parallelism"
+            }
         },
         {
             "name": "darwin",
             "configurePreset": "darwin",
-            "jobs": 8,
             "configuration": "RelWithDebInfo"
         },
         {
             "name": "windows-debug",
+            "inherits": ["windows"],
             "configurePreset": "windows-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "linux-debug",
-            "configurePreset": "linux-debug",
-            "jobs": 8,
-            "configuration": "Debug"
+            "inherits": ["linux"],
+            "configurePreset": "linux-debug"
         },
         {
             "name": "darwin-debug",
+            "inherits": ["darwin"],
             "configurePreset": "darwin-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "windows-unit-tests-debug",
             "configurePreset": "windows-unit-tests-debug",
-            "jobs": 8,
             "configuration": "Debug"
         },
         {
             "name": "linux-unit-tests-debug",
             "configurePreset": "linux-unit-tests-debug",
-            "jobs": 8,
             "configuration": "Debug"
         }
     ]

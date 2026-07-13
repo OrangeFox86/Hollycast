@@ -21,13 +21,13 @@ jobs:
     strategy:
       matrix:
         config:
-          - {name: i686-pc-windows-msvc, os: windows-latest, shell: cmd, arch: x86, cmakeArgs: -G Ninja, buildType: Release}
+          - {name: i686-pc-windows-msvc, os: windows-2022, shell: cmd, arch: x86, cmakeArgs: -G Ninja, buildType: Release}
           - {name: apple-darwin, os: macos-latest, shell: sh, cmakeArgs: -G Xcode -DUSE_DISCORD=ON, destDir: osx, buildType: RelWithDebInfo}
           - {name: x86_64-pc-linux-gnu, os: ubuntu-22.04, shell: sh, cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: linux, buildType: RelWithDebInfo}
-          - {name: x86_64-pc-windows-msvc, os: windows-latest, shell: cmd, arch: x64, cmakeArgs: -G Ninja -DUSE_DISCORD=ON, buildType: Release}
-          - {name: x86_64-w64-mingw32, os: windows-latest, shell: 'msys2 {0}', cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: win, buildType: RelWithDebInfo}
+          - {name: x86_64-pc-windows-msvc, os: windows-2022, shell: cmd, arch: x64, cmakeArgs: -G Ninja -DUSE_DISCORD=ON, buildType: Release}
+          - {name: x86_64-w64-mingw32, os: windows-2022, shell: 'msys2 {0}', cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: win, buildType: RelWithDebInfo}
           - {name: libretro-x86_64-pc-linux-gnu, os: ubuntu-22.04, shell: sh, cmakeArgs: -DLIBRETRO=ON -DUSE_LIBCDIO=ON -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE -G Ninja, buildType: Release}
-          - {name: libretro-x86_64-w64-mingw32, os: windows-latest, shell: 'msys2 {0}', cmakeArgs: -DLIBRETRO=ON -DUSE_LIBCDIO=ON -G Ninja, buildType: Release}
+          - {name: libretro-x86_64-w64-mingw32, os: windows-2022, shell: 'msys2 {0}', cmakeArgs: -DLIBRETRO=ON -DUSE_LIBCDIO=ON -G Ninja, buildType: Release}
 
     steps:
       - name: Set up build environment (macOS)
@@ -84,12 +84,12 @@ jobs:
             libname=$(basename "$formula" .rb)
             HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew install --build-from-source --formula "$formula" || \
             HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew reinstall --build-from-source --formula "$formula"
-            
+
             prefix=$(brew --prefix $libname)
             # Find and verify the static library
             libfile=$(find "$prefix/lib" -name "*.a" | head -n1)
             lipo -info "$libfile"
-            
+
             # Export prefix for subsequent CMake steps
             if [ -z "$CMAKE_PREFIX_PATH" ]; then
               CMAKE_PREFIX_PATH="$prefix"
@@ -118,14 +118,14 @@ jobs:
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.buildType }} -DCMAKE_INSTALL_PREFIX=artifact -DENABLE_CTEST=ON ${{ matrix.config.cmakeArgs }}
           cmake --build build --config ${{ matrix.config.buildType }}
-          ./build/flycast
+          ./build/Hollycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu'
 
       - name: Dump symbols
         run: |
           mkdir -p symbols
-          core/deps/breakpad/bin/dump_syms artifact/bin/flycast.exe > symbols/flycast.sym 2>/dev/null
-          strip artifact/bin/flycast.exe
+          core/deps/breakpad/bin/dump_syms artifact/bin/Hollycast.exe > symbols/Hollycast.sym 2>/dev/null
+          strip artifact/bin/Hollycast.exe
         if: matrix.config.name == 'x86_64-w64-mingw32'
 
       - name: Build breakpad (linux)
@@ -139,16 +139,16 @@ jobs:
       - name: Dump symbols and make AppImage (linux)
         run: |
           mkdir -p symbols
-          dump_syms artifact/bin/flycast > symbols/flycast.sym 2>/dev/null
-          strip artifact/bin/flycast
+          dump_syms artifact/bin/Hollycast > symbols/Hollycast.sym 2>/dev/null
+          strip artifact/bin/Hollycast
           shell/linux/make-appimage.sh . artifact/bin appimage
-          mv flycast-x86_64.AppImage artifact/bin
-          rm artifact/bin/flycast
+          mv Hollycast-x86_64.AppImage artifact/bin
+          rm artifact/bin/Hollycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu'
 
       - uses: actions/upload-artifact@v6
         with:
-          name: flycast-${{ matrix.config.name }}
+          name: Hollycast-${{ matrix.config.name }}
           path: |
             artifact/bin
             artifact/lib/libretro
@@ -156,13 +156,13 @@ jobs:
       - name: Package app (macos)
         run: |
           cd artifact/bin
-          zip -rm flycast.app.zip Flycast.app
+          zip -rm Hollycast.app.zip Hollycast.app
         if: matrix.config.name == 'apple-darwin'
 
       - name: Package app (windows)
         run: |
-          powershell Compress-Archive artifact/bin/flycast.exe artifact/bin/flycast.zip 
-          rm artifact/bin/flycast.exe
+          powershell Compress-Archive artifact/bin/Hollycast.exe artifact/bin/Hollycast.zip
+          rm artifact/bin/Hollycast.exe
         if: matrix.config.name == 'x86_64-w64-mingw32'
 
       - name: Setup Rclone
@@ -170,31 +170,31 @@ jobs:
         with:
           rclone_config: ${{ secrets.RCLONE_CONFIG }}
 
-      - name: Upload to S3
-        run: rclone copy artifact/bin scaleway:flycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
-        shell: bash
-        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.config.destDir != ''
+      # - name: Upload to S3
+      #   run: rclone copy artifact/bin scaleway:Hollycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
+      #   shell: bash
+      #   if: github.repository == 'OrangeFox86/Hollycast' && github.event_name == 'push' && matrix.config.destDir != ''
 
-      - name: Setup Sentry CLI
-        uses: mathieu-bour/setup-sentry-cli@v2
-        env:
-          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-        with:
-          url: https://sentry.io
-          token: ${{ env.SENTRY_TOKEN }}
-          organization: flycast
-          project: minidump
-          version: 2.21.2
-        if: ${{ env.SENTRY_TOKEN != '' }}
-      
-      - name: Upload symbols to Sentry (Windows, macOS, Linux)
-        run: |
-          VERSION=$(git describe --tags --always)
-          sentry-cli releases new "$VERSION"
-          sentry-cli releases set-commits "$VERSION" --auto
-          sentry-cli debug-files upload symbols
-        shell: bash
-        env:
-          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-        if: ${{ env.SENTRY_TOKEN != '' && (matrix.config.name == 'x86_64-w64-mingw32' || matrix.config.name == 'apple-darwin' || matrix.config.name == 'x86_64-pc-linux-gnu') && github.event_name == 'push' }}
-        
+      # - name: Setup Sentry CLI
+      #   uses: mathieu-bour/setup-sentry-cli@v2
+      #   env:
+      #     SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+      #   with:
+      #     url: https://sentry.io
+      #     token: ${{ env.SENTRY_TOKEN }}
+      #     organization: Hollycast
+      #     project: minidump
+      #     version: 2.21.2
+      #   if: ${{ env.SENTRY_TOKEN != '' }}
+
+      # - name: Upload symbols to Sentry (Windows, macOS, Linux)
+      #   run: |
+      #     VERSION=$(git describe --tags --always)
+      #     sentry-cli releases new "$VERSION"
+      #     sentry-cli releases set-commits "$VERSION" --auto
+      #     sentry-cli debug-files upload symbols
+      #   shell: bash
+      #   env:
+      #     SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+      #   if: ${{ env.SENTRY_TOKEN != '' && (matrix.config.name == 'x86_64-w64-mingw32' || matrix.config.name == 'apple-darwin' || matrix.config.name == 'x86_64-pc-linux-gnu') && github.event_name == 'push' }}
+

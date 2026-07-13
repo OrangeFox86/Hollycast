@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
     <string name="OK">OK</string>
     <string name="storage_error">Erreur de Stockage</string>
@@ -10,7 +11,7 @@
     <string name="exporting_home_folder">Export du dossier principal</string>
     <string name="select_an_import_folder">Sélectionnez un dossier d\'import</string>
     <string name="importing_home_folder">Import du dossier principal</string>
-    <string name="flycast_error">Erreur Flycast</string>
+    <string name="flycast_error">Erreur Hollycast</string>
     <string name="init_failed_message">L\'initialisation a échoué. Veuillez réessayer ou réinstaller l\'application.\n\nErreur: </string>
     <string name="exit">Quitter</string>
     <string name="copying">Copie en cours</string>

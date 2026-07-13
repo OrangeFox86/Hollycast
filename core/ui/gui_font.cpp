@@ -29,6 +29,7 @@ ImFont *largeFont;
 ImFont *settingsTitleFont;
 ImFont *settingsValueFont;
 ImFont *settingsRightValueFont;
+ImFont *settingsIconFont;
 
 namespace FontFace
 {
@@ -262,7 +263,6 @@ void gui_loadFonts()
 	// Regular font
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float fontSize = uiScaled(17.f);
-	style.FontSizeBase = fontSize;
 
 	size_t dataSize;
 	std::unique_ptr<u8[]> data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
@@ -490,7 +490,11 @@ void gui_loadFonts()
 
 	data = resource::load("fonts/Jura-wght.ttf", dataSize);
 	if (data != nullptr)
-		settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, ranges);
+	{
+		ImFontConfig settingsTitleFontCfg;
+		settingsTitleFontCfg.RasterizerMultiply = 1.25f;
+		settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &settingsTitleFontCfg, ranges);
+	}
 
 	data = resource::load("fonts/EncodeSans-wdth-wght.ttf", dataSize);
 	if (data != nullptr)
@@ -511,6 +515,15 @@ void gui_loadFonts()
 	if (settingsRightValueFont == nullptr)
 		settingsRightValueFont = largeFont;
 
+	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	if (data != nullptr)
+	{
+		static const ImWchar iconRanges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+		settingsIconFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, iconRanges);
+	}
+	if (settingsIconFont == nullptr)
+		settingsIconFont = regularFont;
+
 	// Font Awesome symbols
 	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
 	verify(data != nullptr);
@@ -520,4 +533,8 @@ void gui_loadFonts()
 	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &faFontConfig);
 	boldFontConfig.FontDataOwnedByAtlas = true;
 	io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &boldFontConfig);
+
+	// AddFont() may sync the active ImGui font stack using the previous size.
+	// Re-apply the rebuilt atlas size after all fonts have been registered.
+	style.FontSizeBase = fontSize;
 }

@@ -48,6 +48,7 @@ typedef double f64;
 namespace nowide {
 FILE *fopen(char const *file_name, char const *mode);
 int remove(const char *pathname);
+int rename(const char* old_name, const char* new_name);
 }
 #endif
 
@@ -175,6 +176,14 @@ struct settings_t
 		std::string gameId;
 		std::string fileName;
 		std::string title;
+
+		void reset()
+		{
+			path.clear();
+			gameId.clear();
+			fileName.clear();
+			title.clear();
+		}
 	} content;
 
 	struct {

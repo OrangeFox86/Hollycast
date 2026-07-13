@@ -1,5 +1,6 @@
 /*
-    Copyright 2021 flyinghead
+    Copyright 2024 flyinghead
+    Portions Copyright 2026 The Hollycast Authors
 
     This file is part of Flycast.
 
@@ -38,7 +39,6 @@
 #include "network/ice.h"
 #include "hw/mem/mem_watch.h"
 #include "network/net_handshake.h"
-#include "network/naomi_network.h"
 #include "serialize.h"
 #include "hw/pvr/pvr.h"
 #include "profiler/fc_profiler.h"
@@ -51,9 +51,18 @@
 #include "hw/sh4/sh4_interpreter.h"
 #include "hw/sh4/dyna/ngen.h"
 #include "oslib/i18n.h"
+#ifndef LIBRETRO
+#include <thread>
+#endif
 
 settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
+static bool skipAutoSaveOnNextUnload = false;
+
+void dc_skipAutoSaveOnNextUnload()
+{
+	skipAutoSaveOnNextUnload = true;
+}
 
 static void loadSpecialSettings()
 {
@@ -420,6 +429,9 @@ static void loadSpecialSettings()
 			INFO_LOG(BOOT, "Enabling Extra depth scaling for game %s", prod_id.c_str());
 			config::ExtraDepthScale.override(10000.f);
 		}
+		if (prod_id == "SEGA STRIKE FIGHTER IN JPN-SLAVE")
+			// slave 1 left channel is connected to a bass shaker, which produces an annoying buzzing sound on regular speakers
+			settings.aica.muteAudio = true;
 	}
 }
 
@@ -572,15 +584,16 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 		if (path != nullptr && strlen(path) > 0)
 		{
 			settings.content.path = path;
-			if (settings.naomi.slave) {
-				settings.content.fileName = path;
-			}
-			else
-			{
+			try {
 				hostfs::FileInfo info = hostfs::storage().getFileInfo(settings.content.path);
 				settings.content.fileName = info.name;
 				if (settings.content.title.empty())
 					settings.content.title = get_file_basename(info.name);
+			} catch (const hostfs::StorageException& e) {
+				if (settings.naomi.slave)
+					settings.content.fileName = path;
+				else
+					throw;
 			}
 		}
 		else
@@ -646,27 +659,25 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 		}
 		else if (settings.platform.isArcade())
 		{
-			nvmem::loadFiles();
 			naomi_cart_LoadRom(settings.content.path, settings.content.fileName, progress);
+			nvmem::loadFiles();
 			loadGameSpecificSettings();
 			// Reload the BIOS in case a game-specific region is set
 			naomi_cart_LoadBios(path);
 		}
-		if (!settings.naomi.slave)
-		{
-			mcfg_DestroyDevices();
-			mcfg_CreateDevices();
-			if (settings.platform.isNaomi())
-				// Must be done after the maple devices are created and EEPROM is accessible
-				naomi_cart_ConfigureEEPROM();
-		}
+		mcfg_DestroyDevices();
+		mcfg_CreateDevices();
+		if (settings.platform.isNaomi())
+			// Must be done after the maple devices are created and EEPROM is accessible
+			naomi_cart_ConfigureEEPROM();
+
 #ifdef USE_RACHIEVEMENTS
 		// RA probably isn't expecting to travel back in the past so disable it
 		if (config::GGPOEnable)
 			config::EnableAchievements.override(false);
 		// Hardcore mode disables all cheats, under/overclocking, load state, lua and forces dynarec on
 		settings.raHardcoreMode = config::EnableAchievements && config::AchievementsHardcoreMode
-			&& !NaomiNetworkSupported();
+			&& !naomiNetworkSupported();
 #endif
 		cheatManager.reset(settings.content.gameId);
 		if (cheatManager.isWidescreen())
@@ -684,8 +695,6 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 #ifndef LIBRETRO
 			if (config::GGPOEnable)
 				dc_loadstate(-1);
-			else if (config::AutoLoadState && !NaomiNetworkSupported() && !settings.naomi.multiboard)
-				dc_loadstate(config::SavestateSlot);
 #endif
 		}
 
@@ -745,17 +754,19 @@ void Emulator::runInternal()
 	}
 }
 
-void Emulator::unloadGame()
+void Emulator::unloadGame(bool allowAutoSave)
 {
+	bool skipAutoSaveThisUnload = skipAutoSaveOnNextUnload;
+	skipAutoSaveOnNextUnload = false;
 	try {
 		stop();
 	} catch (...) { }
 	if (state == Loaded || state == Error)
 	{
 #ifndef LIBRETRO
-		if (state == Loaded && config::AutoSaveState && !settings.content.path.empty()
-				&& !settings.naomi.multiboard && !config::GGPOEnable && !NaomiNetworkSupported())
-			gui_saveState(false);
+		if (allowAutoSave && state == Loaded && config::AutoSaveState && !skipAutoSaveThisUnload && !settings.content.path.empty()
+				&& !settings.naomi.multiboard && !config::GGPOEnable && !naomiNetworkSupported())
+			gui_saveState(dc_getAutoSaveSlot(), false);
 #endif
 		try {
 			dc_reset(true);
@@ -766,10 +777,7 @@ void Emulator::unloadGame()
 		mcfg_DestroyDevices(true);
 		config::Settings::instance().reset();
 		config::Settings::instance().load(false);
-		settings.content.path.clear();
-		settings.content.gameId.clear();
-		settings.content.fileName.clear();
-		settings.content.title.clear();
+		settings.content.reset();
 		settings.platform.system = DC_PLATFORM_DREAMCAST;
 		custom_texture.terminate();
 		state = Init;
@@ -959,6 +967,26 @@ void EventManager::unregisterEvent(Event event, Callback callback, void *param)
 		vector.erase(it);
 }
 
+void EventManager::handleEvent(Event event)
+{
+	switch (event)
+	{
+		case Event::Start:
+			running.store(true);
+			break;
+
+		case Event::Terminate:
+			running.store(false);
+			break;
+
+		default:
+			// Do nothing
+			break;
+	}
+
+	broadcastEvent(event);
+}
+
 void EventManager::broadcastEvent(Event event)
 {
 	auto& vector = callbacks[static_cast<size_t>(event)];
@@ -1093,6 +1121,26 @@ void Emulator::vblank()
 {
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());
+#ifndef LIBRETRO
+	if (settings.input.fastForwardMode && config::FastForwardSpeedLimit < 300)
+	{
+		const double speedFactor = 1.0 + (double)config::FastForwardSpeedLimit / 100.0;
+		const auto frameDuration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+				std::chrono::duration<double>(1.0 / (60.0 * speedFactor)));
+		const auto now = std::chrono::steady_clock::now();
+		if (fastForwardThrottleDeadline.time_since_epoch().count() == 0)
+			fastForwardThrottleDeadline = now;
+		fastForwardThrottleDeadline += frameDuration;
+		if (fastForwardThrottleDeadline > now)
+			std::this_thread::sleep_until(fastForwardThrottleDeadline);
+		else
+			fastForwardThrottleDeadline = now;
+	}
+	else
+	{
+		fastForwardThrottleDeadline = {};
+	}
+#endif
 	// Time out if a frame hasn't been rendered for 50 ms
 	if (sh4_sched_now64() - startTime <= 50_sh4ms)
 		return;
@@ -1140,8 +1188,7 @@ void Emulator::diskChange()
 	}
 	else
 	{
-		settings.content.fileName.clear();
-		settings.content.gameId.clear();
+		settings.content.reset();
 		settings.content.title = BIOS_TITLE;
 	}
 	cheatManager.reset(settings.content.gameId);

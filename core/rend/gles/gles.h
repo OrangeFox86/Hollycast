@@ -300,7 +300,7 @@ struct gl_ctx
 		std::unique_ptr<GlFramebuffer> framebuffer;
 	} videorouting;
 
-	std::unique_ptr<GlQuadDrawer> quad;
+	std::unique_ptr<GlQuadDrawer> quadDrawer;
 #ifndef LIBRETRO
 	std::unique_ptr<GlShaderChain> shaderChain;
 #endif

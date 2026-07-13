@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -17,7 +18,7 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "option.h"
-#include "network/naomi_network.h"
+#include "network/net_handshake.h"
 #include "debug/gdb_server.h"
 
 namespace config {
@@ -26,6 +27,8 @@ namespace config {
 
 Option<bool> DynarecEnabled("Dynarec.Enabled", true);
 Option<int> Sh4Clock("Sh4Clock", 200);
+Option<int> FastForwardSpeedLimit("FastForwardSpeedLimit", 300);
+Option<bool> FastForwardAudio("FastForwardAudio", false);
 
 // General
 
@@ -36,6 +39,7 @@ Option<int> Language("Dreamcast.Language", 1);		// English
 OptionString UILanguage("UILanguage", "");
 Option<bool> AutoLoadState("Dreamcast.AutoLoadState");
 Option<bool> AutoSaveState("Dreamcast.AutoSaveState");
+Option<bool> SaveProtection("Dreamcast.SaveProtection", true);
 Option<int, false> SavestateSlot("Dreamcast.SavestateSlot");
 Option<bool> ForceFreePlay("ForceFreePlay", true);
 Option<bool, false> FetchBoxart("FetchBoxart", true);
@@ -124,6 +128,7 @@ Option<bool> NativeDepthInterpolation("rend.NativeDepthInterpolation", false);
 Option<bool> EmulateFramebuffer("rend.EmulateFramebuffer", false);
 Option<bool> FixUpscaleBleedingEdge("rend.FixUpscaleBleedingEdge", true);
 Option<bool> CustomGpuDriver("rend.CustomGpuDriver", false);
+Option<bool> FramePacing("rend.FramePacing", true);
 #ifdef VIDEO_ROUTING
 Option<bool, false> VideoRouting("rend.VideoRouting", false);
 Option<bool, false> VideoRoutingScale("rend.VideoRoutingScale", false);
@@ -146,6 +151,9 @@ Option<bool> OpenGlChecks("OpenGlChecks", false, "validate");
 Option<std::vector<std::string>, false> ContentPath("Dreamcast.ContentPath");
 Option<std::vector<std::string>, false> BiosPath("Dreamcast.BiosPath");
 Option<std::string, false> VMUPath("Dreamcast.VMUPath");
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+Option<std::string, false> DreamPotatoFolderPath("Dreamcast.DreamPotatoPath");
+#endif
 Option<std::vector<std::string>, false> SavestatePath("Dreamcast.SavestatePath");
 Option<std::string, false> SavePath("Dreamcast.SavePath");
 Option<std::vector<std::string>, false> TexturePath("Dreamcast.TexturePath");
@@ -171,9 +179,10 @@ Option<float> ProfilerFrameWarningTime("Profiler.FrameWarningTime", 1.0f / 55.0f
 
 Option<bool> NetworkEnable("Enable", false, "network");
 Option<bool> ActAsServer("ActAsServer", false, "network");
+Option<bool> NaomiSatellite("NaomiSatellite", false, "network");
 OptionString DNS("DNS", "dns.flyca.st", "network");
 OptionString NetworkServer("server", "", "network");
-Option<int> LocalPort("LocalPort", NaomiNetwork::SERVER_PORT, "network");
+Option<int> LocalPort("LocalPort", defaultNaomiServerPort(), "network");
 Option<bool> EmulateBBA("EmulateBBA", false, "network");
 Option<bool> EnableUPnP("EnableUPnP", true, "network");
 Option<bool> GGPOEnable("GGPO", false, "network");
@@ -233,6 +242,19 @@ std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices{{
 	{{Option<int>("device4.1.net", 0, "input"),
 	Option<int>("device4.2.net", 0, "input")}},
 }};
+std::array<std::array<Option<std::string, false>, 2>, 4> MapleVmuSlotFileNames{{
+	{{Option<std::string, false>("device1.1.vmu", "", "input"),
+	Option<std::string, false>("device1.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device2.1.vmu", "", "input"),
+	Option<std::string, false>("device2.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device3.1.vmu", "", "input"),
+	Option<std::string, false>("device3.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device4.1.vmu", "", "input"),
+	Option<std::string, false>("device4.2.vmu", "", "input")}},
+}};
 std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect{{
 	{{Option<bool>("device1.1.dreamlink", true, "input"),
 	Option<bool>("device1.2.dreamlink", true, "input")}},
@@ -251,6 +273,9 @@ Option<bool> PerGameVmu("PerGameVmu", true, "config");
 Option<bool, false> UseRawInput("RawInput", false, "input");
 #endif
 Option<bool> UsePhysicalVmuMemory("UsePhysicalVmuMemory", true);
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+Option<bool> DreamPotatoIntegratedMode("DreamPotatoIntegratedMode", true);
+#endif
 
 #ifdef USE_LUA
 Option<std::string, false> LuaFileName("LuaFileName", "flycast.lua");
@@ -262,5 +287,6 @@ Option<bool> EnableAchievements("Enabled", false, "achievements");
 Option<bool> AchievementsHardcoreMode("HardcoreMode", false, "achievements");
 OptionString AchievementsUserName("UserName", "", "achievements");
 OptionString AchievementsToken("Token", "", "achievements");
+OptionString AchievementsHostUrl("HostUrl", "", "achievements");
 
 } // namespace config

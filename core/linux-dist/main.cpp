@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS 1
 #endif
@@ -15,6 +16,7 @@
 #include <csignal>
 #include <string>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <vector>
 #include <exception>
 
@@ -221,6 +223,84 @@ void os_RunInstance(int argc, const char *argv[])
 	}
 }
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+std::string os_GetAppContainingDir()
+{
+	const char *appImagePath = nowide::getenv("APPIMAGE");
+	if (appImagePath != nullptr && *appImagePath != '\0')
+	{
+		std::string path(appImagePath);
+		size_t pos = get_last_slash_pos(path);
+		if (pos != std::string::npos)
+			return path.substr(0, pos);
+		return ".";
+	}
+
+	if (selfPath != nullptr && *selfPath != '\0')
+	{
+		std::string path(selfPath);
+		size_t pos = get_last_slash_pos(path);
+		if (pos != std::string::npos)
+			return path.substr(0, pos);
+	}
+
+	return ".";
+}
+
+os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
+{
+	os_Process proc;
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		// Close open file descriptors except for stdio
+		int maxfd = sysconf(_SC_OPEN_MAX);
+		for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++)
+			close(fd);
+
+		std::vector<char *> cargs;
+		cargs.push_back(const_cast<char *>(executable.c_str()));
+		for (const auto& arg : args)
+			cargs.push_back(const_cast<char *>(arg.c_str()));
+		cargs.push_back(nullptr);
+		execvp(executable.c_str(), cargs.data());
+		_exit(127);
+	}
+	else if (pid > 0)
+	{
+		proc.pid = pid;
+	}
+	else
+	{
+		WARN_LOG(BOOT, "os_Process::start fork failed: %s", strerror(errno));
+	}
+	return proc;
+}
+
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	int status;
+	pid_t result = waitpid(pid, &status, WNOHANG);
+	if (result == 0)
+		return true;
+	// Process has exited
+	pid = -1;
+	return false;
+}
+
+void os_Process::terminate()
+{
+	if (!isValid())
+		return;
+	kill(pid, SIGTERM);
+	int status;
+	waitpid(pid, &status, 0);
+	pid = -1;
+}
+#endif // DREAMPOTATO_INTEGRATED_MODE
+
 #if defined(USE_BREAKPAD)
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
 {
@@ -263,7 +343,7 @@ int main(int argc, char* argv[])
 	common_linux_setup();
 
 	if (flycast_init(argc, argv))
-		die("Flycast initialization failed\n");
+		die("Hollycast initialization failed\n");
 
 #if defined(USE_BREAKPAD)
 	auto async = std::async(std::launch::async, uploadCrashes, "/tmp");

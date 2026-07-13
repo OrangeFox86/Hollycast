@@ -1,5 +1,6 @@
 /*
 	Copyright 2022 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -43,13 +44,19 @@ public:
 	GameBoxart getBoxartAndLoad(const GameMedia& media);
 	GameBoxart getBoxart(const GameMedia& media);
 	void term();
+	void refreshCache();
 	void refreshCustomBoxartIndex(bool force = false);
+	void queueBoxart(const GameMedia& media);
+	void startFetch();
 
 private:
 	GameBoxart getPhysicalBoxart(const GameMedia& media);
 	std::string getCustomBoxartPath(const GameMedia& media);
+	GameBoxart getBoxartAndQueue(const GameMedia& media, bool startFetch);
 	bool shouldFetchOnline() const;
 	void loadDatabase();
+	void recoverDatabases(const std::string& saveDir);
+	void reviewDatabaseArtwork();
 	void saveDatabase();
 	std::string getSaveDirectory() const {
 		// *must* end with a path separator
@@ -69,14 +76,14 @@ private:
 	std::string customBoxartRoot;
 	std::mutex mutex;
 	std::unique_ptr<Scraper> scraper;
-	std::unique_ptr<Scraper> offlineScraper;
 	std::unique_ptr<Scraper> arcadeScraper;
 	bool databaseLoaded = false;
 	bool databaseDirty = false;
 	bool customIndexLoaded = false;
 
 	std::vector<GameBoxart> toFetch;
-	std::future<void> fetching;
+	std::future<void> physicalFetching;
+	std::future<void> onlineFetching;
 
 	static constexpr char const *DB_NAME = "flycast-gamedb.json";
 };

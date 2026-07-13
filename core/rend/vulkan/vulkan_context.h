@@ -99,11 +99,8 @@ class VulkanShaderChain;
 class VulkanContext : public GraphicsContext, public FlightManager
 {
 public:
-	VulkanContext();
+	static void Create(void *window, void *display);
 	~VulkanContext() override;
-
-	bool init();
-	void term() override;
 
 	VkInstance GetInstance() const { return static_cast<VkInstance>(instance.get()); }
 	u32 GetGraphicsQueueFamilyIndex() const { return graphicsQueueIndex; }
@@ -154,14 +151,17 @@ public:
 	bool isAMD() override {
 		return vendorID == VENDOR_ATI || vendorID == VENDOR_AMD;
 	}
+	void setSwapInterval(int interval) override;
 	vk::Format GetDepthFormat() const { return depthFormat; }
 	ShaderManager *GetShaderManager() const { return shaderManager.get(); }
-	static VulkanContext *Instance() { return contextInstance; }
+	static VulkanContext *Instance() { return static_cast<VulkanContext *>(GraphicsContext::Instance()); }
 	bool SupportsSamplerAnisotropy() const { return samplerAnisotropy; }
 	float GetMaxSamplerAnisotropy() const { return samplerAnisotropy ? maxSamplerAnisotropy : 1.f; }
 	bool SupportsDedicatedAllocation() const { return dedicatedAllocationSupported; }
+	bool SupportsBufferDeviceAddress() const { return bufferDeviceAddressSupported; }
 	const VMAllocator& GetAllocator() const { return allocator; }
 	vk::DeviceSize GetMaxMemoryAllocationSize() const { return maxMemoryAllocationSize; }
+	u32 GetMaxStorageBufferRange() const { return maxStorageBufferRange; }
 	u32 GetVendorID() const { return vendorID; }
 	vk::CommandBuffer PrepareOverlay(bool vmu, bool crosshair);
 	void DrawOverlay(float scaling, bool vmu, bool crosshair);
@@ -200,6 +200,9 @@ public:
 	constexpr static int VENDOR_MESA = 0x10005;
 
 private:
+	VulkanContext(void *window, void *display);
+	bool init();
+	void term();
 	void CreateSwapChain();
 	bool InitDevice();
 	bool InitInstance(const char** extensions, uint32_t extensions_count);
@@ -226,6 +229,7 @@ private:
 	vk::DeviceSize uniformBufferAlignment = 0;
 	vk::DeviceSize storageBufferAlignment = 0;
 	vk::DeviceSize maxMemoryAllocationSize = 0xFFFFFFFFu;
+	u32 maxStorageBufferRange = 0xFFFFFFFFu;
 	bool optimalTilingSupported565 = false;
 	bool optimalTilingSupported1555 = false;
 	bool optimalTilingSupported4444 = false;
@@ -234,6 +238,7 @@ private:
 	float maxSamplerAnisotropy = 0.f;
 	bool dedicatedAllocationSupported = false;
 	bool provokingVertexSupported = false;
+	bool bufferDeviceAddressSupported = false;
 	u32 vendorID = 0;
 	int swapInterval = 1;
 	vk::UniqueDevice device;
@@ -282,7 +287,7 @@ private:
 
 	std::string driverName;
 	std::string driverVersion;
-
+	int gameSwapInterval = 1;
 #ifdef VK_DEBUG
 #ifndef __ANDROID__
 	vk::UniqueDebugUtilsMessengerEXT debugUtilsMessenger;
@@ -290,7 +295,6 @@ private:
 	vk::UniqueDebugReportCallbackEXT debugReportCallback;
 #endif
 #endif
-	static VulkanContext *contextInstance;
 };
 #endif // !LIBRETRO
 

@@ -1,7 +1,8 @@
 /*   SDLMain.m - main entry point for our Cocoa-ized SDL app
  Initial Version: Darrell Walisser <dwaliss1@purdue.edu>
  Non-NIB-Code & other changes: Max Horn <max@quendi.de>
- 
+ Portions Copyright 2026 The Hollycast Authors
+
  Feel free to customize this file to suit your needs
  */
 #include <SDL.h>
@@ -10,7 +11,10 @@
 #include <sys/param.h> /* for MAXPATHLEN */
 #include <unistd.h>
 #include "ui/gui.h"
+#include "ui/gui_menu.h"
 #include "oslib/oslib.h"
+#include <functional>
+#include <string>
 
 #ifdef USE_BREAKPAD
 #include "client/mac/handler/exception_handler.h"
@@ -125,6 +129,26 @@ static NSString *getApplicationName(void)
 /* The main class of the application, the application's delegate */
 @implementation SDLApplicationDelegate
 
+static void runMenuAction(const std::function<void()>& action)
+{
+	gui_runOnUiThread(action);
+}
+
+static NSMenuItem *addMenuItem(NSMenu *menu, NSString *title, SEL action, NSString *keyEquivalent, NSInteger tag)
+{
+	NSMenuItem *menuItem = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:keyEquivalent ?: @""];
+	if (tag != 0)
+		[menuItem setTag:tag];
+	[menu addItem:menuItem];
+	[menuItem release];
+	return [menu itemAtIndex:[menu numberOfItems] - 1];
+}
+
+static void addMenuSeparator(NSMenu *menu)
+{
+	[menu addItem:[NSMenuItem separatorItem]];
+}
+
 /* Set the working directory to the .app's parent directory */
 - (void) setupWorkingDirectory
 {
@@ -142,6 +166,158 @@ static NSString *getApplicationName(void)
 - (void)toggleMenu:(id)sender
 {
     gui_open_settings();
+}
+
+- (void)setRomDirectory:(id)sender
+{
+	NSOpenPanel *panel = [NSOpenPanel openPanel];
+	[panel setCanChooseFiles:NO];
+	[panel setCanChooseDirectories:YES];
+	[panel setAllowsMultipleSelection:NO];
+	[panel setPrompt:@"Open"];
+	if ([panel runModal] != NSModalResponseOK)
+		return;
+
+	NSString *path = [[[panel URLs] firstObject] path];
+	if (path == nil)
+		return;
+
+	std::string selected([path UTF8String]);
+	runMenuAction([selected]() { GuiMenu::addRomDirectory(selected); });
+}
+
+- (void)rescanRomDirectory:(id)sender
+{
+	runMenuAction([]() { GuiMenu::rescanRomDirectory(); });
+}
+
+- (void)loadRom:(id)sender
+{
+	NSOpenPanel *panel = [NSOpenPanel openPanel];
+	[panel setCanChooseFiles:YES];
+	[panel setCanChooseDirectories:NO];
+	[panel setAllowsMultipleSelection:NO];
+	[panel setPrompt:@"Open"];
+	if ([panel runModal] != NSModalResponseOK)
+		return;
+
+	NSString *path = [[[panel URLs] firstObject] path];
+	if (path == nil)
+		return;
+
+	std::string selected([path UTF8String]);
+	runMenuAction([selected]() { GuiMenu::loadRomFile(selected); });
+}
+
+- (void)saveState:(id)sender
+{
+	runMenuAction([]() { GuiMenu::saveState(); });
+}
+
+- (void)loadState:(id)sender
+{
+	runMenuAction([]() { GuiMenu::loadState(); });
+}
+
+- (void)exitEmulator:(id)sender
+{
+	runMenuAction([]() { GuiMenu::exitEmulator(); });
+}
+
+- (void)pauseResume:(id)sender
+{
+	runMenuAction([]() { GuiMenu::pauseOrResume(); });
+}
+
+- (void)restartGame:(id)sender
+{
+	runMenuAction([]() { GuiMenu::restartGame(); });
+}
+
+- (void)toggleFastForward:(id)sender
+{
+	runMenuAction([]() { GuiMenu::toggleFastForward(); });
+}
+
+- (void)takeScreenshot:(id)sender
+{
+	runMenuAction([]() { GuiMenu::takeScreenshot(); });
+}
+
+- (void)openCheats:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openCheats(); });
+}
+
+- (void)openCustomBoxart:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openCustomBoxartSettings(); });
+}
+
+- (void)openGeneralSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openGeneralSettings(); });
+}
+
+- (void)openVideoSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openVideoSettings(); });
+}
+
+- (void)openAudioSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openAudioSettings(); });
+}
+
+- (void)openControlsSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openControlsSettings(); });
+}
+
+- (void)openNetworkSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openNetworkSettings(); });
+}
+
+- (void)openAdvancedSettings:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openAdvancedSettings(); });
+}
+
+- (void)openAboutHollycast:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openAboutSettings(); });
+}
+
+- (void)openDiscord:(id)sender
+{
+	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://discord.gg/X8YWP8w"]];
+}
+
+- (void)reportBug:(id)sender
+{
+	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/flyinghead/flycast/issues/new/choose"]];
+}
+
+- (void)checkForUpdates:(id)sender
+{
+	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://flyinghead.github.io/flycast-builds/"]];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+	switch ([menuItem tag])
+	{
+	case MENU_TAG_GAME_REQUIRED:
+		return GuiMenu::isGameRunning();
+	case MENU_TAG_PAUSE_RESUME:
+		[menuItem setTitle:(gui_state == GuiState::Closed) ? @"Pause" : @"Resume"];
+		return GuiMenu::isGameRunning();
+	case MENU_TAG_DISABLED:
+		return NO;
+	default:
+		return YES;
+	}
 }
 
 static void setApplicationMenu(void)
@@ -187,8 +363,37 @@ static void setApplicationMenu(void)
     menuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
     [menuItem setSubmenu:appleMenu];
     [[NSApp mainMenu] addItem:menuItem];
-    
-    NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+
+    /* Tell the application object that this is now the application menu */
+    [NSApp setAppleMenu:appleMenu];
+
+    /* Finally give up our references to the objects */
+    [appleMenu release];
+    [menuItem release];
+}
+
+static void setupHollycastFileMenu(void)
+{
+	NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+	NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
+	addMenuItem(fileMenu, @"Set ROM Directory...", @selector(setRomDirectory:), @"", 0);
+	addMenuItem(fileMenu, @"Rescan ROM Directory", @selector(rescanRomDirectory:), @"r", 0);
+	addMenuSeparator(fileMenu);
+	addMenuItem(fileMenu, @"Load ROM...", @selector(loadRom:), @"o", 0);
+	addMenuSeparator(fileMenu);
+	addMenuItem(fileMenu, @"Save State", @selector(saveState:), @"s", MENU_TAG_GAME_REQUIRED);
+	addMenuItem(fileMenu, @"Load State", @selector(loadState:), @"l", MENU_TAG_GAME_REQUIRED);
+	addMenuSeparator(fileMenu);
+	addMenuItem(fileMenu, @"Exit Emulator", @selector(exitEmulator:), @"", 0);
+	[fileMenuItem setSubmenu:fileMenu];
+	[[NSApp mainMenu] addItem:fileMenuItem];
+	[fileMenu release];
+	[fileMenuItem release];
+}
+
+static void setupEditMenu(void)
+{
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
     NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
     [editMenu addItemWithTitle:@"Undo" action:@selector(undoAction:) keyEquivalent:@"z"];
     [editMenu addItemWithTitle:@"Redo" action:@selector(redoAction:) keyEquivalent:@"Z"];
@@ -199,15 +404,48 @@ static void setApplicationMenu(void)
     [editMenu addItemWithTitle:@"Select All" action:@selector(selectAllAction:) keyEquivalent:@"a"];
     [editMenuItem setSubmenu:editMenu];
     [[NSApp mainMenu] addItem:editMenuItem];
-    
-    /* Tell the application object that this is now the application menu */
-    [NSApp setAppleMenu:appleMenu];
-    
-    /* Finally give up our references to the objects */
-    [appleMenu release];
-    [menuItem release];
+
     [editMenuItem release];
     [editMenu release];
+}
+
+static void setupHollycastMenus(void)
+{
+	NSMenuItem *systemMenuItem = [[NSMenuItem alloc] initWithTitle:@"System" action:nil keyEquivalent:@""];
+	NSMenu *systemMenu = [[NSMenu alloc] initWithTitle:@"System"];
+	addMenuItem(systemMenu, @"Pause", @selector(pauseResume:), @"", MENU_TAG_PAUSE_RESUME);
+	addMenuItem(systemMenu, @"Restart", @selector(restartGame:), @"", MENU_TAG_GAME_REQUIRED);
+	addMenuSeparator(systemMenu);
+	addMenuItem(systemMenu, @"Fast Forward", @selector(toggleFastForward:), @"", MENU_TAG_GAME_REQUIRED);
+	addMenuItem(systemMenu, @"Screenshot", @selector(takeScreenshot:), @"", MENU_TAG_GAME_REQUIRED);
+	addMenuSeparator(systemMenu);
+	addMenuItem(systemMenu, @"Cheats", @selector(openCheats:), @"", MENU_TAG_GAME_REQUIRED);
+	[systemMenuItem setSubmenu:systemMenu];
+	[[NSApp mainMenu] addItem:systemMenuItem];
+	[systemMenu release];
+	[systemMenuItem release];
+
+	NSMenuItem *toolsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Tools" action:nil keyEquivalent:@""];
+	NSMenu *toolsMenu = [[NSMenu alloc] initWithTitle:@"Tools"];
+	addMenuItem(toolsMenu, @"CHD Convert", nil, @"", MENU_TAG_DISABLED);
+	addMenuItem(toolsMenu, @"Custom Boxart", @selector(openCustomBoxart:), @"", 0);
+	[toolsMenuItem setSubmenu:toolsMenu];
+	[[NSApp mainMenu] addItem:toolsMenuItem];
+	[toolsMenu release];
+	[toolsMenuItem release];
+
+	NSMenuItem *settingsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Settings" action:nil keyEquivalent:@""];
+	NSMenu *settingsMenu = [[NSMenu alloc] initWithTitle:@"Settings"];
+	addMenuItem(settingsMenu, @"General", @selector(openGeneralSettings:), @"", 0);
+	addMenuItem(settingsMenu, @"Video", @selector(openVideoSettings:), @"", 0);
+	addMenuItem(settingsMenu, @"Audio", @selector(openAudioSettings:), @"", 0);
+	addMenuItem(settingsMenu, @"Controls", @selector(openControlsSettings:), @"", 0);
+	addMenuItem(settingsMenu, @"Network", @selector(openNetworkSettings:), @"", 0);
+	addMenuItem(settingsMenu, @"Advanced", @selector(openAdvancedSettings:), @"", 0);
+	[settingsMenuItem setSubmenu:settingsMenu];
+	[[NSApp mainMenu] addItem:settingsMenuItem];
+	[settingsMenu release];
+	[settingsMenuItem release];
 }
 
 /* Create a window menu */
@@ -257,6 +495,11 @@ static void setupHelpMenu(void)
     NSMenuItem  *helpMenuItem;
     
     helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];
+    addMenuItem(helpMenu, @"Discord", @selector(openDiscord:), @"", 0);
+    addMenuItem(helpMenu, @"Report Bug", @selector(reportBug:), @"", 0);
+    addMenuItem(helpMenu, @"Check for Updates", @selector(checkForUpdates:), @"", 0);
+    addMenuSeparator(helpMenu);
+    addMenuItem(helpMenu, @"About Hollycast", @selector(openAboutHollycast:), @"", 0);
     
     /* Put menu into the menubar */
     helpMenuItem = [[NSMenuItem alloc] initWithTitle:@"Help" action:nil keyEquivalent:@""];
@@ -293,6 +536,9 @@ static void CustomApplicationMain (int argc, char **argv)
     /* Set up the menubar */
     [NSApp setMainMenu:[[[NSMenu alloc] init] autorelease]];
     setApplicationMenu();
+    setupHollycastFileMenu();
+    setupEditMenu();
+    setupHollycastMenus();
     setupWindowMenu();
     setupHelpMenu(); /* needed for help menu */
     

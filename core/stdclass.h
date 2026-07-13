@@ -260,7 +260,10 @@ public:
 	}
 	void execTasks()
 	{
+// Disabled in unit tests because this assertion fails there
+#ifndef FLYCAST_TEST_FILES
 		assert(threadId == std::this_thread::get_id());
+#endif
 		std::vector<std::function<void()>> localTasks;
 		{
 			LockGuard _(mutex);

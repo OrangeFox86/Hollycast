@@ -9,7 +9,7 @@ fun gitVersionName(): String {
 }
 
 android {
-    namespace = "com.flycast.emulator"
+    namespace = "com.hollycast.emulator"
     ndkVersion = "29.0.14206865"
     compileSdk {
         version = release(36) {
@@ -18,9 +18,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.flycast.emulator"
+        applicationId = "com.hollycast.emulator"
         minSdk = 21
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 8
         versionName = gitVersionName()
         vectorDrawables.useSupportLibrary = true
@@ -78,6 +78,14 @@ android {
         }
         resources {
             excludes += "META-INF/DEPENDENCIES"
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("Hollycast-${variant.name}.apk")
         }
     }
 }

@@ -38,11 +38,6 @@ bool BaseDreamLink::storageEnabled()
 	return storageSupported && config::UsePhysicalVmuMemory;
 }
 
-bool BaseDreamLink::isGameRunning() const
-{
-	return PrioritizedRegistry::Get().isGameRunning();
-}
-
 const char* BaseDreamLink::getIssueDescription() const
 {
 	return nullptr;
@@ -201,26 +196,8 @@ void BaseDreamLink::PrioritizedRegistry::unregisterLink(BaseDreamLink* dreamlink
 	MapleLinkRegistry::Get().commitChanges();
 }
 
-bool BaseDreamLink::PrioritizedRegistry::isGameRunning() const
-{
-	return mIsGameRunning;
-}
-
 void BaseDreamLink::PrioritizedRegistry::eventHandler(Event event)
 {
-	// Set GameStarted flag
-	switch (event)
-	{
-	case Event::Start:
-		mIsGameRunning.store(true);
-		break;
-	case Event::Terminate:
-		mIsGameRunning.store(false);
-		break;
-	default:
-		break;
-	}
-
 	// Perform events for each link
 	std::lock_guard<std::recursive_mutex> lock(mMutex);
 	for (std::list<Ptr>& priorities : mRegistry)
@@ -282,11 +259,11 @@ void BaseDreamLink::PrioritizedRegistry::removeLinkFromRegistry(const BaseDreamL
 				for (std::list<Ptr>::iterator innerIter = iter; innerIter != priorities.end(); ++innerIter)
 				{
 					const Ptr& link = *innerIter;
-					const u32 ports = availablePorts & link->linkedPortsMask;
-					if (ports != 0)
+					link->connectedPortsMask = availablePorts & link->linkedPortsMask;
+					if (link->connectedPortsMask != 0)
 					{
-						establishInMapleLinkRegistry(link, bus, ports);
-						availablePorts = availablePorts & ~ports;
+						establishInMapleLinkRegistry(link, bus, link->connectedPortsMask);
+						availablePorts = availablePorts & ~link->connectedPortsMask;
 					}
 				}
 			}

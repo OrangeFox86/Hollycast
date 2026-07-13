@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -21,6 +22,7 @@
 #include "hw/pvr/pvr_mem.h"
 #include "ui/gui.h"
 #include "rend/sorter.h"
+#include "rend/osd.h"
 #include "oslib/i18n.h"
 #include <glm/gtx/transform.hpp>
 
@@ -113,7 +115,7 @@ bool D3DRenderer::ensureIndexBufferSize(ComPtr<IDirect3DIndexBuffer9>& buffer, u
 
 bool D3DRenderer::Init()
 {
-	ComPtr<IDirect3D9> d3d9 = theDXContext.getD3D();
+	ComPtr<IDirect3D9> d3d9 = DXContext::Instance()->getD3D();
 	D3DCAPS9 caps;
 	d3d9->GetDeviceCaps(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &caps);
 	if (caps.VertexShaderVersion < D3DVS_VERSION(1, 0))
@@ -128,7 +130,7 @@ bool D3DRenderer::Init()
 	}
 	maxAnisotropy = caps.MaxAnisotropy;
 
-	device = theDXContext.getDevice();
+	device = DXContext::Instance()->getDevice();
 	devCache.setDevice(device);
 
 	bool success = ensureVertexBufferSize(vertexBuffer, vertexBufferSize, 4_MB);
@@ -215,7 +217,7 @@ void D3DRenderer::Term()
 
 BaseTextureCacheData *D3DRenderer::GetTexture(TSP tsp, TCW tcw, int area)
 {
-	if (!theDXContext.isReady())
+	if (!DXContext::Instance()->isReady())
 		return nullptr;
 	//lookup texture
 	D3DTexture* tf = texCache.getTextureCacheData(tsp, tcw, area);
@@ -237,7 +239,7 @@ BaseTextureCacheData *D3DRenderer::GetTexture(TSP tsp, TCW tcw, int area)
 
 void D3DRenderer::RenderFramebuffer(const FramebufferInfo& info)
 {
-	if (!theDXContext.isReady()) {
+	if (!DXContext::Instance()->isReady()) {
 		// force a Present
 		frameRendered = true;
 		return;
@@ -306,12 +308,12 @@ void D3DRenderer::RenderFramebuffer(const FramebufferInfo& info)
 	frameRendered = true;
 	frameRenderedOnce = true;
 	clearLastFrame = false;
-	theDXContext.setFrameRendered();
+	DXContext::Instance()->setFrameRendered();
 }
 
 void D3DRenderer::Process(TA_context* ctx)
 {
-	if (!theDXContext.isReady()) {
+	if (!DXContext::Instance()->isReady()) {
 		// force a Present
 		frameRendered = true;
 		return;
@@ -953,7 +955,7 @@ void D3DRenderer::readRttRenderTarget(u32 texAddress)
 
 bool D3DRenderer::Render()
 {
-	if (!theDXContext.isReady())
+	if (!DXContext::Instance()->isReady())
 		return false;
 
 	bool is_rtt = rendContext->isRTT;
@@ -1139,7 +1141,7 @@ bool D3DRenderer::Render()
 		frameRendered = true;
 		frameRenderedOnce = true;
 		clearLastFrame = false;
-		theDXContext.setFrameRendered();
+		DXContext::Instance()->setFrameRendered();
 	}
 
 	return !is_rtt;
@@ -1174,17 +1176,21 @@ void D3DRenderer::displayFramebuffer()
 {
 	devCache.SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
 	device->ColorFill(backbuffer, 0, D3DCOLOR_COLORVALUE(VO_BORDER_COL.red(), VO_BORDER_COL.green(), VO_BORDER_COL.blue(), 1.f));
-	
+
+	// Adjust 'rd.top', 'viewport.Y', and 'viewport.Height' to avoid framebuffer overlapping with the menu bar
+	int topInset = getScaledTopInset();
+	int outheight = settings.display.height - topInset;
+
 	int dx = 0;
 	int dy = 0;
-	getWindowboxDimensions(settings.display.width, settings.display.height, aspectRatio, dx, dy, config::Rotate90);
+	getWindowboxDimensions(settings.display.width, outheight, aspectRatio, dx, dy, config::Rotate90);
 
 	float shiftX, shiftY;
 	getVideoShift(shiftX, shiftY);
 	if (!config::Rotate90 && shiftX == 0 && shiftY == 0)
 	{
 		RECT rs { 0, 0, (long)width, (long)height };
-		RECT rd { dx, dy, settings.display.width - dx, settings.display.height - dy };
+		RECT rd { dx, dy + topInset, settings.display.width - dx, settings.display.height - dy };
 		device->StretchRect(framebufferSurface, &rs, backbuffer, &rd,
 				config::LinearInterpolation ? D3DTEXF_LINEAR : D3DTEXF_POINT);	// This can fail if window is minimized
 	}
@@ -1211,9 +1217,9 @@ void D3DRenderer::displayFramebuffer()
 		device->SetFVF(D3DFVF_XYZ | D3DFVF_TEX1);
 		D3DVIEWPORT9 viewport;
 		viewport.X = dx;
-		viewport.Y = dy;
+		viewport.Y = dy + topInset;
 		viewport.Width = settings.display.width - dx * 2;
-		viewport.Height = settings.display.height - dy * 2;
+		viewport.Height = outheight - dy * 2;
 		viewport.MinZ = 0;
 		viewport.MaxZ = 1;
 		bool rc = SUCCEEDED(device->SetViewport(&viewport));
@@ -1236,7 +1242,7 @@ void D3DRenderer::displayFramebuffer()
 
 bool D3DRenderer::RenderLastFrame()
 {
-	if (clearLastFrame || !frameRenderedOnce || !theDXContext.isReady())
+	if (clearLastFrame || !frameRenderedOnce || !DXContext::Instance()->isReady())
 		return false;
 	backbuffer.reset();
 	bool rc = SUCCEEDED(device->GetRenderTarget(0, &backbuffer.get()));
@@ -1298,9 +1304,9 @@ void D3DRenderer::updateFogTexture()
 
 void D3DRenderer::drawOSD()
 {
-	theDXContext.setOverlay(true);
+	DXContext::Instance()->setOverlay(true);
 	gui_display_osd();
-	theDXContext.setOverlay(false);
+	DXContext::Instance()->setOverlay(false);
 }
 
 void D3DRenderer::writeFramebufferToVRAM()
@@ -1376,7 +1382,7 @@ void D3DRenderer::writeFramebufferToVRAM()
 
 bool D3DRenderer::GetLastFrame(std::vector<u8>& data, int& width, int& height)
 {
-	if (!frameRenderedOnce || !theDXContext.isReady())
+	if (!frameRenderedOnce || !DXContext::Instance()->isReady())
 		return false;
 
 	if (width != 0) {

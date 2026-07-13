@@ -1,5 +1,6 @@
 /*
 	Copyright 2020 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of flycast.
 
@@ -65,6 +66,7 @@ public:
 
 	void stop();
 	void fetch_game_list();
+	void fetch_game_list_sync();
 
 	std::mutex& get_mutex() { return mutex; }
 	const std::vector<GameMedia>& get_game_list() { return game_list; }

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -33,7 +34,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Flycast uses the local network to find and communicate with AltServer.</string>
+	<string>Hollycast uses the local network to find and communicate with AltServer.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key><true/>
@@ -69,9 +70,9 @@
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Flycast requires microphone access to emulate the Dreamcast microphone</string>
+	<string>Hollycast requires microphone access to emulate the Dreamcast microphone</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Flycast can save screenshots to your Photo library.</string>
+	<string>Hollycast can save screenshots to your Photo library.</string>
 	<key>UISupportsDocumentBrowser</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -89,7 +90,7 @@
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.flyinghead.flycast.disk-image</string>
+				<string>org.hollycast.disk-image</string>
 			</array>
 		</dict>
 		<dict>
@@ -115,7 +116,7 @@
 			<key>UTTypeDescription</key>
 			<string>Disk image</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.flyinghead.flycast.disk-image</string>
+			<string>org.hollycast.disk-image</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

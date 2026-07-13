@@ -25,6 +25,7 @@
 #include "rend/sorter.h"
 #include "cfg/option.h"
 #include "rend/postprocess/shader_chain.h"
+#include "rend/osd.h"
 
 #include <memory>
 
@@ -46,16 +47,16 @@ const D3D11_INPUT_ELEMENT_DESC ModVolLayout[]
 bool DX11Renderer::Init()
 {
 	NOTICE_LOG(RENDERER, "DX11 renderer initializing");
-	device = theDX11Context.getDevice();
-	deviceContext = theDX11Context.getDeviceContext();
+	device = DX11Context::Instance()->getDevice();
+	deviceContext = DX11Context::Instance()->getDeviceContext();
 	if (!device || !deviceContext)
 	{
 		WARN_LOG(RENDERER, "Null device or device context. Aborting");
 		return false;
 	}
 
-	shaders = &theDX11Context.getShaders();
-	samplers = &theDX11Context.getSamplers();
+	shaders = &DX11Context::Instance()->getShaders();
+	samplers = &DX11Context::Instance()->getSamplers();
 	bool success = (bool)shaders->getVertexShader(true, true);
 	ComPtr<ID3DBlob> blob = shaders->getVertexShaderBlob();
 	success = success && SUCCEEDED(device->CreateInputLayout(MainLayout, std::size(MainLayout), blob->GetBufferPointer(), blob->GetBufferSize(), &mainInputLayout.get()));
@@ -335,7 +336,7 @@ void DX11Renderer::Process(TA_context* ctx)
 	}
 	texCache.Cleanup();
 	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
-		theDX11Context.setSwapInterval(ctx->rend.swapInterval);
+		DX11Context::Instance()->setSwapInterval(ctx->rend.swapInterval);
 
 	ta_parse(ctx, true);
 }
@@ -524,15 +525,15 @@ bool DX11Renderer::Render()
 	{
 		aspectRatio = getOutputFramebufferAspectRatio();
 #ifndef LIBRETRO
-		deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
+		deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
 		displayFramebuffer();
 		drawOSD();
 		renderVideoRouting();
-		theDX11Context.setFrameRendered();
+		DX11Context::Instance()->setFrameRendered();
 #else
 		ID3D11RenderTargetView *nullView = nullptr;
 		deviceContext->OMSetRenderTargets(1, &nullView, nullptr);
-		theDX11Context.presentFrame(fbTextureView, width, height);
+		DX11Context::Instance()->presentFrame(fbTextureView, width, height);
 #endif
 		frameRendered = true;
 		frameRenderedOnce = true;
@@ -550,7 +551,7 @@ void DX11Renderer::displayFramebuffer()
 		shaderChain->render(fbTextureView, width, height, FrameCount, displayTexture);
 	// Shader passes bind their own intermediate render targets. The final blit
 	// and OSD must always return to the swapchain target.
-	deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
+	deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
 	D3D11_VIEWPORT vp{};
 	vp.Width = (FLOAT)settings.display.width;
 	vp.Height = (FLOAT)settings.display.height;
@@ -563,7 +564,7 @@ void DX11Renderer::displayFramebuffer()
 	float colors[4];
 	VO_BORDER_COL.getRGBColor(colors);
 	colors[3] = 1.f;
-	deviceContext->ClearRenderTargetView(theDX11Context.getRenderTarget(), colors);
+	deviceContext->ClearRenderTargetView(DX11Context::Instance()->getRenderTarget(), colors);
 
 	float shiftX, shiftY;
 	getVideoShift(shiftX, shiftY);
@@ -578,6 +579,12 @@ void DX11Renderer::displayFramebuffer()
 		std::swap(shiftX, shiftY);
 		renderAR = 1 / renderAR;
 	}
+
+	// Adjust 'h' or 'w' to avoid overlapping with the menu bar
+	int topInset = getScaledTopInset();
+	int leftInset = 0;
+	if (config::Rotate90)
+		std::swap(topInset, leftInset);
 	
 	int dy = 0;
 	int dx = 0;
@@ -586,8 +593,8 @@ void DX11Renderer::displayFramebuffer()
 	
 	float x = (float)dx;
 	float y = (float)dy;
-	float w = (float)(outwidth - 2 * dx);
-	float h = (float)(outheight - 2 * dy);
+	float w = (float)(outwidth - leftInset - 2 * dx);
+	float h = (float)(outheight - topInset - 2 * dy);
 
 	// Normalize
 	x = x * 2.f / outwidth - 1.f;
@@ -1047,15 +1054,15 @@ void DX11Renderer::RenderFramebuffer(const FramebufferInfo& info)
 
 	aspectRatio = getDCFramebufferAspectRatio();
 
-	deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
+	deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
 	displayFramebuffer();
 	drawOSD();
 	renderVideoRouting();
-	theDX11Context.setFrameRendered();
+	DX11Context::Instance()->setFrameRendered();
 #else
 	ID3D11RenderTargetView *nullView = nullptr;
 	deviceContext->OMSetRenderTargets(1, &nullView, nullptr);
-	theDX11Context.presentFrame(dcfbTextureView, width, height);
+	DX11Context::Instance()->presentFrame(dcfbTextureView, width, height);
 #endif
 	frameRendered = true;
 	frameRenderedOnce = true;
@@ -1212,9 +1219,9 @@ void DX11Renderer::updateFogTexture()
 void DX11Renderer::drawOSD()
 {
 #ifndef LIBRETRO
-	theDX11Context.setOverlay(true);
+	DX11Context::Instance()->setOverlay(true);
 	gui_display_osd();
-	theDX11Context.setOverlay(false);
+	DX11Context::Instance()->setOverlay(false);
 #endif
 }
 
@@ -1364,7 +1371,7 @@ bool DX11Renderer::GetLastFrame(std::vector<u8>& data, int& width, int& height)
 	quad->draw(fbTextureView, samplers->getSampler(true), nullptr, -1.f, -1.f, 2.f, 2.f, config::Rotate90);
 
 #ifndef LIBRETRO
-	deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
+	deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
 #else
 	ID3D11RenderTargetView *nullView = nullptr;
 	deviceContext->OMSetRenderTargets(1, &nullView, nullptr);
@@ -1415,7 +1422,7 @@ void DX11Renderer::renderVideoRouting()
 	{
 		extern void os_VideoRoutingPublishFrameTexture(ID3D11Texture2D* pTexture);
 		
-		ID3D11RenderTargetView* pRenderTargetView = theDX11Context.getRenderTarget().get();
+		ID3D11RenderTargetView* pRenderTargetView = DX11Context::Instance()->getRenderTarget().get();
 
 		// Backbuffer texture would be different after resizing, fetching new address everytime
 		ID3D11Resource* pResource = nullptr;
@@ -1474,7 +1481,7 @@ void DX11Renderer::renderVideoRouting()
 			quad->draw(vrStagingTextureSRV, samplers->getSampler(true));
 			os_VideoRoutingPublishFrameTexture(vrScaledTexture);
 
-			deviceContext->OMSetRenderTargets(1, &theDX11Context.getRenderTarget().get(), nullptr);
+			deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
 
 		} else {
 			os_VideoRoutingPublishFrameTexture(backBufferTexture);

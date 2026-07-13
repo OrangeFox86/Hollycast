@@ -1,4 +1,6 @@
 /*
+	Portions Copyright 2026 The Hollycast Authors
+
 	This file is part of Flycast.
 
     Flycast is free software: you can redistribute it and/or modify
@@ -63,6 +65,7 @@ public:
 	void deserialize(Deserializer& deser);
 
 	static Achievements& Instance();
+	void setHostOverride(const std::string& host);
 
 private:
 	bool createClient();
@@ -156,6 +159,10 @@ bool canPause() {
 	return Achievements::Instance().canPause();
 }
 
+void setHostOverride(const std::string& host) {
+	Achievements::Instance().setHostOverride(host);
+}
+
 void serialize(Serializer& ser) {
 	Achievements::Instance().serialize(ser);
 }
@@ -243,7 +250,41 @@ bool Achievements::createClient()
 
 	rc_client_set_userdata(rc_client, this);
 
+	if (!config::AchievementsHostUrl.get().empty()) {
+		rc_client_set_host(rc_client, config::AchievementsHostUrl.get().c_str());
+	}
+
 	return true;
+}
+
+void Achievements::setHostOverride(const std::string& host)
+{
+	config::AchievementsHostUrl.set(host);
+	// rc_client_set_host sets the global URL even when rc_client is null
+	rc_client_set_host(rc_client, host.empty() ? nullptr : host.c_str());
+	if (rc_client != nullptr)
+	{
+		if (!host.empty())
+		{
+			rc_client_set_hardcore_enabled(rc_client, 0);
+			if (!loggedOn
+				&& !config::AchievementsUserName.get().empty()
+				&& !config::AchievementsToken.get().empty())
+			{
+				INFO_LOG(COMMON, "RA: Retrying login via proxy host '%s'", host.c_str());
+				rc_client_begin_login_with_token(rc_client,
+					config::AchievementsUserName.get().c_str(),
+					config::AchievementsToken.get().c_str(),
+					clientLoginWithTokenCallback, nullptr);
+			}
+		}
+		else
+		{
+			bool restoredHardcore = config::AchievementsHardcoreMode.get();
+			rc_client_set_hardcore_enabled(rc_client, (int)restoredHardcore);
+			settings.raHardcoreMode = restoredHardcore;
+		}
+	}
 }
 
 void Achievements::loadCache()
@@ -855,7 +896,9 @@ void Achievements::loadGame()
 	if (!gameHash.empty())
 	{
 		// settings.raHardcoreMode is set before enabling cheats and loading the initial savestate
-		rc_client_set_hardcore_enabled(rc_client, settings.raHardcoreMode);
+		// Hardcore is disabled when routing through a custom host (e.g. RAOfflineProxy).
+		bool effectiveHardcore = settings.raHardcoreMode && config::AchievementsHostUrl.get().empty();
+		rc_client_set_hardcore_enabled(rc_client, effectiveHardcore);
 		rc_client_begin_load_game(rc_client, gameHash.c_str(), [](int result, const char *error_message, rc_client_t *client, void *userdata) {
 				((Achievements *)userdata)->gameLoaded(result, error_message);
 			}, this);

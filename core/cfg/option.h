@@ -1,5 +1,6 @@
 /*
-	Copyright 2021 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -350,6 +351,8 @@ using OptionString = Option<std::string>;
 // Dynarec
 
 extern Option<bool> DynarecEnabled;
+extern Option<int> FastForwardSpeedLimit;
+extern Option<bool> FastForwardAudio;
 #ifndef LIBRETRO
 extern Option<int> Sh4Clock;
 #endif
@@ -363,6 +366,7 @@ extern Option<int> Language;	// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -
 extern OptionString UILanguage;
 extern Option<bool> AutoLoadState;
 extern Option<bool> AutoSaveState;
+extern Option<bool> SaveProtection;
 extern Option<int, false> SavestateSlot;
 extern Option<bool> ForceFreePlay;
 extern Option<bool, false> FetchBoxart;
@@ -480,6 +484,7 @@ extern Option<bool> NativeDepthInterpolation;
 extern Option<bool> EmulateFramebuffer;
 extern Option<bool> FixUpscaleBleedingEdge;
 extern Option<bool> CustomGpuDriver;
+extern Option<bool> FramePacing;
 #ifdef VIDEO_ROUTING
 extern Option<bool, false> VideoRouting;
 extern Option<bool, false> VideoRoutingScale;
@@ -509,6 +514,9 @@ extern Option<std::string, false> TextureDumpPath;
 extern Option<std::string, false> BoxartPath;
 extern Option<std::vector<std::string>, false> MappingsPath;
 extern Option<std::vector<std::string>, false> CheatPath;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<std::string, false> DreamPotatoFolderPath;
+#endif
 extern Option<bool, false> HideLegacyNaomiRoms;
 extern Option<bool, false> UploadCrashLogs;
 extern Option<bool, false> DiscordPresence;
@@ -527,6 +535,7 @@ extern Option<float> ProfilerFrameWarningTime;
 
 extern Option<bool> NetworkEnable;
 extern Option<bool> ActAsServer;
+extern Option<bool> NaomiSatellite;
 extern OptionString DNS;
 extern OptionString NetworkServer;
 extern Option<int> LocalPort;
@@ -558,6 +567,7 @@ extern Option<int> VirtualGamepadTransparency;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;
+extern std::array<std::array<Option<std::string, false>, 2>, 4> MapleVmuSlotFileNames;
 // When true, automatically change the peripheral setting to DreamLink when a DreamLink controller attaches
 extern std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect;
 extern Option<bool> PerGameVmu;
@@ -567,6 +577,9 @@ extern Option<bool, false> UseRawInput;
 constexpr bool UseRawInput = false;
 #endif
 extern Option<bool> UsePhysicalVmuMemory;
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+extern Option<bool> DreamPotatoIntegratedMode;
+#endif
 
 #ifdef USE_LUA
 extern Option<std::string, false> LuaFileName;
@@ -578,5 +591,6 @@ extern Option<bool> EnableAchievements;
 extern Option<bool> AchievementsHardcoreMode;
 extern OptionString AchievementsUserName;
 extern OptionString AchievementsToken;
+extern OptionString AchievementsHostUrl;
 
 } // namespace config

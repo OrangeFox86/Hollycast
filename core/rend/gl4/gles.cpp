@@ -673,7 +673,7 @@ static void gl_create_resources()
 	}
 	GlVertexArray::unbind();
 
-	gl.quad = std::make_unique<GlQuadDrawer>();
+	gl.quadDrawer = std::make_unique<GlQuadDrawer>();
 	glCheck();
 }
 

@@ -1,3 +1,5 @@
+// Portions Copyright 2026 The Hollycast Authors
+
 #ifndef LIBRETRO
 #include "types.h"
 #include "emulator.h"
@@ -106,7 +108,7 @@ int flycast_init(int argc, char* argv[])
 		os_SetupInput();
 
 		if(config::GDB)
-			debugger::init(config::GDBPort);
+			debugger::init(config::GDBPort + config::loadInt("naomi", "BoardId"));
 		lua::init();
 
 		if(config::ProfilerEnabled)
@@ -415,6 +417,11 @@ void dc_getStateScreenshot(int index, std::vector<u8>& pngData)
 			pngData.clear();
 	}
 	delete f;
+}
+
+int dc_getAutoSaveSlot()
+{
+	return NUM_SAVE_SLOTS;
 }
 
 #endif

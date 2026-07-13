@@ -4,10 +4,13 @@
 //
 //  Created by admin on 8/5/15.
 //  Copyright (c) 2015 reicast. All rights reserved.
+// Portions Copyright 2026 The Hollycast Authors
 //
 #import <Carbon/Carbon.h>
 #import <AppKit/AppKit.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <mach/task.h>
 #include <mach/mach_init.h>
 #include <mach/mach_port.h>
@@ -55,8 +58,9 @@ int darw_printf(const char* text, ...)
 
 void os_DoEvents() {
 #if defined(USE_SDL)
-	NSMenuItem *editMenuItem = [[NSApp mainMenu] itemAtIndex:1];
-	[editMenuItem setEnabled:SDL_IsTextInputActive()];
+	NSMenuItem *editMenuItem = [[NSApp mainMenu] itemWithTitle:@"Edit"];
+	if (editMenuItem)
+		[editMenuItem setEnabled:SDL_IsTextInputActive()];
 
 	NSMenuItem *toggleMenuItem = [[[[NSApp mainMenu] itemAtIndex:0] submenu] itemWithTag:MENU_TAG_TOGGLE_MENU];
 	if (toggleMenuItem) {
@@ -211,10 +215,85 @@ void os_RunInstance(int argc, const char *argv[])
 			localArgs.push_back((char *)argv[i]);
 		localArgs.push_back(nullptr);
 		execv(selfPath, &localArgs[0]);
-		ERROR_LOG(BOOT, "Error %d launching Flycast instance %s", errno, selfPath);
+		ERROR_LOG(BOOT, "Error %d launching Hollycast instance %s", errno, selfPath);
 		die("execv failed");
 	}
 }
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+std::string os_GetAppContainingDir()
+{
+	NSBundle *bundle = [NSBundle mainBundle];
+	if (bundle != nil)
+	{
+		// path to the .app folder
+		NSString *bundlePath = [bundle bundlePath];
+		if (bundlePath != nil && [bundlePath length] > 0)
+			return [[[bundlePath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+	}
+
+	// Not packaged in .app. Return the directory containing the executable.
+	NSArray *arguments = [[NSProcessInfo processInfo] arguments];
+	if ([arguments count] == 0)
+		return "";
+
+	NSString *selfPath = [arguments objectAtIndex:0];
+	return [[[selfPath stringByDeletingLastPathComponent] stringByStandardizingPath] UTF8String];
+}
+
+os_Process os_Process::start(const std::string& executable, const std::vector<std::string>& args)
+{
+	os_Process proc;
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		// Close open file descriptors except for stdio
+		int maxfd = sysconf(_SC_OPEN_MAX);
+		for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++)
+			close(fd);
+
+		std::vector<char *> cargs;
+		cargs.push_back(const_cast<char *>(executable.c_str()));
+		for (const auto& arg : args)
+			cargs.push_back(const_cast<char *>(arg.c_str()));
+		cargs.push_back(nullptr);
+		execvp(executable.c_str(), cargs.data());
+		_exit(127);
+	}
+	else if (pid > 0)
+	{
+		proc.pid = pid;
+	}
+	else
+	{
+		WARN_LOG(BOOT, "os_Process::start fork failed: %s", strerror(errno));
+	}
+	return proc;
+}
+
+bool os_Process::isRunning()
+{
+	if (!isValid())
+		return false;
+	int status;
+	pid_t result = waitpid(pid, &status, WNOHANG);
+	if (result == 0)
+		return true;
+	// Process has exited
+	pid = -1;
+	return false;
+}
+
+void os_Process::terminate()
+{
+	if (!isValid())
+		return;
+	kill(pid, SIGTERM);
+	int status;
+	waitpid(pid, &status, 0);
+	pid = -1;
+}
+#endif // DREAMPOTATO_INTEGRATED_MODE
 
 #import <Syphon/Syphon.h>
 #import <cfg/cfg.h>

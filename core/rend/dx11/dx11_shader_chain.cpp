@@ -249,7 +249,7 @@ void Dx11ShaderChain::init(const ComPtr<ID3D11Device>& device, const ComPtr<ID3D
 bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, std::vector<Program>& candidate,
 		std::string& error) const
 {
-	const pD3DCompile compiler = theDX11Context.getCompiler();
+	const pD3DCompile compiler = DX11Context::Instance()->getCompiler();
 	if (compiler == nullptr) {
 		error = "DirectX 11 shader compiler is unavailable.";
 		return false;
@@ -543,7 +543,7 @@ bool Dx11ShaderChain::prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& s
 	deviceContext->RSSetViewports(1, &viewport);
 	deviceContext->OMSetRenderTargets(1, &mipmapSource.view.get(), nullptr);
 	deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	quad->draw(sourceView, theDX11Context.getSamplers().getSampler(false));
+	quad->draw(sourceView, DX11Context::Instance()->getSamplers().getSampler(false));
 	unbindPixelShaderSource();
 	deviceContext->GenerateMips(mipmapSource.shaderView);
 	mipmappedView = mipmapSource.shaderView;
@@ -594,7 +594,7 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		deviceContext->RSSetViewports(1, &historyViewport);
 		deviceContext->OMSetRenderTargets(1, &sourceHistory[currentTarget].view.get(), nullptr);
 		deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-		quad->draw(sourceView, theDX11Context.getSamplers().getSampler(false));
+		quad->draw(sourceView, DX11Context::Instance()->getSamplers().getSampler(false));
 		unbindPixelShaderSource();
 	}
 	for (size_t index = 0; index < programs.size(); ++index) {
@@ -735,7 +735,7 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 				return false;
 			}
 			resourceViews.push_back(view);
-			samplers.push_back(sampler ? sampler : theDX11Context.getSamplers().getSampler(program.pass.linearFilter));
+			samplers.push_back(sampler ? sampler : DX11Context::Instance()->getSamplers().getSampler(program.pass.linearFilter));
 		}
 		quad->drawWithShaders(resourceViews, samplers, program.vertexShader.get(), program.pixelShader, &uniforms, sizeof(uniforms));
 		unbindPixelShaderSource();

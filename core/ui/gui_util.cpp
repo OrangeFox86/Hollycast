@@ -1,5 +1,5 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
 	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
@@ -22,6 +22,9 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <cctype>
+#include <ctime>
 
 #include "types.h"
 #include "stdclass.h"
@@ -30,11 +33,13 @@
 #include "oslib/storage.h"
 #include "oslib/http_client.h"
 #include "oslib/i18n.h"
+#include "gui_menu.h"
 #include "imgui_driver.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_stdlib.h"
 #include "gui_font.h"
+#include "IconsFontAwesome6.h"
 #include "stdclass.h"
 #include "rend/osd.h"
 #include <stb_image.h>
@@ -45,6 +50,13 @@ static std::string select_current_directory = "**home**";
 static std::vector<hostfs::FileInfo> subfolders;
 static std::vector<hostfs::FileInfo> folderFiles;
 bool subfolders_read;
+static char fileInputText[1024] = {};
+static bool fileInputIsDirectory;
+static char filePathText[1024] = {};
+static char fileSearchText[128] = {};
+static std::vector<std::string> select_back_history;
+static std::vector<std::string> select_forward_history;
+static bool select_pathbox_text_mode;
 static std::mutex g_storageCallbackMutex;
 static StringCallback g_storageCallback;
 
@@ -90,22 +102,115 @@ namespace hostfs
 void select_file_popup(const char *prompt, const StringCallback& callback,
 		bool selectFile, const std::string& selectExtension)
 {
-	fullScreenWindow(true);
+	const float windowInset = uiScaled(8.0f);
+	const ImVec2 parentPos = ImGui::GetWindowPos();
+	const ImVec2 parentSize = ImGui::GetWindowSize();
+	const ImVec2 popupPos(parentPos.x + windowInset, parentPos.y + windowInset);
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+	const ImVec2 desiredSize(parentSize.x - windowInset * 2.0f, parentSize.y - windowInset * 2.0f);
+	const ImVec2 minSize(uiScaled(320.0f), uiScaled(240.0f));
+	const ImVec2 maxSize(
+			std::max(minSize.x, displaySize.x - popupPos.x - windowInset),
+			std::max(minSize.y, displaySize.y - popupPos.y - windowInset));
+	ImGui::SetNextWindowPos(popupPos, ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImClamp(desiredSize, minSize, maxSize), ImGuiCond_Always);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
 	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ImVec2(4, 3)); // default
 
-	if (ImGui::BeginPopup(prompt, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize ))
+	if (ImGui::BeginPopup(prompt, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
+			| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+			| ImGuiWindowFlags_NoSavedSettings))
 	{
 		static std::string error_message;
 
 		if (select_current_directory == "**home**")
 			select_current_directory = hostfs::storage().getDefaultDirectory();
 
+		auto setInputText = [](const std::string& text) {
+			std::strncpy(fileInputText, text.c_str(), sizeof(fileInputText) - 1);
+			fileInputText[sizeof(fileInputText) - 1] = '\0';
+		};
+
+		auto setPathText = [](const std::string& text) {
+			std::strncpy(filePathText, text.c_str(), sizeof(filePathText) - 1);
+			filePathText[sizeof(filePathText) - 1] = '\0';
+		};
+
+		auto setCurrentFolderInput = [&]() {
+			if (selectFile)
+				fileInputText[0] = '\0';
+			else
+				setInputText(select_current_directory);
+			fileInputIsDirectory = false;
+			setPathText(select_current_directory);
+		};
+
+		auto navigateToDirectory = [&](const std::string& path, bool addToHistory) {
+			if (path == select_current_directory)
+				return;
+			if (addToHistory && !select_current_directory.empty())
+			{
+				select_back_history.push_back(select_current_directory);
+				select_forward_history.clear();
+			}
+			select_current_directory = path;
+			subfolders_read = false;
+			setCurrentFolderInput();
+		};
+
+		if (ImGui::IsWindowAppearing())
+		{
+			fileSearchText[0] = '\0';
+			select_back_history.clear();
+			select_forward_history.clear();
+			select_pathbox_text_mode = false;
+			setCurrentFolderInput();
+		}
+
+		auto finalizeSelection = [&](const std::string& selection) {
+			bool success = false;
+			if (selectFile)
+			{
+				if (!selection.empty())
+				{
+					const std::string path = isAbsolutePath(selection)
+							? selection : hostfs::storage().getSubPath(select_current_directory, selection);
+					if (!fileInputIsDirectory)
+						success = callback && callback(false, path);
+				}
+			}
+			else
+			{
+				std::string path = select_current_directory;
+				if (!selection.empty())
+					path = isAbsolutePath(selection)
+							? selection : hostfs::storage().getSubPath(select_current_directory, selection);
+				success = callback && callback(false, path);
+			}
+
+#if defined(_WIN32) && !defined(TARGET_UWP)
+			if (!success)
+				MessageBeep(MB_ICONERROR);
+#endif
+			if (success)
+			{
+				subfolders_read = false;
+				ImGui::CloseCurrentPopup();
+			}
+		};
+
 		if (!subfolders_read)
 		{
 			subfolders.clear();
             folderFiles.clear();
 			error_message.clear();
+
+			auto isSupportedGameExtension = [](const std::string& extension) {
+				return extension == "zip" || extension == "7z" || extension == "chd"
+						|| extension == "gdi" || extension == "cdi" || extension == "cue"
+						|| (!config::HideLegacyNaomiRoms
+								&& (extension == "bin" || extension == "lst" || extension == "dat"));
+			};
 
 			try {
 				for (const hostfs::FileInfo& entry : hostfs::storage().listContent(select_current_directory))
@@ -119,16 +224,14 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						std::string extension = get_file_extension(entry.name);
 						if (selectFile)
 						{
-							// A semicolon-delimited filter keeps the existing picker API
-							// compatible while allowing shader packages to expose their
-							// real entry-point extensions together.
-							if (extension == selectExtension || selectExtension.find(";" + extension + ";") != std::string::npos)
+							// Semicolon-delimited filters let package pickers expose several
+							// entry-point types without changing the single-extension API.
+							if ((selectExtension.empty() && isSupportedGameExtension(extension))
+									|| extension == selectExtension
+									|| selectExtension.find(";" + extension + ";") != std::string::npos)
 								folderFiles.push_back(entry);
 						}
-						else if (extension == "zip" || extension == "7z" || extension == "chd"
-								|| extension == "gdi" || extension == "cdi" || extension == "cue"
-								|| (!config::HideLegacyNaomiRoms
-										&& (extension == "bin" || extension == "lst" || extension == "dat")))
+						else
 							folderFiles.push_back(entry);
 					}
 				}
@@ -149,71 +252,448 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::PopFont();
 			ImGui::EndDisabled();
 		}
-		std::string title;
-		if (!error_message.empty())
-			title = error_message;
-		else if (select_current_directory.empty())
-			title = T("Storage");
-		else
-			title = select_current_directory;
+		auto matchesSearch = [](const std::string& name) {
+			if (fileSearchText[0] == '\0')
+				return true;
 
-		ImGui::Text("%s", title.c_str());
-		ImGui::BeginChild(ImGui::GetID("dir_list"), ImVec2(0, - uiScaled(30) - ImGui::GetStyle().ItemSpacing.y),
-				ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
-		{
-			ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 20));
+			std::string haystack = name;
+			std::string needle = fileSearchText;
+			std::transform(haystack.begin(), haystack.end(), haystack.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			std::transform(needle.begin(), needle.end(), needle.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return haystack.find(needle) != std::string::npos;
+		};
 
-			if (!select_current_directory.empty() && select_current_directory != "/")
+		const bool showError = !error_message.empty();
+		if (showError)
+			ImGui::TextUnformatted(error_message.c_str());
+
+		// POSIX allows '\' inside filenames, so only treat it as a separator when
+		// the current build is targeting Windows paths.
+		auto isPathSeparator = [](char c) {
+#ifdef _WIN32
+			return c == '/' || c == '\\';
+#else
+			return c == '/';
+#endif
+		};
+
+		auto trimTrailingPathSeparators = [&](std::string path) {
+			while (path.size() > 1 && isPathSeparator(path.back()))
+				path.pop_back();
+			return path;
+		};
+
+		auto findLastPathSeparator = [&](const std::string& path) {
+			for (size_t i = path.size(); i-- > 0;)
+				if (isPathSeparator(path[i]))
+					return i;
+			return std::string::npos;
+		};
+
+		auto getPathLeaf = [&](const std::string& path) {
+			if (path.empty())
+				return std::string("/");
+			std::string normalized = trimTrailingPathSeparators(path);
+			const size_t pos = findLastPathSeparator(normalized);
+			if (pos == std::string::npos)
+				return normalized;
+			return normalized.substr(pos + 1);
+		};
+
+		auto getNavigationChain = [](const std::string& startPath) {
+			std::vector<std::string> chain;
+			if (startPath.empty())
+				return chain;
+
+			std::string cursor = startPath;
+			for (int guard = 0; guard < 64 && !cursor.empty(); ++guard)
 			{
-				if (ImGui::Selectable(T(".. Up to Parent Folder")))
+				if (chain.empty() || chain.back() != cursor)
+					chain.push_back(cursor);
+
+				std::string parent = hostfs::storage().getParentPath(cursor);
+				if (parent.empty() || parent == cursor)
+					break;
+				cursor = parent;
+			}
+			std::reverse(chain.begin(), chain.end());
+			return chain;
+		};
+
+		auto normalizePathForCompare = [&](std::string path) {
+			path = trimTrailingPathSeparators(std::move(path));
+#ifdef _WIN32
+			std::transform(path.begin(), path.end(), path.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+			return path;
+		};
+
+		auto isSamePath = [&](const std::string& lhs, const std::string& rhs) {
+			return normalizePathForCompare(lhs) == normalizePathForCompare(rhs);
+		};
+
+		const float navSize = ImGui::GetFrameHeight();
+		auto formatTimestamp = [](u64 updateTime) {
+			if (updateTime == 0)
+				return std::string("---");
+			std::time_t rawTime = static_cast<std::time_t>(updateTime);
+			std::tm timeInfo {};
+#ifdef _WIN32
+			if (localtime_s(&timeInfo, &rawTime) != 0)
+				return std::string("---");
+#else
+			if (localtime_r(&rawTime, &timeInfo) == nullptr)
+				return std::string("---");
+#endif
+			char buffer[32];
+			std::strftime(buffer, sizeof(buffer), "%m/%d/%Y %H:%M", &timeInfo);
+			return std::string(buffer);
+		};
+
+		auto FavoriteButton = [&](bool enabled) {
+			if (!enabled)
+			{
+				ImGui::BeginDisabled(true);
+				ImGui::PushFont(settingsIconFont);
+				ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
+				ImGui::PopFont();
+				ImGui::EndDisabled();
+				return false;
+			}
+			ImGui::PushFont(settingsIconFont);
+			const bool pressed = ImGui::Button(ICON_FA_STAR, ImVec2(navSize, navSize));
+			ImGui::PopFont();
+			return pressed;
+		};
+
+		auto PathBox = [&](bool* editMode) {
+			if (*editMode)
+			{
+				const bool submitted = ImGui::InputTextEx("##pathbox", T("Path"), filePathText, sizeof(filePathText),
+						ImVec2(-uiScaled(220), navSize), ImGuiInputTextFlags_EnterReturnsTrue);
+				if (submitted)
 				{
-					subfolders_read = false;
-					select_current_directory = hostfs::storage().getParentPath(select_current_directory);
+					navigateToDirectory(filePathText, true);
+					*editMode = false;
 				}
+				else if (ImGui::IsItemDeactivated())
+					*editMode = false;
+				return;
 			}
 
-			for (const auto& entry : subfolders)
+			ImGui::BeginChild("##pathbox", ImVec2(-uiScaled(220), navSize),
+					ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 			{
-				if (ImGui::Selectable(entry.name.c_str()))
+				const std::vector<std::string> chain = getNavigationChain(select_current_directory);
+				if (ImGui::SmallButton(T("This PC")))
+					navigateToDirectory("", true);
+				bool first = true;
+				for (size_t i = 0; i < chain.size(); ++i)
 				{
-					subfolders_read = false;
-					select_current_directory = entry.path;
-				}
-			}
-			ImguiStyleColor _1(ImGuiCol_Text, { 1, 1, 1, selectFile ? 1.f : 0.3f });
-			for (const auto& entry : folderFiles)
-			{
-				if (selectFile)
-				{
-					if (ImGui::Selectable(entry.name.c_str()))
+					const std::string leaf = chain[i] == "/" ? "/" : getPathLeaf(chain[i]);
+					if (first)
 					{
-						subfolders_read = false;
-						if (callback && callback(false, entry.path))
-							ImGui::CloseCurrentPopup();
+						ImGui::SameLine(0.0f, 2.0f);
+						ImGui::Text(">");
+						ImGui::SameLine(0.0f, 2.0f);
+					}
+					if (!first)
+					{
+						ImGui::SameLine(0.0f, 2.0f);
+						ImGui::Text(">");
+						ImGui::SameLine(0.0f, 2.0f);
+					}
+					first = false;
+
+					if (ImGui::SmallButton(leaf.c_str()))
+						navigateToDirectory(chain[i], true);
+					if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+					{
+						setPathText(chain[i]);
+						fileInputIsDirectory = true;
+						*editMode = true;
 					}
 				}
-				else
-				{
-					ImGui::Text("%s", entry.name.c_str());
-				}
 			}
-			scrollWhenDraggingOnVoid();
-			windowDragScroll();
+			ImGui::EndChild();
+		};
+
+		auto drawBrowserItemLabel = [&](const char* icon, const std::string& name, const ImVec2& pos,
+				bool disabled, float indent) {
+			ImFont* iconFont = settingsIconFont != nullptr ? settingsIconFont : ImGui::GetFont();
+			ImFont* textFont = ImGui::GetFont();
+			ImGuiStyle& style = ImGui::GetStyle();
+			const float textHeight = ImGui::GetTextLineHeight();
+			const float iconSize = ImGui::GetFontSize();
+			const float iconWidth = uiScaled(18.0f);
+			const ImU32 color = ImGui::GetColorU32(disabled ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+			const float itemX = pos.x + style.FramePadding.x + indent;
+			const ImVec2 iconPos(itemX, pos.y + style.FramePadding.y);
+			const ImVec2 textPos(itemX + iconWidth, pos.y + style.FramePadding.y);
+
+			ImGui::GetWindowDrawList()->AddText(iconFont, iconSize, iconPos, color, icon);
+			ImGui::GetWindowDrawList()->AddText(textFont, textHeight, textPos, color, name.c_str());
+		};
+
+		auto FolderNode = [&](const hostfs::FileInfo& entry, bool inContentPane, int treeDepth) {
+			const bool selected = inContentPane
+					? fileInputIsDirectory && std::strcmp(fileInputText, entry.path.c_str()) == 0
+					: isSamePath(select_current_directory, entry.path);
+			const char* icon = selected ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
+			const ImVec2 rowSize(0.0f, ImGui::GetTextLineHeightWithSpacing());
+			if (inContentPane)
+				ImGui::TableNextRow();
+			if (inContentPane)
+				ImGui::TableSetColumnIndex(0);
+			ImGui::PushID(entry.path.empty() ? entry.name.c_str() : entry.path.c_str());
+			const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+			if (ImGui::Selectable("##folder", selected,
+					inContentPane
+							? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)
+							: 0,
+					rowSize))
+			{
+				setInputText(entry.path);
+				fileInputIsDirectory = true;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					navigateToDirectory(entry.path, true);
+				else if (!inContentPane)
+					navigateToDirectory(entry.path, true);
+			}
+			drawBrowserItemLabel(icon, entry.name, rowPos, false,
+					inContentPane ? 0.0f : uiScaled(14.0f) * treeDepth);
+			ImGui::PopID();
+			if (inContentPane)
+			{
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+
+				ImGui::TableSetColumnIndex(2);
+				ImGui::TextUnformatted("");
+			}
+		};
+
+		auto FileNode = [&](const hostfs::FileInfo& entry) {
+			const bool selected = !fileInputIsDirectory && std::strcmp(fileInputText, entry.name.c_str()) == 0;
+			const ImVec2 rowSize(0.0f, ImGui::GetTextLineHeightWithSpacing());
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::PushID(entry.name.c_str());
+			const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+			if (ImGui::Selectable("##file", selected,
+					ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick,
+					rowSize))
+			{
+				setInputText(entry.name);
+				fileInputIsDirectory = false;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					finalizeSelection(entry.name);
+			}
+			drawBrowserItemLabel(ICON_FA_FILE, entry.name, rowPos, false, 0.0f);
+			ImGui::PopID();
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::Text("%.3f KiB", entry.size / 1024.0f);
+		};
+
+		ImGui::Separator();
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		const bool canGoBack = !select_back_history.empty();
+		if (!canGoBack)
+			ImGui::BeginDisabled(true);
+		if (ImGui::ArrowButton("##back", ImGuiDir_Left) && canGoBack)
+		{
+			select_forward_history.push_back(select_current_directory);
+			const std::string path = select_back_history.back();
+			select_back_history.pop_back();
+			navigateToDirectory(path, false);
+		}
+		if (!canGoBack)
+			ImGui::EndDisabled();
+		ImGui::SameLine();
+		const bool canGoForward = !select_forward_history.empty();
+		if (!canGoForward)
+			ImGui::BeginDisabled(true);
+		if (ImGui::ArrowButton("##forward", ImGuiDir_Right) && canGoForward)
+		{
+			select_back_history.push_back(select_current_directory);
+			const std::string path = select_forward_history.back();
+			select_forward_history.pop_back();
+			navigateToDirectory(path, false);
+		}
+		if (!canGoForward)
+			ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("##up", ImGuiDir_Up)
+				&& !select_current_directory.empty() && select_current_directory != "/")
+		{
+			std::string parent = hostfs::storage().getParentPath(select_current_directory);
+			if (parent == select_current_directory)
+				parent.clear();
+			navigateToDirectory(parent, true);
+		}
+		ImGui::SameLine();
+		PathBox(&select_pathbox_text_mode);
+		ImGui::SameLine();
+		FavoriteButton(false);
+		ImGui::SameLine();
+		if (ImGui::InputTextEx("##searchTB", T("Search"), fileSearchText, sizeof(fileSearchText),
+				ImVec2(-FLT_MIN, navSize), 0))
+		{
+		}
+		ImGui::Separator();
+
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float bottomControlsHeight = ImGui::GetFrameHeightWithSpacing() * 2.0f
+				+ style.ItemSpacing.y * 2.0f
+				+ style.WindowPadding.y;
+		const float browserHeight = std::max(uiScaled(120.0f),
+				ImGui::GetContentRegionAvail().y - bottomControlsHeight);
+		ImGui::BeginChild("##file_browser_region", ImVec2(0, browserHeight),
+				ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		if (ImGui::BeginTable("##file_dialog_layout", 2, ImGuiTableFlags_Resizable, ImVec2(0, 0)))
+		{
+			ImGui::TableSetupColumn("##tree", ImGuiTableColumnFlags_WidthFixed, uiScaled(170));
+			ImGui::TableSetupColumn("##content", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::BeginChild("##treeContainer", ImVec2(0, 0),
+					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
+			{
+				ImguiStyleVar _(ImGuiStyleVar_ItemSpacing, ScaledVec2(8, 8));
+				ImGui::TextDisabled("%s", T("Folders"));
+				ImGui::Separator();
+
+				hostfs::FileInfo rootEntry;
+				rootEntry.name = T("This device");
+				rootEntry.path = "";
+				FolderNode(rootEntry, false, 0);
+
+				std::vector<hostfs::FileInfo> roots;
+				try {
+					roots = hostfs::storage().listContent("");
+					std::sort(roots.begin(), roots.end());
+				} catch (const hostfs::StorageException&) {
+				}
+
+				const std::vector<std::string> navigationChain = getNavigationChain(select_current_directory);
+				const std::string activeRoot = navigationChain.empty() ? std::string() : navigationChain.front();
+				for (const auto& root : roots)
+				{
+					if (!root.isDirectory || !matchesSearch(root.name))
+						continue;
+					FolderNode(root, false, 1);
+
+					if (!activeRoot.empty() && isSamePath(root.path, activeRoot))
+					{
+						for (size_t i = 1; i < navigationChain.size(); ++i)
+						{
+							const std::string& path = navigationChain[i];
+							const std::string leafName = getPathLeaf(path);
+							const std::string label = leafName.empty() ? path : leafName;
+							hostfs::FileInfo breadcrumb;
+							breadcrumb.name = label;
+							breadcrumb.path = path;
+							FolderNode(breadcrumb, false, static_cast<int>(i + 1));
+						}
+						for (const auto& entry : subfolders)
+						{
+							if (!matchesSearch(entry.name))
+								continue;
+
+							FolderNode(entry, false, static_cast<int>(navigationChain.size() + 1));
+						}
+					}
+				}
+
+				if (roots.empty())
+				{
+					for (const auto& entry : subfolders)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+
+						FolderNode(entry, false, 1);
+					}
+				}
+				scrollWhenDraggingOnVoid();
+				windowDragScroll();
+			}
+			ImGui::EndChild();
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::BeginChild("##contentContainer", ImVec2(0, 0),
+					ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
+			{
+				if (ImGui::BeginTable("##contentTable", 3,
+						ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY))
+				{
+					ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
+					ImGui::TableSetupColumn(T("Date modified"), ImGuiTableColumnFlags_WidthFixed, uiScaled(170));
+					ImGui::TableSetupColumn(T("Size"), ImGuiTableColumnFlags_WidthFixed, uiScaled(95));
+					ImGui::TableHeadersRow();
+
+					for (const auto& entry : subfolders)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+						FolderNode(entry, true, 0);
+					}
+
+					for (const auto& entry : folderFiles)
+					{
+						if (!matchesSearch(entry.name))
+							continue;
+						if (selectFile)
+							FileNode(entry);
+						else {
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							drawBrowserItemLabel(ICON_FA_FILE, entry.name, ImGui::GetCursorScreenPos(), true, 0.0f);
+							ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing()));
+							ImGui::TableSetColumnIndex(1);
+							ImGui::TextUnformatted(formatTimestamp(entry.updateTime).c_str());
+							ImGui::TableSetColumnIndex(2);
+							ImGui::Text("%.3f KiB", entry.size / 1024.0f);
+						}
+					}
+
+					ImGui::EndTable();
+				}
+				scrollWhenDraggingOnVoid();
+				windowDragScroll();
+			}
+			ImGui::EndChild();
+			ImGui::EndTable();
 		}
 		ImGui::EndChild();
-		if (!selectFile)
+		ImGui::TextUnformatted(selectFile ? T("File name:") : T("Folder:"));
+		ImGui::SameLine();
+		const bool inputSubmitted = ImGui::InputTextEx("##file_input", T("Filename"), fileInputText, sizeof(fileInputText),
+				ImVec2(-FLT_MIN, 0),
+				ImGuiInputTextFlags_EnterReturnsTrue);
+		if (ImGui::IsItemEdited())
+			fileInputIsDirectory = false;
+		if (inputSubmitted)
+			finalizeSelection(fileInputText);
+		const float buttonWidth = std::max(ImGui::CalcTextSize(T("Open")).x, ImGui::CalcTextSize(T("Back")).x)
+				+ ImGui::GetStyle().FramePadding.x * 2.f + uiScaled(32.f);
+		const float ok_cancel_width = buttonWidth * 2.f + ImGui::GetStyle().ItemSpacing.x;
+		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ok_cancel_width);
+		if (ImGui::Button(T("Open"),
+				ImVec2(buttonWidth, 0.0f)))
 		{
-			if (ImGui::Button(T("Select Current Folder"), ScaledVec2(0, 30)))
-			{
-				if (callback && callback(false, select_current_directory))
-				{
-					subfolders_read = false;
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			ImGui::SameLine();
+			finalizeSelection(fileInputText);
 		}
-		if (ImGui::Button(T("Cancel"), ScaledVec2(0, 30)))
+		ImGui::SameLine();
+		if (ImGui::Button(T("Back"), ImVec2(-FLT_MIN, 0.0f)))
 		{
 			subfolders_read = false;
 			if (callback)
@@ -221,6 +701,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 			ImGui::CloseCurrentPopup();
 		}
 		error_popup();
+		ImGui::PopStyleColor();
 		ImGui::EndPopup();
 	}
 }
@@ -257,6 +738,25 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button)
 		window = window->ParentWindow;
 	if (window == nullptr || !(window->Flags & ImGuiWindowFlags_DragScrolling))
 		return;
+#if defined(__ANDROID__)
+	const ImGuiIO& io = ImGui::GetIO();
+	const bool touchDragAnywhere = io.MouseSource == ImGuiMouseSource_TouchScreen
+			&& io.MouseDown[mouse_button]
+			&& window->Rect().Contains(io.MousePos)
+			&& ImGui::IsMouseDragging(mouse_button, io.MouseDragThreshold);
+	if (touchDragAnywhere)
+	{
+		// Android finger scrolling often starts over a live Selectable row. Treat
+		// that as a scroll drag so settings rows do not eat the swipe as a tap.
+		const ImVec2& delta = io.MouseDelta;
+		if (delta != ImVec2())
+		{
+			window->DragScrolling = true;
+			window->ScrollSpeed = delta;
+		}
+		return;
+	}
+#endif
     bool hovered = false;
     bool held = false;
     ImGuiButtonFlags button_flags = (mouse_button == ImGuiMouseButton_Left) ? ImGuiButtonFlags_MouseButtonLeft
@@ -558,8 +1058,8 @@ void fullScreenWindow(bool modal)
 			ImGui::End();
 		}
 	}
-	// Position the main window below the menu bar to avoid covering it
-	float menuBarHeight = ImGui::GetFrameHeight();  // Standard menu bar height
+	// Position the main window below the menu bar only when it is actually visible.
+	float menuBarHeight = GuiMenu::mainMenuBarHeight();
 	ImGui::SetNextWindowPos(ImVec2(insetLeft, insetTop + menuBarHeight));
 	ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - insetLeft - insetRight, ImGui::GetIO().DisplaySize.y - insetTop - insetBottom - menuBarHeight));
 }
@@ -726,13 +1226,14 @@ std::future<ImguiStateTexture::LoadedPic> ImguiStateTexture::asyncLoad;
 
 bool ImguiStateTexture::exists()
 {
-	std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+	std::string path = hostfs::getSavestatePath(slot, false);
 	return hostfs::storage().exists(path);
 }
 
 ImTextureID ImguiStateTexture::getId()
 {
-	std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+	const int stateSlot = slot;
+	std::string path = hostfs::getSavestatePath(stateSlot, false);
 	ImTextureID texid = imguiDriver->getTexture(path);
 	if (texid != ImTextureID())
 		return texid;
@@ -752,11 +1253,11 @@ ImTextureID ImguiStateTexture::getId()
 		}
 		return texid;
 	}
-	asyncLoad = std::async(std::launch::async, []() {
+	asyncLoad = std::async(std::launch::async, [stateSlot]() {
 		LoadedPic loadedPic{};
 		// load savestate info
 		std::vector<u8> pngData;
-		dc_getStateScreenshot(config::SavestateSlot, pngData);
+		dc_getStateScreenshot(stateSlot, pngData);
 		if (pngData.empty())
 			return loadedPic;
 
@@ -773,7 +1274,7 @@ void ImguiStateTexture::invalidate()
 {
 	if (imguiDriver)
 	{
-		std::string path = hostfs::getSavestatePath(config::SavestateSlot, false);
+		std::string path = hostfs::getSavestatePath(slot, false);
 		imguiDriver->deleteTexture(path);
 	}
 }
@@ -805,7 +1306,8 @@ void ImguiVmuTexture::displayVmus(const ImVec2& pos)
 {
 	const ScaledVec2 size(VMU_WIDTH, VMU_HEIGHT);
 	const float padding = uiScaled(VMU_PADDING);
-	ImDrawList *dl = ImGui::GetForegroundDrawList();
+	assert((ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_ChildWindow) == 0);
+	ImDrawList *dl = ImGui::GetWindowDrawList();
 	ImVec2 cpos(pos + ScaledVec2(2.f, 0));	// 96 pixels wide + 2 * 2 -> 100
 	for (int i = 0; i < 8; i++)
 	{
@@ -853,8 +1355,9 @@ bool Toast::draw()
 	ImFont *regularFont = ImGui::GetFont();
 	const ImVec2 titleSize = title.empty() ? ImVec2()
 			: ImGui::GetFont()->CalcTextSizeA(uiLargeFontSize(), FLT_MAX, maxW, &title.front(), &title.back() + 1);
+	const float regularFontSize = ImGui::GetStyle().FontSizeBase;
 	const ImVec2 msgSize = message.empty() ? ImVec2()
-			: regularFont->CalcTextSizeA(regularFont->LegacySize, FLT_MAX, maxW, &message.front(), &message.back() + 1);
+			: regularFont->CalcTextSizeA(regularFontSize, FLT_MAX, maxW, &message.front(), &message.back() + 1);
 	const ScaledVec2 padding(5.f, 4.f);
 	const ScaledVec2 spacing(0.f, 2.f);
 	ImVec2 totalSize(std::max(titleSize.x, msgSize.x), titleSize.y + msgSize.y);
@@ -880,7 +1383,7 @@ bool Toast::draw()
 	if (!message.empty())
 	{
 		const ImU32 col = alphaOverride(0xFF00FFFF, alpha);	// yellow
-		dl->AddText(regularFont, regularFont->LegacySize, pos, col, &message.front(), &message.back() + 1, maxW);
+		dl->AddText(regularFont, regularFontSize, pos, col, &message.front(), &message.back() + 1, maxW);
 	}
 
 	return true;
@@ -1041,7 +1544,11 @@ void SectionHeaderWithIcon(const char* icon, const char* text)
 
 	// Icon + text with highlighted color
 	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-	ImGui::Text("%s %s", icon, text);
+	ImGui::PushFont(settingsIconFont);
+	ImGui::Text("%s", icon);
+	ImGui::PopFont();
+	ImGui::SameLine();
+	ImGui::Text("%s", text);
 	ImGui::PopStyleColor();
 
 	// Separator line
@@ -1058,9 +1565,31 @@ void SettingIcon(const char* icon, const ImVec2& size)
 	if (iconSize.x <= 0 || iconSize.y <= 0)
 		iconSize = ImVec2(settings.display.uiScale * 16, settings.display.uiScale * 16);
 
-	ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_Text]);
-	ImGui::Text("%s", icon);
-	ImGui::PopStyleColor();
+	const ImVec2 iconPos = ImGui::GetCursorScreenPos();
+	ImFont* font = settingsIconFont;
+
+	// FontAwesome glyphs do not always fit their box at every UI scale, so measure
+	// and shrink only when needed before drawing the icon centered in the row slot.
+	float fontSize = std::min(iconSize.x, iconSize.y);
+	ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	if (textSize.x > iconSize.x && textSize.x > 0.0f)
+	{
+		fontSize *= iconSize.x / textSize.x;
+		textSize = font->CalcTextSizeA(fontSize, FLT_MAX, -1.0f, icon);
+	}
+
+	const ImVec2 textPos(
+		iconPos.x + (iconSize.x - textSize.x) * 0.5f,
+		iconPos.y + (iconSize.y - textSize.y) * 0.5f
+	);
+	ImGui::GetWindowDrawList()->AddText(
+		font,
+		fontSize,
+		textPos,
+		ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_Text]),
+		icon
+	);
+	ImGui::Dummy(iconSize);
 }
 
 void BeginSettingsRow(const SettingsRowParams& params)
@@ -1071,7 +1600,9 @@ void BeginSettingsRow(const SettingsRowParams& params)
 	// Draw icon if provided
 	if (params.icon != nullptr)
 	{
+		ImGui::PushFont(settingsIconFont);
 		ImGui::Text("%s", params.icon);
+		ImGui::PopFont();
 		ImGui::SameLine(0, settings.display.uiScale * 12);
 	}
 
@@ -1222,14 +1753,67 @@ static inline ImVec4 DarkerColor(const ImVec4& v, float f = 0.8f)
                 std::max(v.z, 1.0f / 255.0f) * f, v.w);
 }
 
+static inline float ColorLuminance(const ImVec4& v)
+{
+    return v.x * 0.299f + v.y * 0.587f + v.z * 0.114f;
+}
+
+static inline ImVec4 BlendColor(const ImVec4& color, const ImVec4& target, float amount)
+{
+    return ImVec4(
+        color.x + (target.x - color.x) * amount,
+        color.y + (target.y - color.y) * amount,
+        color.z + (target.z - color.z) * amount,
+        color.w
+    );
+}
+
+static ImVec4 ReadablePopupTextColor(const ImVec4& bg)
+{
+    return ColorLuminance(bg) > 0.50f
+        ? ImVec4(0.06f, 0.06f, 0.07f, 1.00f)
+        : ImVec4(0.95f, 0.95f, 0.97f, 1.00f);
+}
+
+static ImVec4 ReadablePopupDisabledTextColor(const ImVec4& bg)
+{
+    return ColorLuminance(bg) > 0.50f
+        ? ImVec4(0.32f, 0.32f, 0.36f, 1.00f)
+        : ImVec4(0.72f, 0.72f, 0.76f, 1.00f);
+}
+
+static ImVec4 ReadablePopupFillColor(ImVec4 fill, const ImVec4& text)
+{
+    const bool lightText = ColorLuminance(text) > 0.50f;
+    const ImVec4 target = lightText ? ImVec4(0.0f, 0.0f, 0.0f, fill.w) : ImVec4(1.0f, 1.0f, 1.0f, fill.w);
+    const float limit = lightText ? 0.42f : 0.58f;
+    for (int i = 0; i < 4; i++)
+    {
+        const float luminance = ColorLuminance(fill);
+        if ((lightText && luminance <= limit) || (!lightText && luminance >= limit))
+            break;
+        fill = BlendColor(fill, target, 0.25f);
+    }
+    return fill;
+}
+
 // Helper: Apply DuckStation-style popup styling
 struct PopupStyleScope {
     PopupStyleScope(float padding = Layout::SMALL_POPUP_PADDING, float rounding = Layout::POPUP_ROUNDING) {
-        // Get the popup background color from current style
-        ImVec4 popupBg = ImGui::GetStyle().Colors[ImGuiCol_PopupBg];
+        // Popup colors are derived from the current surface so theme switches
+        // cannot leave light-theme text on a dark dialog, or the reverse.
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 popupBg = style.Colors[ImGuiCol_PopupBg];
+        ImVec4 popupText = ReadablePopupTextColor(popupBg);
+        ImVec4 popupTextDisabled = ReadablePopupDisabledTextColor(popupBg);
 
         // DuckStation-style popup background with full opacity
         ImGui::PushStyleColor(ImGuiCol_PopupBg, ModAlpha(popupBg, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, popupText);
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, popupTextDisabled);
+        ImGui::PushStyleColor(ImGuiCol_Header, ReadablePopupFillColor(style.Colors[ImGuiCol_Header], popupText));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ReadablePopupFillColor(style.Colors[ImGuiCol_HeaderHovered], popupText));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ReadablePopupFillColor(style.Colors[ImGuiCol_HeaderActive], popupText));
         // Button active state (darker for pressed state)
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ModAlpha(DarkerColor(popupBg, 1.8f), 1.0f));
         // Button hovered state (medium dark)
@@ -1248,7 +1832,7 @@ struct PopupStyleScope {
 
     ~PopupStyleScope() {
         ImGui::PopStyleVar(6);
-        ImGui::PopStyleColor(4);
+        ImGui::PopStyleColor(9);
     }
 };
 
@@ -1359,7 +1943,7 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
         ImVec2(uiScaled(Layout::POPUP_MIN_WIDTH), 0),
         ImVec2(maxWidth, maxHeight)
     );
-    ImGui::SetNextWindowSize(ImVec2(uiScaled(Layout::POPUP_WIDTH), 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(uiScaled(Layout::POPUP_WIDTH), 0), ImGuiCond_Always);
 
     PopupStyleScope style;
     if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
@@ -1375,7 +1959,7 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
         }
         if (popupDescription != nullptr && popupDescription[0] != '\0') {
             ImGui::PushFont(SettingsDescriptionFont());
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(popupDescription);
             ImGui::PopTextWrapPos();
@@ -1438,6 +2022,15 @@ bool RenderOptionsPopup(const PopupOptionsConfig& cfg)
 // Internal helper to render slider popup (DuckStation-style)
 bool RenderSliderPopup(PopupSliderConfig& cfg)
 {
+    const auto formatValueText = [&](int value, char* out, size_t outSize) {
+        if (cfg.valueFormatter) {
+            const std::string text = cfg.valueFormatter(value);
+            snprintf(out, outSize, "%s", text.c_str());
+        } else {
+            snprintf(out, outSize, cfg.format, value);
+        }
+    };
+
     // Icon and label
     SettingIcon(cfg.icon, ImVec2(uiScaled(cfg.iconSize), uiScaled(cfg.iconSize)));
     ImGui::SameLine(0, uiScaled(cfg.iconSpacing));
@@ -1460,7 +2053,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
     }
 
     char currentValue[32];
-    snprintf(currentValue, sizeof(currentValue), cfg.format, *cfg.currentValue);
+    formatValueText(*cfg.currentValue, currentValue, sizeof(currentValue));
 
     // Display current value as centered text (full row handles popup opening)
     ImFont* valueFont = SettingsRightValueFont();
@@ -1486,10 +2079,13 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
     // Configure popup window BEFORE opening (DuckStation-style)
     centerNextWindow();
-    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.5f;
+    float maxWidth = ImGui::GetIO().DisplaySize.x * 0.85f;
     float maxHeight = ImGui::GetIO().DisplaySize.y * 0.7f;
-    ImGui::SetNextWindowSizeConstraints(ImVec2(uiScaled(250), 0), ImVec2(maxWidth, maxHeight));
-    ImGui::SetNextWindowSize(ImVec2(uiScaled(500), 0), ImGuiCond_FirstUseEver);
+    // Keep the popup wide enough for the centered slider and range labels
+    // without forcing every slider dialog to open at an oversized fixed width.
+    const float popupWidth = std::min(std::max(uiScaled(320.0f), uiScaled(cfg.sliderWidth + 48.0f)), maxWidth);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(popupWidth, maxWidth), 0), ImVec2(maxWidth, maxHeight));
+    ImGui::SetNextWindowSize(ImVec2(popupWidth, 0), ImGuiCond_Always);
 
     PopupStyleScope style;
     if (ImGui::BeginPopup(cfg.popupID, ImGuiWindowFlags_NoScrollbar)) {
@@ -1501,29 +2097,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
 
         if (cfg.description) {
             ImGui::PushFont(SettingsDescriptionFont());
-
-            // Determine if we're on a light or dark theme
-            ImGuiStyle& guiStyle = ImGui::GetStyle();
-            float bgLuminance = (guiStyle.Colors[ImGuiCol_WindowBg].x
-                               + guiStyle.Colors[ImGuiCol_WindowBg].y
-                               + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
-            bool isLightTheme = bgLuminance > 0.5f;
-
-            // For dark themes: use solid white text
-            // For light themes: blend with disabled color for secondary text
-            ImVec4 textColor;
-            if (isLightTheme) {
-                ImVec4 normalColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-                ImVec4 disabledColor = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-                textColor.x = (normalColor.x + disabledColor.x) * 0.5f;
-                textColor.y = (normalColor.y + disabledColor.y) * 0.5f;
-                textColor.z = (normalColor.z + disabledColor.z) * 0.5f;
-                textColor.w = 1.0f;
-            } else {
-                // Solid white for dark themes
-                textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-            }
-            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(cfg.description);
             ImGui::PopTextWrapPos();
@@ -1539,12 +2113,17 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         char rangeText[128];
         snprintf(rangeText, sizeof(rangeText), "Value Range: %d - %d", cfg.minValue, cfg.maxValue);
         ImGui::PushFont(PopupEmphasisFont());
+        const float contentWidth = ImGui::GetContentRegionAvail().x;
         ImGui::TextDisabled("%s", rangeText);
 
         if (cfg.defaultValue >= cfg.minValue && cfg.defaultValue <= cfg.maxValue) {
             char defaultText[128];
             snprintf(defaultText, sizeof(defaultText), "Default Value: %d", cfg.defaultValue);
-            ImGui::SameLine(0, uiScaled(20));
+            const float rangeWidth = ImGui::CalcTextSize(rangeText).x;
+            const float defaultWidth = ImGui::CalcTextSize(defaultText).x;
+            const float sameLineSpacing = uiScaled(20);
+            if (rangeWidth + sameLineSpacing + defaultWidth <= contentWidth)
+                ImGui::SameLine(0, sameLineSpacing);
             ImGui::TextDisabled("%s", defaultText);
         }
         ImGui::PopFont();
@@ -1564,26 +2143,54 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         const ImGuiID popupId = ImGui::GetID(cfg.popupID);
         static ImGuiID modePopupId = 0;
         static bool modeTextEntry = false;
+        static bool modeControllerSlider = false;
+        static bool modeFocusTextEntry = false;
+        static bool modePendingChanges = false;
+        static int modeTypedValue = 0;
 
-        if (ImGui::IsWindowAppearing())
+        const bool popupAppearing = ImGui::IsWindowAppearing();
+        if (popupAppearing)
         {
             ImGuiContext& g = *GImGui;
             const bool controllerOpen = (g.NavInputSource == ImGuiInputSource_Gamepad);
             modePopupId = popupId;
-            // Mouse/keyboard opens use direct text entry.
-            // Controller opens use slider-only interaction.
-            modeTextEntry = cfg.preferTextEntry || !controllerOpen;
+            // Mouse opens use the draggable slider. Controller opens use slider-only
+            // interaction and accepts with A. Typing switches mouse/keyboard to text entry.
+            modeTextEntry = cfg.preferTextEntry;
+            modeControllerSlider = controllerOpen && !modeTextEntry;
+            modeFocusTextEntry = modeTextEntry;
+            modePendingChanges = cfg.hasPendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag);
+            modeTypedValue = *cfg.currentValue;
+        }
+
+        const auto hasTextInput = [] {
+            ImGuiIO& io = ImGui::GetIO();
+            for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+            {
+                const ImWchar c = io.InputQueueCharacters[i];
+                if ((c >= '0' && c <= '9') || c == '-' || c == '+')
+                    return true;
+            }
+            return false;
+        };
+
+        if (modePopupId == popupId && !modeControllerSlider && !modeTextEntry && hasTextInput())
+        {
+            modeTextEntry = true;
+            modeFocusTextEntry = true;
+            modeTypedValue = *cfg.currentValue;
         }
 
         const bool textEntryMode = (modePopupId == popupId) && modeTextEntry;
         bool requestFocusApply = false;
+        bool controllerAcceptValue = false;
+        bool keyboardAcceptValue = false;
 
         if (textEntryMode)
         {
             char sliderValueText[32];
-            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            formatValueText(modeTypedValue, sliderValueText, sizeof(sliderValueText));
             const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
-            int typedValue = *cfg.currentValue;
             const float inputWidth = std::max(uiScaled(84.0f), valueTextSize.x + uiScaled(18.0f));
             ImGui::SetCursorScreenPos(ImVec2(
                 sliderPos.x + (sliderWidth - inputWidth) * 0.5f,
@@ -1591,31 +2198,37 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             ));
             ImGui::SetNextItemWidth(inputWidth);
             ImGui::PushID("SliderTypedValue");
-            if (ImGui::IsWindowAppearing())
+            if (modeFocusTextEntry)
+            {
                 ImGui::SetKeyboardFocusHere();
-            const bool typedChanged = ImGui::InputInt("##TypedValue", &typedValue, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
-            const bool accept = typedChanged || ImGui::IsItemDeactivatedAfterEdit();
+                modeFocusTextEntry = false;
+            }
+            const bool accept = ImGui::InputInt("##TypedValue", &modeTypedValue, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
             ImGui::PopID();
 
             if (accept)
             {
-                typedValue = std::clamp(typedValue, cfg.minValue, cfg.maxValue);
-                if (typedValue != *cfg.currentValue)
+                modeTypedValue = std::clamp(modeTypedValue, cfg.minValue, cfg.maxValue);
+                if (modeTypedValue != *cfg.currentValue)
                 {
-                    *cfg.currentValue = typedValue;
+                    *cfg.currentValue = modeTypedValue;
                     valueChanged = true;
-                    if (cfg.showApplyFlag)
-                        *cfg.showApplyFlag = true;
-                    cfg.hasPendingChanges = true;
                     if (cfg.onValueChange)
                         cfg.onValueChange();
                 }
+                if (cfg.onApply)
+                    cfg.onApply();
+                cfg.hasPendingChanges = false;
+                modePendingChanges = false;
+                if (cfg.showApplyFlag)
+                    *cfg.showApplyFlag = false;
+                ImGui::CloseCurrentPopup();
             }
         }
         else
         {
             ImGui::SetNextItemWidth(sliderWidth);
-            if (ImGui::IsWindowAppearing())
+            if (popupAppearing)
                 ImGui::SetKeyboardFocusHere();
 
             int tempValue = *cfg.currentValue;
@@ -1629,9 +2242,16 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             );
             const bool sliderFocused = ImGui::IsItemFocused();
             const bool sliderActive = ImGui::IsItemActive();
+            if (modeControllerSlider && (ImGui::IsItemHovered() || sliderActive) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                modeControllerSlider = false;
 
             if (sliderFocused)
             {
+                controllerAcceptValue = modePopupId == popupId
+                    && modeControllerSlider
+                    && !popupAppearing
+                    && ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false);
+
                 int navDelta = 0;
                 if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, true)
                     || ImGui::IsKeyPressed(ImGuiKey_GamepadDpadLeft, true)
@@ -1649,9 +2269,10 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                     {
                         *cfg.currentValue = tempValue;
                         valueChanged = true;
-                        if (cfg.showApplyFlag)
+                        if (!modeControllerSlider && cfg.showApplyFlag)
                             *cfg.showApplyFlag = true;
                         cfg.hasPendingChanges = true;
+                        modePendingChanges = true;
                         if (cfg.onValueChange)
                             cfg.onValueChange();
                     }
@@ -1675,18 +2296,22 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
                 valueChanged = true;
 
                 // Update state tracking
-                if (cfg.showApplyFlag) {
+                if (!modeControllerSlider && cfg.showApplyFlag) {
                     *cfg.showApplyFlag = true;
                 }
                 cfg.hasPendingChanges = true;
+                modePendingChanges = true;
 
                 if (cfg.onValueChange) {
                     cfg.onValueChange();
                 }
             }
+            keyboardAcceptValue = !modeControllerSlider
+                && (cfg.hasPendingChanges || modePendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag))
+                && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
 
             char sliderValueText[32];
-            snprintf(sliderValueText, sizeof(sliderValueText), cfg.format, *cfg.currentValue);
+            formatValueText(*cfg.currentValue, sliderValueText, sizeof(sliderValueText));
             const ImVec2 valueTextSize = ImGui::CalcTextSize(sliderValueText);
             const ImVec2 sliderMin = ImGui::GetItemRectMin();
             const ImVec2 sliderMax = ImGui::GetItemRectMax();
@@ -1702,10 +2327,20 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
         ImGui::Spacing();
 
         // DuckStation-style button layout (right-aligned)
-        bool shouldShowApply = cfg.hasPendingChanges ||
-                               (cfg.showApplyFlag && *cfg.showApplyFlag);
+        bool shouldShowApply = !modeControllerSlider &&
+                               (cfg.hasPendingChanges || modePendingChanges || (cfg.showApplyFlag && *cfg.showApplyFlag));
 
-        if (cfg.onApply && shouldShowApply) {
+        if (controllerAcceptValue || keyboardAcceptValue) {
+            if (cfg.onApply)
+                cfg.onApply();
+            // Live sliders have already applied through onValueChange, but accepting
+            // should still clear pending state and close the popup.
+            cfg.hasPendingChanges = false;
+            modePendingChanges = false;
+            if (cfg.showApplyFlag)
+                *cfg.showApplyFlag = false;
+            ImGui::CloseCurrentPopup();
+        } else if (cfg.onApply && shouldShowApply) {
             // Begin menu buttons container
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(uiScaled(8), uiScaled(8)));
 
@@ -1726,6 +2361,7 @@ bool RenderSliderPopup(PopupSliderConfig& cfg)
             if (ImGui::Button(cfg.applyButtonText, ImVec2(buttonWidth, buttonHeight))) {
                 cfg.onApply();
                 cfg.hasPendingChanges = false; // Reset state
+                modePendingChanges = false;
                 if (cfg.showApplyFlag) {
                     *cfg.showApplyFlag = false; // Reset external flag
                 }

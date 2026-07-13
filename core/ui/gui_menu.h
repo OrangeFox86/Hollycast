@@ -1,20 +1,20 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2026 The Hollycast Authors
 
-	This file is part of reicast.
+	This file is part of Hollycast.
 
-    reicast is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+	Hollycast is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 2 of the License, or
+	(at your option) any later version.
 
-    reicast is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	Hollycast is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with reicast.  If not, see <https://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with Hollycast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
 
@@ -47,7 +47,7 @@ void renderSystemMenu();
 void renderToolsMenu();
 
 // Settings Menu - configuration
-// Items: Graphics, Audio, Input, About
+// Items: General, Video, Audio, Controls, Network, Advanced
 void renderSettingsMenu();
 
 // Help Menu - documentation and support
@@ -62,8 +62,34 @@ void setMenuVisible(bool visible);
 // Useful for keyboard shortcuts (e.g., Alt key)
 void toggleMenuVisibility();
 
-// Check if menu is currently visible
-bool isMenuVisible();
+// Check if menu bar is currently visible
+bool isMenuBarVisible();
+
+// Current effective menu bar height for laying out full-screen UI.
+float mainMenuBarHeight();
+
+// Shared menu actions. Native platform menus call these so behavior stays
+// aligned with the ImGui menu implementation.
+void addRomDirectory(const std::string& path);
+void loadRomFile(const std::string& path);
+void rescanRomDirectory();
+void saveState();
+void loadState();
+void exitEmulator();
+void pauseOrResume();
+void restartGame();
+void toggleFastForward();
+void takeScreenshot();
+void openCheats();
+void openCustomBoxartSettings();
+void openGeneralSettings();
+void openVideoSettings();
+void openAudioSettings();
+void openControlsSettings();
+void openNetworkSettings();
+void openAdvancedSettings();
+void openAboutSettings();
+bool isGameRunning();
 
 // Initialize menu system
 // Called during GUI initialization to set up menu state
