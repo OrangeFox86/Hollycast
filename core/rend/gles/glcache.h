@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+*/
 #pragma once
 #include "wsi/gl_context.h"
 #include <map>
@@ -17,6 +20,12 @@ public:
 		}
 		else
 			glBindTexture(target, texture);
+	}
+
+	// The legacy cache tracks one 2D binding, not one per texture unit. Call this
+	// after changing units so multi-sampler draws cannot inherit another unit's binding.
+	void InvalidateTextureBinding() {
+		_texture = 0xFFFFFFFFu;
 	}
 
 	void BlendFunc(GLenum sfactor, GLenum dfactor) {

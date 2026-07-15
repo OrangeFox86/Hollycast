@@ -782,13 +782,15 @@ bool OpenGLRenderer::renderLastFrame()
 	const int sourceHeight = framebuffer->getHeight();
 	float presentShiftX = gl.ofbo.shiftX;
 	float presentShiftY = gl.ofbo.shiftY;
+	bool presentationTransformApplied = false;
 #ifndef LIBRETRO
 	// GL4 shares this presentation path. During context teardown, it may reach
 	// here before the chain is recreated, so leave the unprocessed frame intact.
 	if (gl.shaderChain != nullptr)
 	{
 		if (GlFramebuffer *processed = gl.shaderChain->render(framebuffer->getTexture(),
-				{ sourceWidth, sourceHeight, settings.display.width - dx * 2, outheight - dy * 2, FrameCount }))
+				{ sourceWidth, sourceHeight, settings.display.width - dx * 2, outheight - dy * 2,
+						FrameCount, config::Rotate90 }, presentationTransformApplied))
 		{
 			framebuffer = processed;
 			// Display shifts are measured in source pixels. Scale them after a pass
@@ -799,7 +801,8 @@ bool OpenGLRenderer::renderLastFrame()
 	}
 #endif
 
-	if (gl.bogusBlitFramebuffer || config::Rotate90)
+	const bool rotateAtPresentation = config::Rotate90 && !presentationTransformApplied;
+	if (gl.bogusBlitFramebuffer || rotateAtPresentation)
 	{
 		glViewport(dx, dy, settings.display.width - dx * 2, outheight - dy * 2);
 		glBindFramebuffer(GL_FRAMEBUFFER, gl.ofbo.origFbo);
@@ -823,7 +826,7 @@ bool OpenGLRenderer::renderLastFrame()
 			vertices = sverts;
 		}
 		glcache.Disable(GL_BLEND);
-		gl.quadDrawer->draw(framebuffer->getTexture(), config::Rotate90, true, vertices);
+		gl.quadDrawer->draw(framebuffer->getTexture(), rotateAtPresentation, true, vertices);
 	}
 	else
 	{

@@ -18,6 +18,16 @@
 #include <memory>
 #include <vector>
 
+namespace postprocess {
+
+// Builds the exact GLSL submitted by the Vulkan executor. Keeping this pure
+// lets package validation catch front-end failures before device activation.
+bool buildVulkanShaderSources(const ShaderPassSource& source, const std::vector<SlangParameter>& parameters,
+		const std::vector<ShaderPassInput>& bindings, uint32_t outputCount,
+		std::string& fragmentSource, std::string& vertexSource, std::string& error);
+
+} // namespace postprocess
+
 class VulkanShaderChain
 {
 public:
@@ -26,7 +36,8 @@ public:
 	// GLSL files are fragment bodies. HollyCast supplies Source, SourceSize,
 	// OutputSize and FrameCount, matching the OpenGL executor contract.
 	bool render(vk::Image sourceImage, vk::ImageView sourceView, const vk::Extent2D& extent,
-			const postprocess::ShaderFrameInfo& frame, vk::ImageView& outputView);
+			const postprocess::ShaderFrameInfo& frame, vk::ImageView& outputView,
+			bool& presentationTransformApplied);
 	void term();
 
 private:
@@ -41,11 +52,14 @@ private:
 		vk::Extent2D extent {};
 		vk::Format format = vk::Format::eUndefined;
 		uint32_t mipLevels = 1;
+		uint32_t renderedFrame = 0;
 		bool initialized = false;
 	};
 	struct TargetSet {
 		std::vector<Target> outputs;
 		vk::UniqueFramebuffer framebuffer;
+		uint32_t renderedFrame = 0;
+		bool initialized = false;
 	};
 	struct Binding {
 		postprocess::ShaderPassInput input;
@@ -66,6 +80,7 @@ private:
 		std::vector<Output> outputs;
 		std::vector<Binding> bindings;
 		std::vector<postprocess::SlangParameter> parameters;
+		uint32_t historyDepth = 1;
 	};
 	struct LookupTexture {
 		postprocess::ShaderPresetTexture config;
@@ -77,6 +92,8 @@ private:
 	bool compileCandidate(const postprocess::ShaderChain& chain, std::vector<Program>& candidate, std::string& error);
 	bool ensureTarget(Target& target, const vk::Extent2D& extent, vk::Format format, bool mipmapped);
 	bool ensureTargetSet(TargetSet& targets, const Program& program, const vk::Extent2D& extent);
+	const Target *findSourceHistoryTarget(uint32_t frameCount) const;
+	const TargetSet *findPassHistoryTarget(uint32_t passIndex, uint32_t frameCount) const;
 	void generateMipmaps(vk::CommandBuffer commandBuffer, const Target& target, bool existingContents) const;
 	vk::UniquePipeline createPipeline(vk::ShaderModule vertexShader, vk::ShaderModule fragmentShader, vk::RenderPass renderPass,
 			const postprocess::ShaderPass& pass, size_t colorAttachmentCount) const;
@@ -93,17 +110,18 @@ private:
 	vk::UniqueSampler mipNearestSampler;
 	vk::UniqueShaderModule copyFragmentShader;
 	vk::UniquePipeline copyPipeline;
+	vk::UniquePipeline copyRotatePipeline;
 	std::unique_ptr<QuadBuffer> quadBuffer;
 	std::vector<std::vector<vk::UniqueDescriptorSet>> descriptorSets;
 	std::vector<vk::UniqueDescriptorSet> sourceDescriptorSets;
 	std::vector<std::vector<std::vector<TargetSet>>> targets;
 	std::vector<std::vector<Target>> sourceTargets;
-	uint32_t historyDepth = 1;
-	bool needsSourceHistory = false;
+	uint32_t sourceHistoryDepth = 1;
+	bool wantsUnscaledInput = false;
 	std::vector<Program> programs;
 	std::vector<LookupTexture> lookupTextures;
 	std::vector<postprocess::ShaderParameter> parameters;
-	std::string configuredPath;
+	std::vector<std::string> configuredPaths;
 	uint64_t configuredGeneration = 0;
 	uint64_t parameterGeneration = 0;
 	std::string activePath;

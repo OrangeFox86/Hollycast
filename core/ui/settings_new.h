@@ -27,6 +27,7 @@ enum class SettingsTab
 {
 	General,
 	Video,
+	Shader,
 	Audio,
 	Controls,
 	Network,
@@ -57,6 +58,11 @@ const char* getTabName(SettingsTab tab);
 // Individual tab renderers
 void renderGeneralTab();
 void renderVideoTab();
+void renderShaderTab();
+// Draws the lightweight in-game controls while normal gameplay continues.
+// The same parameter editor is shared with the Shader settings page.
+void renderShaderLiveTuneOverlay();
+void closeShaderLiveTune();
 void renderAudioTab();
 void renderControlsTab();
 void renderNetworkTab();

@@ -115,9 +115,16 @@ bool parseValues(const std::string& expression, SlangParameterType type, SlangPa
 		result.values[0] = lower == "true" ? 1.f : 0.f;
 		return true;
 	}
+	std::string values = expression;
+	const size_t open = values.find('(');
+	if (open != std::string::npos && values.back() == ')'
+			&& std::all_of(values.begin(), values.begin() + open, [](unsigned char c) {
+				return std::isalnum(c) || c == '_';
+			}))
+		values = values.substr(open + 1, values.size() - open - 2);
 	static const std::regex number(R"([-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?)");
 	uint32_t index = 0;
-	for (std::sregex_iterator it(expression.begin(), expression.end(), number), end; it != end; ++it) {
+	for (std::sregex_iterator it(values.begin(), values.end(), number), end; it != end; ++it) {
 		if (index >= result.componentCount)
 			return false;
 		try {
@@ -127,6 +134,21 @@ bool parseValues(const std::string& expression, SlangParameterType type, SlangPa
 		}
 	}
 	return index == result.componentCount;
+}
+
+std::vector<std::string> splitChoiceLabels(const std::string& values)
+{
+	std::vector<std::string> labels;
+	for (size_t begin = 0; begin < values.size();) {
+		const size_t end = values.find('\0', begin);
+		const size_t length = (end == std::string::npos ? values.size() : end) - begin;
+		if (length != 0)
+			labels.emplace_back(values.substr(begin, length));
+		if (end == std::string::npos)
+			break;
+		begin = end + 1;
+	}
+	return labels;
 }
 
 const ReShadeFunction *findFunction(const ReShadeEffect& effect, const std::string& name)
@@ -198,7 +220,7 @@ std::vector<StructField> structFields(const ReShadeEffect& effect, const std::st
 	if (structure == effect.structs.end())
 		return {};
 	std::vector<StructField> fields;
-	const std::regex field(R"(([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^]]+\])?\s*(?::\s*([A-Za-z_][A-Za-z0-9_]*))?\s*;)");
+	const std::regex field(R"(([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]+\])?\s*(?::\s*([A-Za-z_][A-Za-z0-9_]*))?\s*;)");
 	for (std::sregex_iterator it(structure->body.begin(), structure->body.end(), field), end; it != end; ++it)
 		fields.push_back({ (*it)[1].str(), (*it)[2].str(), (*it)[3].str() });
 	return fields;
@@ -329,9 +351,13 @@ bool compileReShadeFxPass(const std::string& effectText, size_t techniqueIndex, 
 			return fail(error, "ReShade FX uniform '" + uniform.name + "' has an invalid default value.");
 		parameter.minimum = parameter.maximum = parameter.defaultValue;
 		parameter.step.componentCount = componentCount(parameter.type);
+		std::string uiType;
+		std::string uiItems;
 		for (const ReShadeAnnotation& annotation : uniform.annotations) {
 			const std::string name = lowercase(annotation.name);
 			if (name == "ui_label") parameter.label = annotation.value;
+			else if (name == "ui_type") uiType = lowercase(annotation.value);
+			else if (name == "ui_items") uiItems = annotation.value;
 			else if (name == "ui_min" && !parseValues(annotation.value, parameter.type, parameter.minimum))
 				return fail(error, "ReShade FX uniform '" + uniform.name + "' has an invalid ui_min value.");
 			else if (name == "ui_max" && !parseValues(annotation.value, parameter.type, parameter.maximum))
@@ -355,6 +381,17 @@ bool compileReShadeFxPass(const std::string& effectText, size_t techniqueIndex, 
 		visible.stepValues = parameter.step.values;
 		visible.componentCount = componentCount(parameter.type);
 		visible.type = parameter.type;
+		if (visible.componentCount == 1 && parameter.type == SlangParameterType::Int
+				&& (uiType == "combo" || uiType == "radio")) {
+			visible.choiceLabels = splitChoiceLabels(uiItems);
+			if (!visible.choiceLabels.empty()) {
+				visible.minimum = visible.minimumValues[0] = 0.f;
+				visible.maximum = visible.maximumValues[0] = static_cast<float>(visible.choiceLabels.size() - 1);
+				visible.step = visible.stepValues[0] = 1.f;
+				if (visible.value < visible.minimum || visible.value > visible.maximum)
+					return fail(error, "ReShade FX uniform '" + uniform.name + "' has a choice default outside ui_items.");
+			}
+		}
 		if (parameter.type == SlangParameterType::Bool) {
 			visible.minimum = visible.minimumValues[0] = 0.f;
 			visible.maximum = visible.maximumValues[0] = 1.f;

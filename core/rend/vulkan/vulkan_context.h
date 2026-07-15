@@ -208,7 +208,8 @@ private:
 	bool InitInstance(const char** extensions, uint32_t extensions_count);
 	void InitImgui();
 	void DoSwapAutomation();
-	void DrawFrame(vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio);
+	void DrawFrame(vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio,
+			bool presentationTransformApplied = false);
 	vk::SurfaceKHR GetSurface() const { return *surface; }
 
 	bool HasSurfaceDimensionChanged() const;
@@ -281,6 +282,7 @@ private:
 	vk::ImageView lastFrameView;
 	vk::Extent2D lastFrameExtent;
 	float lastFrameAR = 0.f;
+	bool lastFramePresentationTransformApplied = false;
 
 	std::unique_ptr<VulkanOverlay> overlay;
 	std::vector<std::vector<std::unique_ptr<Deletable>>> inFlightObjects;

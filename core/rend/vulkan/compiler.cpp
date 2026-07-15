@@ -2,6 +2,7 @@
     Created on: Nov 6, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -136,4 +137,15 @@ bool ShaderCompiler::TryCompile(vk::ShaderStageFlagBits shaderStage, std::string
 		error = exception.what();
 		return false;
 	}
+}
+
+bool ShaderCompiler::Validate(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText, std::string& error)
+{
+	Init();
+	std::vector<unsigned int> shaderSPV;
+	const bool valid = GLSLtoSPV(shaderStage, shaderText, shaderSPV, &error);
+	Term();
+	if (!valid && error.empty())
+		error = "Vulkan GLSL compilation failed.";
+	return valid;
 }

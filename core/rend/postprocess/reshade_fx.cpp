@@ -110,9 +110,14 @@ bool evaluateCondition(const std::string& expression, const std::unordered_map<s
 		if (std::regex_match(value, match, comparison)) {
 			const std::string leftText = trim(match[1].str());
 			const std::string rightText = trim(match[3].str());
-		auto numericValue = [&](const std::string& text, long long& number) {
-			const auto define = defines.find(text);
-			const std::string value = define == defines.end() ? text : define->second;
+			auto numericValue = [&](const std::string& text, long long& number) {
+				const auto define = defines.find(text);
+				if (define == defines.end() && !text.empty() && isIdentifierStart(text.front())
+						&& std::all_of(text.begin() + 1, text.end(), isIdentifierPart)) {
+					number = 0;
+					return true;
+				}
+				const std::string value = define == defines.end() ? text : define->second;
 			char *end = nullptr;
 			number = std::strtoll(value.c_str(), &end, 0);
 			return end != value.c_str() && *end == '\0';
@@ -134,6 +139,11 @@ bool evaluateCondition(const std::string& expression, const std::unordered_map<s
 			return true;
 		}
 		const auto define = defines.find(value);
+		if (define == defines.end() && !value.empty() && isIdentifierStart(value.front())
+				&& std::all_of(value.begin() + 1, value.end(), isIdentifierPart)) {
+			parsed = false;
+			return true;
+		}
 		const std::string numeric = define == defines.end() ? value : define->second;
 		char *end = nullptr;
 		const long long number = std::strtoll(numeric.c_str(), &end, 0);
@@ -159,7 +169,7 @@ void expandObjectMacros(std::string& line, const std::unordered_map<std::string,
 				++index;
 			const std::string name = line.substr(begin, index - begin);
 			const auto define = defines.find(name);
-			if (define == defines.end() || define->second.empty() || define->second == name)
+			if (define == defines.end() || define->second == name)
 				expanded += name;
 			else {
 				expanded += define->second;
@@ -197,11 +207,12 @@ void expandFunctionMacros(std::string& line, const std::unordered_map<std::strin
 					else if (line[close] == ')') --depth;
 				}
 				if (depth != 0) break;
+				const size_t closeParenthesis = close - 1;
 				std::vector<std::string> arguments;
 				size_t begin = open + 1;
 				depth = 0;
-				for (size_t index = begin; index <= close; ++index) {
-					const char character = index < close ? line[index] : ',';
+				for (size_t index = begin; index <= closeParenthesis; ++index) {
+					const char character = index < closeParenthesis ? line[index] : ',';
 					if (character == '(') ++depth;
 					else if (character == ')') --depth;
 					if (character == ',' && depth == 0) {
@@ -219,7 +230,9 @@ void expandFunctionMacros(std::string& line, const std::unordered_map<std::strin
 					const std::regex parameter("\\b" + macro.arguments[argument] + "\\b");
 					replacement = std::regex_replace(replacement, parameter, arguments[argument]);
 				}
-				line.replace(search, close + 1 - search, replacement);
+				// close already points one past ')'. Consuming close + 1 also ate the
+				// following comma or semicolon from valid shader expressions.
+				line.replace(search, close - search, replacement);
 				search += replacement.size();
 				changed = true;
 			}
@@ -228,14 +241,16 @@ void expandFunctionMacros(std::string& line, const std::unordered_map<std::strin
 	}
 }
 
-bool preprocess(const std::string& source, std::string& output, std::string& error)
+bool preprocess(const std::string& source,
+		const std::unordered_map<std::string, std::string>& initialDefines,
+		std::string& output, std::string& error)
 {
 	struct Conditional {
 		bool parentActive;
 		bool branchTaken;
 		bool active;
 	};
-	std::unordered_map<std::string, std::string> defines;
+	std::unordered_map<std::string, std::string> defines = initialDefines;
 	std::unordered_map<std::string, FunctionMacro> functionDefines;
 	std::vector<Conditional> conditionals;
 	auto active = [&] { return conditionals.empty() || conditionals.back().active; };
@@ -262,18 +277,19 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 		std::getline(directive, argument);
 		argument = trim(argument);
 		if (lowercase(command) == "include") {
-			error = "line " + std::to_string(lineNumber) + ": includes are not permitted in ReShade FX effects.";
+			error = "line " + std::to_string(lineNumber) + ": includes must be resolved by the shader package loader.";
 			return false;
 		}
 		if (command == "if" || command == "ifdef" || command == "ifndef") {
+			const bool parentActive = active();
 			bool condition = false;
-			if (command == "ifdef") condition = defines.count(argument) != 0;
+			if (!parentActive) condition = false;
+			else if (command == "ifdef") condition = defines.count(argument) != 0;
 			else if (command == "ifndef") condition = defines.count(argument) == 0;
 			else if (!evaluateCondition(argument, defines, condition)) {
-				error = "line " + std::to_string(lineNumber) + ": unsupported ReShade FX #if condition.";
+				error = "line " + std::to_string(lineNumber) + ": unsupported shader #if condition.";
 				return false;
 			}
-			const bool parentActive = active();
 			conditionals.push_back({ parentActive, condition, parentActive && condition });
 			continue;
 		}
@@ -284,8 +300,9 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 			}
 			Conditional& conditional = conditionals.back();
 			bool condition = false;
-			if (!evaluateCondition(argument, defines, condition)) {
-				error = "line " + std::to_string(lineNumber) + ": unsupported ReShade FX #elif condition.";
+			if (conditional.parentActive && !conditional.branchTaken
+					&& !evaluateCondition(argument, defines, condition)) {
+				error = "line " + std::to_string(lineNumber) + ": unsupported shader #elif condition.";
 				return false;
 			}
 			conditional.active = conditional.parentActive && !conditional.branchTaken && condition;
@@ -318,6 +335,10 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 			definition >> name;
 			std::string value;
 			std::getline(definition, value);
+			// Comments are removed before macro replacement by a real C
+			// preprocessor. Keeping one here comments out the caller's suffix.
+			if (const size_t comment = value.find("//"); comment != std::string::npos)
+				value.erase(comment);
 			const size_t open = name.find('(');
 			if (open != std::string::npos && name.back() == ')') {
 				FunctionMacro macro;
@@ -331,7 +352,9 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 				})) {
 					macro.body = trim(value);
 					functionDefines[name.substr(0, open)] = std::move(macro);
-					defines[name.substr(0, open)] = "1";
+					// Keep function-like macro names visible to defined() without
+					// letting object-macro expansion replace the call with a number.
+					defines[name.substr(0, open)] = name.substr(0, open);
 				}
 				else
 				{
@@ -340,7 +363,9 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 				}
 			}
 			else
-				defines[name] = trim(value).empty() ? "1" : trim(value);
+				// Empty object macros are qualifiers in many RetroArch shaders.
+				// Preserve their real C-preprocessor meaning: expand to nothing.
+				defines[name] = trim(value);
 		}
 		else if (command == "undef") {
 			defines.erase(argument);
@@ -349,7 +374,7 @@ bool preprocess(const std::string& source, std::string& output, std::string& err
 		output += line + '\n';
 	}
 	if (!conditionals.empty()) {
-		error = "unterminated ReShade FX conditional directive.";
+		error = "unterminated shader conditional directive.";
 		return false;
 	}
 	return true;
@@ -417,7 +442,16 @@ bool lex(const std::string& source, std::vector<Token>& tokens, std::string& err
 			while (index < source.size()) {
 				char valueChar = source[index++];
 				if (valueChar == '\\' && index < source.size()) {
-					value += source[index++];
+					const char escaped = source[index++];
+					switch (escaped) {
+					case '0': value += '\0'; break;
+					case 'n': value += '\n'; break;
+					case 'r': value += '\r'; break;
+					case 't': value += '\t'; break;
+					case '\\': value += '\\'; break;
+					case '"': value += '"'; break;
+					default: value += escaped; break;
+					}
 					continue;
 				}
 				if (valueChar == '"') {
@@ -831,10 +865,17 @@ private:
 
 } // namespace
 
+bool preprocessShaderSource(const std::string& source,
+		const std::unordered_map<std::string, std::string>& initialDefines,
+		std::string& output, std::string& error)
+{
+	return preprocess(source, initialDefines, output, error);
+}
+
 bool parseReShadeEffect(const std::string& source, ReShadeEffect& effect, std::string& error)
 {
 	std::string preprocessed;
-	if (!preprocess(source, preprocessed, error))
+	if (!preprocessShaderSource(source, {}, preprocessed, error))
 		return false;
 	std::vector<Token> tokens;
 	if (!lex(preprocessed, tokens, error))

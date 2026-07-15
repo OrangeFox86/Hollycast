@@ -472,6 +472,8 @@ extern Option<int> RenderResolution;
 extern Option<bool> IntegerScale;
 extern Option<bool> LinearInterpolation;
 extern OptionString PostProcessShader;
+extern Option<std::vector<std::string>> PostProcessShaders;
+extern Option<std::string, false> PostProcessShaderDirectory;
 extern OptionString PostProcessShaderParameters;
 extern OptionString PostProcessShaderTechnique;
 extern Option<bool> VSync;

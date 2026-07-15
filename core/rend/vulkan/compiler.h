@@ -2,6 +2,7 @@
     Created on: Nov 6, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -31,6 +32,8 @@ public:
 	// must leave the previously active post-processing program untouched.
 	static bool TryCompile(vk::ShaderStageFlagBits shaderStage, std::string const& shaderText,
 			vk::UniqueShaderModule& shaderModule, std::string& error);
+	// Syntax and SPIR-V validation without requiring a live Vulkan device.
+	static bool Validate(vk::ShaderStageFlagBits shaderStage, const std::string& shaderText, std::string& error);
 private:
 	static int initCount;
 };

@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace postprocess {
@@ -98,6 +99,12 @@ struct ReShadeEffect {
 	std::optional<size_t> selectedTechnique;
 	std::optional<size_t> selectedPass;
 };
+
+// Shared deterministic preprocessor used by ReShade FX and RetroArch GLSL.
+// Includes are resolved by the package loader before this function is called.
+bool preprocessShaderSource(const std::string& source,
+		const std::unordered_map<std::string, std::string>& initialDefines,
+		std::string& output, std::string& error);
 
 // Lexes and parses ReShade FX declarations into a backend-neutral syntax IR.
 // Includes are rejected because effect packages are not trusted to escape their

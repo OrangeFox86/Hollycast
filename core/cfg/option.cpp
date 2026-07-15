@@ -111,6 +111,8 @@ Option<int> RenderResolution("rend.Resolution", 480);
 Option<bool> IntegerScale("rend.IntegerScale", false);
 Option<bool> LinearInterpolation("rend.LinearInterpolation", true);
 OptionString PostProcessShader("rend.PostProcessShader");
+Option<std::vector<std::string>> PostProcessShaders("rend.PostProcessShaders");
+Option<std::string, false> PostProcessShaderDirectory("rend.PostProcessShaderDirectory");
 OptionString PostProcessShaderParameters("rend.PostProcessShaderParameters");
 OptionString PostProcessShaderTechnique("rend.PostProcessShaderTechnique");
 Option<bool> VSync("rend.vsync", true);

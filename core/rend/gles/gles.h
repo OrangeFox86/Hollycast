@@ -400,7 +400,8 @@ PipelineShader *GetProgram(bool cp_AlphaTest, bool pp_InsideClipping,
 		int palette, bool naomi2, bool dithering);
 
 GLuint gl_CompileShader(const char* shader, GLuint type);
-GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader);
+GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader,
+		std::string *diagnostics = nullptr);
 bool CompilePipelineShader(PipelineShader* s);
 extern const char* GouraudSource;
 

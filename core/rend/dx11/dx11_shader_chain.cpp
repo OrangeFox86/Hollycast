@@ -19,8 +19,6 @@
 
 #include <algorithm>
 #include <array>
-#include <regex>
-#include <sstream>
 
 namespace {
 
@@ -102,142 +100,6 @@ bool resolveTargetFormat(const postprocess::ShaderPass& pass, DXGI_FORMAT& forma
 	return true;
 }
 
-void removeResourceDeclarations(std::string& source, const std::vector<postprocess::ShaderPassInput>& inputs,
-		const std::vector<postprocess::SlangParameter>& parameters)
-{
-	std::string cleaned;
-	std::istringstream stream(source);
-	for (std::string line; std::getline(stream, line);) {
-		const bool resourceDeclaration = std::any_of(inputs.begin(), inputs.end(), [&](const postprocess::ShaderPassInput& input) {
-			const std::regex pattern("^\\s*uniform\\s+(?:lowp\\s+|mediump\\s+|highp\\s+)?(?:sampler2D|texture2D)\\s+"
-					+ input.bindingName + R"(\s*;\s*$)", std::regex::icase);
-			return std::regex_match(line, pattern);
-		});
-		const bool parameterDeclaration = std::any_of(parameters.begin(), parameters.end(), [&](const postprocess::SlangParameter& parameter) {
-			const std::regex pattern("^\\s*uniform\\s+(?:lowp\\s+|mediump\\s+|highp\\s+)?(?:float|int|bool|vec[2-4]|mat[2-4])\\s+"
-					+ parameter.name + R"(\s*;\s*$)", std::regex::icase);
-			return std::regex_match(line, pattern);
-		});
-		if (!resourceDeclaration && !parameterDeclaration)
-			cleaned += line + '\n';
-	}
-	source = std::move(cleaned);
-}
-
-bool translateGraphFragment(const postprocess::ShaderPassSource& source,
-		const std::vector<postprocess::SlangParameter>& parameters, const std::vector<postprocess::ShaderPassInput>& inputs,
-		uint32_t outputCount, std::string& hlslSource, std::string& error)
-{
-	std::string glsl = source.fragment;
-	removeResourceDeclarations(glsl, inputs, parameters);
-	std::vector<std::string> sampledBindings;
-	const std::regex textureCall(R"(\btexture\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)");
-	for (std::sregex_iterator it(glsl.begin(), glsl.end(), textureCall), end; it != end; ++it) {
-		const std::string name = (*it)[1].str();
-		if (std::none_of(inputs.begin(), inputs.end(), [&](const postprocess::ShaderPassInput& input) { return input.bindingName == name; })) {
-			error = "DirectX 11 shader samples undeclared resource '" + name + "'.";
-			return false;
-		}
-		sampledBindings.push_back(name);
-	}
-	if (!sampledBindings.empty()) {
-		std::string transformed;
-		size_t offset = 0;
-		for (std::sregex_iterator it(glsl.begin(), glsl.end(), textureCall), end; it != end; ++it) {
-			const size_t position = static_cast<size_t>((*it).position());
-			transformed.append(glsl, offset, position - offset);
-			transformed += "texture(Source,";
-			offset = position + static_cast<size_t>((*it).length());
-		}
-		transformed.append(glsl, offset, std::string::npos);
-		glsl = std::move(transformed);
-	}
-	if (!postprocess::translateGlslFragmentToHlsl(glsl, parameters, hlslSource, error, outputCount))
-		return false;
-
-	const std::string marker = "SamplerState SourceSampler : register(s0);\n";
-	const size_t markerPosition = hlslSource.find(marker);
-	if (markerPosition == std::string::npos) {
-		error = "DirectX 11 shader bridge did not emit its resource preamble.";
-		return false;
-	}
-	std::string declarations;
-	for (size_t slot = 1; slot < inputs.size(); ++slot)
-		declarations += "Texture2D " + inputs[slot].bindingName + " : register(t" + std::to_string(slot) + ");\n"
-				+ "SamplerState " + inputs[slot].bindingName + "Sampler : register(s" + std::to_string(slot) + ");\n";
-	hlslSource.insert(markerPosition + marker.size(), declarations);
-
-	size_t searchFrom = 0;
-	for (const std::string& binding : sampledBindings) {
-		const std::string sourceSample = "Source.Sample(SourceSampler,";
-		const size_t position = hlslSource.find(sourceSample, searchFrom);
-		if (position == std::string::npos) {
-			error = "DirectX 11 shader bridge could not map a graph texture sample.";
-			return false;
-		}
-		const std::string replacement = binding + ".Sample(" + binding + "Sampler,";
-		hlslSource.replace(position, sourceSample.size(), replacement);
-		searchFrom = position + replacement.size();
-	}
-	return true;
-}
-
-bool translateGraphVertex(const std::string& vertexSource,
-		const std::vector<postprocess::SlangParameter>& parameters, const std::vector<postprocess::ShaderPassInput>& inputs,
-		std::string& hlslSource, std::string& error)
-{
-	std::string glsl = vertexSource;
-	removeResourceDeclarations(glsl, inputs, parameters);
-	std::vector<std::string> sampledBindings;
-	const std::regex textureCall(R"(\btexture\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)");
-	for (std::sregex_iterator it(glsl.begin(), glsl.end(), textureCall), end; it != end; ++it) {
-		const std::string name = (*it)[1].str();
-		if (std::none_of(inputs.begin(), inputs.end(), [&](const postprocess::ShaderPassInput& input) { return input.bindingName == name; })) {
-			error = "DirectX 11 vertex shader samples undeclared resource '" + name + "'.";
-			return false;
-		}
-		sampledBindings.push_back(name);
-	}
-	if (!sampledBindings.empty()) {
-		std::string transformed;
-		size_t offset = 0;
-		for (std::sregex_iterator it(glsl.begin(), glsl.end(), textureCall), end; it != end; ++it) {
-			const size_t position = static_cast<size_t>((*it).position());
-			transformed.append(glsl, offset, position - offset);
-			transformed += "texture(Source,";
-			offset = position + static_cast<size_t>((*it).length());
-		}
-		transformed.append(glsl, offset, std::string::npos);
-		glsl = std::move(transformed);
-	}
-	if (!postprocess::translateGlslVertexToHlsl(glsl, parameters, hlslSource, error))
-		return false;
-	const std::string marker = "SamplerState SourceSampler : register(s0);\n";
-	const size_t markerPosition = hlslSource.find(marker);
-	if (markerPosition == std::string::npos) {
-		error = "DirectX 11 vertex shader bridge did not emit its resource preamble.";
-		return false;
-	}
-	std::string declarations;
-	for (size_t slot = 1; slot < inputs.size(); ++slot)
-		declarations += "Texture2D " + inputs[slot].bindingName + " : register(t" + std::to_string(slot) + ");\n"
-				+ "SamplerState " + inputs[slot].bindingName + "Sampler : register(s" + std::to_string(slot) + ");\n";
-	hlslSource.insert(markerPosition + marker.size(), declarations);
-	size_t searchFrom = 0;
-	for (const std::string& binding : sampledBindings) {
-		const std::string sourceSample = "Source.Sample(SourceSampler,";
-		const size_t position = hlslSource.find(sourceSample, searchFrom);
-		if (position == std::string::npos) {
-			error = "DirectX 11 vertex shader bridge could not map a graph texture sample.";
-			return false;
-		}
-		const std::string replacement = binding + ".Sample(" + binding + "Sampler,";
-		hlslSource.replace(position, sourceSample.size(), replacement);
-		searchFrom = position + replacement.size();
-	}
-	return true;
-}
-
 } // namespace
 void Dx11ShaderChain::init(const ComPtr<ID3D11Device>& device, const ComPtr<ID3D11DeviceContext>& deviceContext, Quad *quad)
 {
@@ -291,7 +153,8 @@ bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, st
 			}
 		std::string hlslSource;
 		const uint32_t outputCount = pass.outputs.empty() ? 1u : static_cast<uint32_t>(pass.outputs.size());
-		if (!translateGraphFragment(*passSource, typedParameters, inputs, outputCount, hlslSource, error))
+		if (!postprocess::translateGlslGraphFragmentToHlsl(*passSource, typedParameters, inputs,
+				outputCount, hlslSource, error))
 			return false;
 		ComPtr<ID3DBlob> shaderBlob;
 		ComPtr<ID3DBlob> errorBlob;
@@ -304,6 +167,18 @@ bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, st
 		Program program;
 		program.pass = pass;
 		program.parameters = std::move(typedParameters);
+		program.outputFormats.reserve(outputCount);
+		for (uint32_t output = 0; output < outputCount; ++output) {
+			postprocess::ShaderPass outputPass = pass;
+			if (!pass.outputs.empty()) {
+				outputPass.targetFormat = pass.outputs[output].targetFormat;
+				outputPass.targetFormatName = pass.outputs[output].targetFormatName;
+			}
+			DXGI_FORMAT targetFormat;
+			if (!resolveTargetFormat(outputPass, targetFormat, error))
+				return false;
+			program.outputFormats.push_back(targetFormat);
+		}
 		for (size_t slot = 0; slot < inputs.size(); ++slot)
 			program.resources.push_back({ inputs[slot], static_cast<UINT>(slot) });
 		if (FAILED(device->CreatePixelShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr, &program.pixelShader.get()))) {
@@ -331,7 +206,8 @@ bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, st
 		if (!passSource->vertex.empty()) {
 			std::string vertexSource = passSource->vertex;
 			std::string hlslVertex;
-			if (!translateGraphVertex(vertexSource, program.parameters, inputs, hlslVertex, error))
+			if (!postprocess::translateGlslGraphVertexToHlsl(vertexSource, program.parameters, inputs,
+					hlslVertex, error))
 				return false;
 			ComPtr<ID3DBlob> vertexBlob;
 			ComPtr<ID3DBlob> vertexErrorBlob;
@@ -356,13 +232,14 @@ bool Dx11ShaderChain::compileCandidate(const postprocess::ShaderChain& chain, st
 
 bool Dx11ShaderChain::updateConfiguredChain()
 {
-	const std::string& requestedPath = config::PostProcessShader.get();
+	const std::vector<std::string> requestedPaths = postprocess::configuredShaderPaths();
+	const std::string requestedLabel = postprocess::shaderSelectionLabel(requestedPaths);
 	const uint64_t generation = postprocess::shaderChainReloadGeneration();
-	if (requestedPath == configuredPath && generation == configuredGeneration)
+	if (requestedPaths == configuredPaths && generation == configuredGeneration)
 		return !programs.empty();
-	configuredPath = requestedPath;
+	configuredPaths = requestedPaths;
 	configuredGeneration = generation;
-	if (requestedPath.empty()) {
+	if (requestedPaths.empty()) {
 		programs.clear();
 		parameters.clear();
 		activePath.clear();
@@ -371,30 +248,38 @@ bool Dx11ShaderChain::updateConfiguredChain()
 	}
 	std::string error;
 	postprocess::ShaderChain chain;
-	if (!postprocess::loadShaderChain(requestedPath, chain, error)) {
+	if (!postprocess::loadShaderChain(requestedPaths, chain, error)) {
 		postprocess::reportShaderChainStatus(activePath, error);
-		WARN_LOG(RENDERER, "Post-processing shader '%s' was not loaded: %s", requestedPath.c_str(), error.c_str());
+		WARN_LOG(RENDERER, "Post-processing shader '%s' was not loaded: %s", requestedLabel.c_str(), error.c_str());
 		return !programs.empty();
 	}
 	postprocess::applyShaderChainParameterValues(chain, config::PostProcessShaderParameters.get());
 	std::vector<Program> candidate;
 	if (!compileCandidate(chain, candidate, error)) {
 		postprocess::reportShaderChainStatus(activePath, error);
-		WARN_LOG(RENDERER, "Post-processing shader '%s' was not activated: %s", requestedPath.c_str(), error.c_str());
+		WARN_LOG(RENDERER, "Post-processing shader '%s' was not activated: %s", requestedLabel.c_str(), error.c_str());
 		return !programs.empty();
 	}
 	programs = std::move(candidate);
 	parameters = std::move(chain.parameters);
-	historyDepth = 1;
+	wantsUnscaledInput = chain.wantsUnscaledInput;
+	sourceHistoryDepth = 1;
 	needsSourceHistory = false;
 	for (const postprocess::ShaderPass& pass : chain.passes)
 		for (const postprocess::ShaderPassInput& input : pass.inputs) {
-			if (input.kind == postprocess::ShaderInputKind::History) {
-				historyDepth = std::max(historyDepth, input.historyOffset + 1);
-				needsSourceHistory = needsSourceHistory || input.sourcePass == postprocess::InvalidShaderPass;
+			if (input.kind != postprocess::ShaderInputKind::History
+					&& input.kind != postprocess::ShaderInputKind::Feedback)
+				continue;
+			const uint32_t requiredDepth = input.kind == postprocess::ShaderInputKind::Feedback
+					? 2u : input.historyOffset + 1;
+			if (input.sourcePass == postprocess::InvalidShaderPass) {
+				sourceHistoryDepth = std::max(sourceHistoryDepth, requiredDepth);
+				needsSourceHistory = true;
 			}
-			else if (input.kind == postprocess::ShaderInputKind::Feedback)
-				historyDepth = std::max(historyDepth, 2u);
+			else {
+				programs[input.sourcePass].historyDepth =
+						std::max(programs[input.sourcePass].historyDepth, requiredDepth);
+			}
 		}
 	targets.clear();
 	sourceHistory.clear();
@@ -402,7 +287,7 @@ bool Dx11ShaderChain::updateConfiguredChain()
 	lookupTextures.reserve(chain.textures.size());
 	for (const postprocess::ShaderPresetTexture& texture : chain.textures)
 		lookupTextures.push_back({ texture });
-	activePath = requestedPath;
+	activePath = requestedLabel;
 	postprocess::reportShaderChainStatus(activePath, {}, parameters,
 			chain.techniques, chain.selectedTechnique);
 	parameterGeneration = postprocess::shaderChainStatusGeneration();
@@ -518,11 +403,12 @@ bool Dx11ShaderChain::ensureTarget(Target& target, int width, int height, DXGI_F
 	return true;
 }
 
-void Dx11ShaderChain::unbindPixelShaderSource() const
+void Dx11ShaderChain::unbindPixelShaderSource(UINT count) const
 {
 	std::array<ID3D11ShaderResourceView *, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT> nullViews {};
-	deviceContext->PSSetShaderResources(0, static_cast<UINT>(nullViews.size()), nullViews.data());
-	deviceContext->VSSetShaderResources(0, static_cast<UINT>(nullViews.size()), nullViews.data());
+	count = std::min(count, static_cast<UINT>(nullViews.size()));
+	deviceContext->PSSetShaderResources(0, count, nullViews.data());
+	deviceContext->VSSetShaderResources(0, count, nullViews.data());
 }
 
 bool Dx11ShaderChain::prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height,
@@ -550,10 +436,11 @@ bool Dx11ShaderChain::prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& s
 	return true;
 }
 
-bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height, uint32_t frameCount,
-		ComPtr<ID3D11ShaderResourceView>& outputView)
+bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, const postprocess::ShaderFrameInfo& frame,
+		ComPtr<ID3D11ShaderResourceView>& outputView, bool& presentationTransformApplied)
 {
-	if (!updateConfiguredChain() || !sourceView || width <= 0 || height <= 0)
+	presentationTransformApplied = false;
+	if (!updateConfiguredChain() || !sourceView || frame.sourceWidth <= 0 || frame.sourceHeight <= 0)
 		return false;
 	std::string lookupError;
 	if (!ensureLookupTextures(lookupError)) {
@@ -561,7 +448,10 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		WARN_LOG(RENDERER, "%s", lookupError.c_str());
 		return false;
 	}
-	postprocess::ShaderFrameInfo passFrame { width, height, width, height, frameCount };
+	// External renderer state is unknown at chain entry. Clear it once; later
+	// passes only unbind the slots that HollyCast itself populated.
+	unbindPixelShaderSource(D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT);
+	postprocess::ShaderFrameInfo passFrame = frame;
 	const uint64_t statusGeneration = postprocess::shaderChainStatusGeneration();
 	if (statusGeneration != parameterGeneration) {
 		const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
@@ -570,15 +460,38 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 			parameters = status.parameters;
 	}
 	ComPtr<ID3D11ShaderResourceView> inputView = sourceView;
+	ComPtr<ID3D11ShaderResourceView> originalView = sourceView;
+	const bool composeDisplayInput = postprocess::shouldComposeDisplayInput(frame, wantsUnscaledInput);
+	if (composeDisplayInput) {
+		if (!ensureTarget(displayInput, frame.viewportWidth, frame.viewportHeight, DXGI_FORMAT_B8G8R8A8_UNORM, false))
+			return false;
+		D3D11_VIEWPORT viewport {};
+		viewport.Width = static_cast<float>(frame.viewportWidth);
+		viewport.Height = static_cast<float>(frame.viewportHeight);
+		viewport.MinDepth = 0.f;
+		viewport.MaxDepth = 1.f;
+		unbindPixelShaderSource();
+		deviceContext->RSSetViewports(1, &viewport);
+		deviceContext->OMSetRenderTargets(1, &displayInput.view.get(), nullptr);
+		deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+		quad->draw(sourceView, DX11Context::Instance()->getSamplers().getSampler(config::LinearInterpolation),
+				nullptr, -1.f, -1.f, 2.f, 2.f, frame.rotationPending);
+		unbindPixelShaderSource();
+		inputView = displayInput.shaderView;
+		originalView = inputView;
+		passFrame.sourceWidth = frame.viewportWidth;
+		passFrame.sourceHeight = frame.viewportHeight;
+	}
+	const int originalWidth = passFrame.sourceWidth;
+	const int originalHeight = passFrame.sourceHeight;
 	bool inputHasMipChain = false;
 	if (targets.size() != programs.size())
 		targets.resize(programs.size());
-	const size_t currentTarget = frameCount % historyDepth;
 	if (needsSourceHistory) {
-		if (sourceHistory.size() != historyDepth)
-			sourceHistory.resize(historyDepth);
+		if (sourceHistory.size() != sourceHistoryDepth)
+			sourceHistory.resize(sourceHistoryDepth);
 		if (std::any_of(sourceHistory.begin(), sourceHistory.end(), [&](Target& target) {
-			return !ensureTarget(target, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false);
+			return !ensureTarget(target, passFrame.sourceWidth, passFrame.sourceHeight, DXGI_FORMAT_B8G8R8A8_UNORM, false);
 		})) {
 			const std::string error = "DirectX 11 post-processing source history target creation failed.";
 			postprocess::reportShaderChainStatus(activePath, error);
@@ -586,19 +499,21 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 			return false;
 		}
 		D3D11_VIEWPORT historyViewport {};
-		historyViewport.Width = static_cast<float>(width);
-		historyViewport.Height = static_cast<float>(height);
+		historyViewport.Width = static_cast<float>(passFrame.sourceWidth);
+		historyViewport.Height = static_cast<float>(passFrame.sourceHeight);
 		historyViewport.MinDepth = 0.f;
 		historyViewport.MaxDepth = 1.f;
 		unbindPixelShaderSource();
 		deviceContext->RSSetViewports(1, &historyViewport);
-		deviceContext->OMSetRenderTargets(1, &sourceHistory[currentTarget].view.get(), nullptr);
+		const size_t currentSourceTarget = frame.frameCount % sourceHistoryDepth;
+		deviceContext->OMSetRenderTargets(1, &sourceHistory[currentSourceTarget].view.get(), nullptr);
 		deviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-		quad->draw(sourceView, DX11Context::Instance()->getSamplers().getSampler(false));
+		quad->draw(originalView, DX11Context::Instance()->getSamplers().getSampler(false));
 		unbindPixelShaderSource();
 	}
 	for (size_t index = 0; index < programs.size(); ++index) {
 		Program& program = programs[index];
+		const size_t currentTarget = frame.frameCount % program.historyDepth;
 		int outputWidth;
 		int outputHeight;
 		std::string error;
@@ -612,23 +527,11 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		if (passTargets.size() != outputCount)
 			passTargets.resize(outputCount);
 		for (uint32_t output = 0; output < outputCount; ++output) {
-			postprocess::ShaderPass outputPass = program.pass;
-			if (!program.pass.outputs.empty()) {
-				const postprocess::ShaderPassOutput& outputConfig = program.pass.outputs[output];
-				outputPass.targetFormat = outputConfig.targetFormat;
-				outputPass.targetFormatName = outputConfig.targetFormatName;
-			}
-			DXGI_FORMAT targetFormat;
-			if (!resolveTargetFormat(outputPass, targetFormat, error)) {
-				postprocess::reportShaderChainStatus(activePath, error);
-				WARN_LOG(RENDERER, "%s", error.c_str());
-				return false;
-			}
 			TargetRing& targetRing = passTargets[output];
-			if (targetRing.size() != historyDepth)
-				targetRing.resize(historyDepth);
+			if (targetRing.size() != program.historyDepth)
+				targetRing.resize(program.historyDepth);
 			if (std::any_of(targetRing.begin(), targetRing.end(), [&](Target& target) {
-				return !ensureTarget(target, outputWidth, outputHeight, targetFormat, program.outputNeedsMipmaps[output]);
+				return !ensureTarget(target, outputWidth, outputHeight, program.outputFormats[output], program.outputNeedsMipmaps[output]);
 			})) {
 				if (error.empty())
 					error = "DirectX 11 post-processing target creation failed.";
@@ -664,7 +567,10 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		uniforms.sourceSize[1] = static_cast<float>(passFrame.sourceHeight);
 		uniforms.outputSize[0] = static_cast<float>(outputWidth);
 		uniforms.outputSize[1] = static_cast<float>(outputHeight);
-		uniforms.frameCount = static_cast<int>(program.pass.frameCountModulo == 0 ? frameCount : frameCount % program.pass.frameCountModulo);
+		uniforms.frameCount = static_cast<int>(program.pass.frameCountModulo == 0 ? frame.frameCount : frame.frameCount % program.pass.frameCountModulo);
+		uniforms.rotation = frame.rotationPending ? 1 : 0;
+		uniforms.originalSize[0] = static_cast<float>(originalWidth);
+		uniforms.originalSize[1] = static_cast<float>(originalHeight);
 		uint32_t parameterOffset = 0;
 		for (const postprocess::SlangParameter& parameter : program.parameters) {
 			const uint32_t components = parameterComponentCount(parameter.type);
@@ -705,16 +611,21 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 				view = inputView;
 				break;
 			case postprocess::ShaderInputKind::Original:
-				view = sourceView;
+				view = originalView;
 				break;
-			case postprocess::ShaderInputKind::PassOutput:
-				view = targets[binding.input.sourcePass][binding.input.sourceOutput][currentTarget].shaderView;
+			case postprocess::ShaderInputKind::PassOutput: {
+				const uint32_t sourceDepth = programs[binding.input.sourcePass].historyDepth;
+				view = targets[binding.input.sourcePass][binding.input.sourceOutput]
+						[frame.frameCount % sourceDepth].shaderView;
 				break;
+			}
 			case postprocess::ShaderInputKind::History:
 			case postprocess::ShaderInputKind::Feedback:
 			{
 				const uint32_t offset = binding.input.kind == postprocess::ShaderInputKind::Feedback ? 1 : binding.input.historyOffset;
-				const size_t historyTarget = (currentTarget + historyDepth - offset % historyDepth) % historyDepth;
+				const uint32_t sourceDepth = binding.input.sourcePass == postprocess::InvalidShaderPass
+						? sourceHistoryDepth : programs[binding.input.sourcePass].historyDepth;
+				const size_t historyTarget = (frame.frameCount + sourceDepth - offset % sourceDepth) % sourceDepth;
 				view = binding.input.sourcePass == postprocess::InvalidShaderPass
 						? sourceHistory[historyTarget].shaderView : targets[binding.input.sourcePass][binding.input.sourceOutput][historyTarget].shaderView;
 				break;
@@ -738,7 +649,7 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 			samplers.push_back(sampler ? sampler : DX11Context::Instance()->getSamplers().getSampler(program.pass.linearFilter));
 		}
 		quad->drawWithShaders(resourceViews, samplers, program.vertexShader.get(), program.pixelShader, &uniforms, sizeof(uniforms));
-		unbindPixelShaderSource();
+		unbindPixelShaderSource(static_cast<UINT>(resourceViews.size()));
 		for (uint32_t output = 0; output < outputCount; ++output)
 			if (program.outputNeedsMipmaps[output])
 				deviceContext->GenerateMips(passTargets[output][currentTarget].shaderView);
@@ -748,22 +659,25 @@ bool Dx11ShaderChain::render(ComPtr<ID3D11ShaderResourceView>& sourceView, int w
 		passFrame.sourceHeight = outputHeight;
 	}
 	outputView = inputView;
+	presentationTransformApplied = composeDisplayInput;
 	return true;
 }
 
 void Dx11ShaderChain::term()
 {
 	targets.clear();
+	displayInput = {};
 	mipmapSource = {};
 	sourceHistory.clear();
 	programs.clear();
 	lookupTextures.clear();
 	parameters.clear();
-	configuredPath.clear();
+	configuredPaths.clear();
 	configuredGeneration = 0;
 	parameterGeneration = 0;
+	wantsUnscaledInput = false;
 	activePath.clear();
-	historyDepth = 1;
+	sourceHistoryDepth = 1;
 	needsSourceHistory = false;
 	quad = nullptr;
 	deviceContext.reset();

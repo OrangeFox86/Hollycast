@@ -547,25 +547,6 @@ void DX11Renderer::displayFramebuffer()
 {
 #ifndef LIBRETRO
 	ComPtr<ID3D11ShaderResourceView> displayTexture = fbTextureView;
-	if (shaderChain)
-		shaderChain->render(fbTextureView, width, height, FrameCount, displayTexture);
-	// Shader passes bind their own intermediate render targets. The final blit
-	// and OSD must always return to the swapchain target.
-	deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
-	D3D11_VIEWPORT vp{};
-	vp.Width = (FLOAT)settings.display.width;
-	vp.Height = (FLOAT)settings.display.height;
-	vp.MinDepth = 0.f;
-	vp.MaxDepth = 1.f;
-	deviceContext->RSSetViewports(1, &vp);
-
-	const D3D11_RECT r = { 0, 0, settings.display.width, settings.display.height };
-	deviceContext->RSSetScissorRects(1, &r);
-	float colors[4];
-	VO_BORDER_COL.getRGBColor(colors);
-	colors[3] = 1.f;
-	deviceContext->ClearRenderTargetView(DX11Context::Instance()->getRenderTarget(), colors);
-
 	float shiftX, shiftY;
 	getVideoShift(shiftX, shiftY);
 	shiftX *=  2.f / width;
@@ -593,8 +574,34 @@ void DX11Renderer::displayFramebuffer()
 	
 	float x = (float)dx;
 	float y = (float)dy;
-	float w = (float)(outwidth - leftInset - 2 * dx);
-	float h = (float)(outheight - topInset - 2 * dy);
+	const int viewportWidth = outwidth - leftInset - 2 * dx;
+	const int viewportHeight = outheight - topInset - 2 * dy;
+	float w = (float)viewportWidth;
+	float h = (float)viewportHeight;
+	bool presentationTransformApplied = false;
+	if (shaderChain)
+		shaderChain->render(fbTextureView,
+				{ static_cast<int>(width), static_cast<int>(height),
+						config::Rotate90 ? viewportHeight : viewportWidth,
+						config::Rotate90 ? viewportWidth : viewportHeight,
+						FrameCount, config::Rotate90 }, displayTexture, presentationTransformApplied);
+
+	// Shader passes bind their own intermediate render targets. The final blit
+	// and OSD must always return to the swapchain target.
+	deviceContext->OMSetRenderTargets(1, &DX11Context::Instance()->getRenderTarget().get(), nullptr);
+	D3D11_VIEWPORT vp{};
+	vp.Width = (FLOAT)settings.display.width;
+	vp.Height = (FLOAT)settings.display.height;
+	vp.MinDepth = 0.f;
+	vp.MaxDepth = 1.f;
+	deviceContext->RSSetViewports(1, &vp);
+
+	const D3D11_RECT r = { 0, 0, settings.display.width, settings.display.height };
+	deviceContext->RSSetScissorRects(1, &r);
+	float colors[4];
+	VO_BORDER_COL.getRGBColor(colors);
+	colors[3] = 1.f;
+	deviceContext->ClearRenderTargetView(DX11Context::Instance()->getRenderTarget(), colors);
 
 	// Normalize
 	x = x * 2.f / outwidth - 1.f;
@@ -604,8 +611,19 @@ void DX11Renderer::displayFramebuffer()
 	// Shift
 	x += shiftX;
 	y += shiftY;
+	if (presentationTransformApplied && config::Rotate90) {
+		// The legacy DX presenter describes the rectangle in pre-rotation clip
+		// space. Once the chain consumes rotation, apply that same transform to
+		// the rectangle instead of rotating the already-rotated shader output.
+		const float rotatedX = -(y + h);
+		const float rotatedY = x;
+		x = rotatedX;
+		y = rotatedY;
+		std::swap(w, h);
+	}
 	deviceContext->OMSetBlendState(blendStates.getState(false), nullptr, 0xffffffff);
-	quad->draw(displayTexture, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
+	quad->draw(displayTexture, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h,
+			config::Rotate90 && !presentationTransformApplied);
 #endif
 }
 

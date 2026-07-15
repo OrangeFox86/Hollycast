@@ -27,6 +27,7 @@
 void gui_init();
 void gui_updateStyle();
 void gui_open_settings();
+void gui_open_shader_settings();
 void gui_display_ui();
 void gui_draw_osd();
 void gui_display_osd();

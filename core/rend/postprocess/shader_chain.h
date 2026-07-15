@@ -21,15 +21,21 @@
 #include "slang_frontend.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace postprocess {
 
+// Vulkan guarantees 128 bytes of push constants. Frame metadata consumes 32,
+// leaving 24 scalar parameter components with identical storage on every backend.
+inline constexpr uint32_t MaxShaderParameterComponents = 24;
+
 enum class ShaderFormat {
 	Unknown,
 	GLSL,
+	GlslPreset,
 	ReShadeFX,
 	Slang,
 	SlangPreset,
@@ -88,6 +94,7 @@ enum class ShaderBlendOperation {
 };
 
 constexpr uint32_t InvalidShaderPass = static_cast<uint32_t>(-1);
+constexpr size_t MaxShaderLayers = 8;
 
 struct ShaderPresetTexture {
 	std::string name;
@@ -135,6 +142,9 @@ struct ShaderParameter {
 	std::array<float, 16> stepValues { 0.f };
 	uint32_t componentCount = 1;
 	SlangParameterType type = SlangParameterType::Float;
+	// ReShade combo/radio annotations expose named integer choices. An empty
+	// list means the parameter uses its declared numeric range instead.
+	std::vector<std::string> choiceLabels;
 };
 
 struct ShaderPass {
@@ -175,6 +185,9 @@ struct ShaderFrameInfo {
 	int viewportWidth = 0;
 	int viewportHeight = 0;
 	uint32_t frameCount = 0;
+	// Rotation remains a presentation operation for unscaled Slang chains. A
+	// backend must not pre-scale an unrotated source into rotated dimensions.
+	bool rotationPending = false;
 };
 
 struct ShaderChainStatus {
@@ -201,6 +214,9 @@ struct ShaderPassSource {
 	// Fragment outputs are counted during lowering so state blocks and backend
 	// attachments cannot silently disagree about an MRT pass.
 	uint32_t outputCount = 1;
+	// RetroArch GLSL uses a vec4 fullscreen position, while HollyCast's native
+	// portable vertex contract exposes the underlying vec3 attribute.
+	bool retroArchGlsl = false;
 	std::vector<ShaderParameter> parameters;
 	std::vector<SlangParameter> slangParameters;
 	std::vector<SlangResource> slangResources;
@@ -217,6 +233,9 @@ struct ShaderChain {
 	// compiler. Reload explicitly invalidates this cache through a new chain.
 	std::vector<ShaderPassSource> sources;
 	uint32_t feedbackPass = InvalidShaderPass;
+	// Slang presets define their own source/viewport scaling. Display GLSL and
+	// ReShade effects instead receive an already display-sized input.
+	bool wantsUnscaledInput = false;
 };
 
 ShaderFormat detectFormat(const std::string& path);
@@ -226,6 +245,11 @@ const char *formatName(ShaderFormat format);
 // rounded to the nearest pixel so all backends use identical chain geometry.
 bool resolveTargetSize(const ShaderPass& pass, const ShaderFrameInfo& frame,
 		int& width, int& height, std::string& error);
+
+// A normal display chain sees the composed presentation image. Presets that
+// explicitly own source/viewport scaling retain the raw input and leave the
+// presentation transform for the renderer after the chain.
+bool shouldComposeDisplayInput(const ShaderFrameInfo& frame, bool wantsUnscaledInput);
 
 // Resolves reflected Slang resources to the chain's symbolic inputs. This is
 // intentionally renderer-free so loaders and backend compilers enforce the
@@ -252,10 +276,16 @@ uint64_t shaderChainReloadGeneration();
 void applyShaderChainParameterValues(ShaderChain& chain, const std::string& values);
 std::string serializeShaderChainParameterValues(const std::vector<ShaderParameter>& parameters);
 
-// Parses a .slangp document without touching storage. This keeps preset validation
+// Parses preset documents without touching storage. This keeps validation
 // deterministic and lets import/UI code report malformed presets before activation.
 bool parseSlangPreset(const std::string& presetText, const std::string& presetPath,
 		ShaderChain& chain, std::string& error);
+bool parseGlslPreset(const std::string& presetText, const std::string& presetPath,
+		ShaderChain& chain, std::string& error);
+
+// Lowers the common RetroArch combined VERTEX/FRAGMENT GLSL contract into the
+// backend-neutral interface consumed by all three executors.
+bool parseGlslShader(const std::string& shaderText, ShaderPassSource& source, std::string& error);
 
 // Compatibility projection for callers that use the portable float-only
 // parameter contract. New code should use parseSlangFrontend() for rich Slang
@@ -269,11 +299,19 @@ bool loadSlangPreset(const std::string& presetPath, ShaderChain& chain, std::str
 // allocation and generation identical across the renderer backends.
 std::vector<std::vector<bool>> resolveShaderPassOutputMipmaps(const ShaderChain& chain);
 
-// Builds a chain from a selected GLSL, Slang, Slang preset, or ReShade FX file
+// Builds a chain from a selected GLSL, GLSL preset, Slang, Slang preset, or ReShade FX file
 // and reflects the parameters that its backend-neutral source exposes.
 bool loadShaderChain(const std::string& path, ShaderChain& chain, std::string& error);
+// Independent files selected in the UI are appended as ordered layers. Pass
+// references are rebased once here so every renderer executes the same graph.
+bool loadShaderChain(const std::vector<std::string>& paths, ShaderChain& chain, std::string& error);
 
-// Loads one pass into HollyCast's portable fragment-body contract. Slang
+// Reads the new ordered selection while preserving existing single-shader
+// configurations created before the Shader page was introduced.
+std::vector<std::string> configuredShaderPaths();
+std::string shaderSelectionLabel(const std::vector<std::string>& paths);
+
+// Loads one pass into HollyCast's portable fragment-body contract. Shader
 // includes are expanded only within the pass package; FX is lowered by the
 // clean-room, deliberately small compatibility compiler.
 bool loadShaderPassSource(const ShaderPass& pass, ShaderPassSource& source, std::string& error);
@@ -294,6 +332,15 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vector<ShaderParameter>& parameters,
 		std::string& hlslSource, std::string& error);
 bool translateGlslVertexToHlsl(const std::string& glslSource, const std::vector<SlangParameter>& parameters,
+		std::string& hlslSource, std::string& error);
+
+// Translates a fully resolved render-graph pass, including named texture
+// resources and GLSL sampler parameters, to Shader Model 4 compatible HLSL.
+bool translateGlslGraphFragmentToHlsl(const ShaderPassSource& source,
+		const std::vector<SlangParameter>& parameters, const std::vector<ShaderPassInput>& inputs,
+		uint32_t outputCount, std::string& hlslSource, std::string& error);
+bool translateGlslGraphVertexToHlsl(const std::string& vertexSource,
+		const std::vector<SlangParameter>& parameters, const std::vector<ShaderPassInput>& inputs,
 		std::string& hlslSource, std::string& error);
 
 } // namespace postprocess

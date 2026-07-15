@@ -253,6 +253,8 @@ void classifyResource(SlangResource& resource)
 	std::string logicalName = resource.name;
 	if (endsWith(logicalName, "Texture"))
 		logicalName.resize(logicalName.size() - std::string_view("Texture").size());
+	else if (endsWith(logicalName, "Sampler"))
+		logicalName.resize(logicalName.size() - std::string_view("Sampler").size());
 	if (logicalName == "Source") {
 		resource.convention = SlangResourceConvention::Source;
 		return;
@@ -266,8 +268,14 @@ void classifyResource(SlangResource& resource)
 		resource.alias = logicalName.substr(0, logicalName.size() - std::string_view("Feedback").size());
 		return;
 	}
+	std::smatch indexedFeedback;
+	if (std::regex_match(logicalName, indexedFeedback, std::regex(R"(^PassFeedback([0-9]+)$)"))) {
+		resource.convention = SlangResourceConvention::Feedback;
+		resource.alias = logicalName;
+		return;
+	}
 	std::smatch historyMatch;
-	if (std::regex_match(logicalName, historyMatch, std::regex(R"(^(.+)History([1-9][0-9]*)?$)"))) {
+	if (std::regex_match(logicalName, historyMatch, std::regex(R"(^(.+)History([0-9]+)?$)"))) {
 		resource.convention = SlangResourceConvention::History;
 		resource.alias = historyMatch[1].str();
 		if (historyMatch[2].matched) {

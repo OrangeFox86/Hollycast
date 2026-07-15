@@ -51,13 +51,19 @@
 #include "oslib/oslib.h"
 #include "oslib/storage.h"
 #include "rend/postprocess/shader_chain.h"
+#include "json.hpp"
 #include "stdclass.h"
 #include "achievements/achievements.h"
 #include "vgamepad.h"
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <cfloat>
+#include <cctype>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #ifdef __ANDROID__
 #if HOST_CPU == CPU_ARM64 && USE_VULKAN
 #include "rend/vulkan/adreno.h"
@@ -371,6 +377,8 @@ static const char* GetTabHelpText(SettingsTab tab)
 		return T("System, content, interface, and storage behavior. Highlight or select a setting to see a fuller explanation here.");
 	case SettingsTab::Video:
 		return T("Graphics quality, renderer behavior, scaling, and performance tuning. Highlight or select a setting to see what it changes and why it matters.");
+	case SettingsTab::Shader:
+		return T("Choose, order, and adjust display shader layers. Every selected layer must compile before the active stack is replaced.");
 	case SettingsTab::Audio:
 		return T("Audio backend, latency, mixing, and output behavior. Highlight or select a setting for practical guidance before changing it.");
 	case SettingsTab::Controls:
@@ -2056,6 +2064,8 @@ const char* getTabName(SettingsTab tab)
 		return T("General");
 	case SettingsTab::Video:
 		return T("Video");
+	case SettingsTab::Shader:
+		return T("Shader");
 	case SettingsTab::Audio:
 		return T("Audio");
 	case SettingsTab::Controls:
@@ -2225,6 +2235,9 @@ static void renderContentArea()
 		break;
 	case SettingsTab::Video:
 		renderVideoTab();
+		break;
+	case SettingsTab::Shader:
+		renderShaderTab();
 		break;
 	case SettingsTab::Audio:
 		renderAudioTab();
@@ -3577,93 +3590,6 @@ void renderVideoTab()
 		}
 	}
 
-	if (RenderCollapsingHeader("PostProcessingSection", ICON_FA_WAND_MAGIC, T("Post-processing"), ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ImGui::TextWrapped("%s", T("Apply a GLSL shader, Slang stage/preset, or supported ReShade FX effect after rendering. A new chain replaces the active one only after every pass compiles successfully."));
-		const std::string& selectedPath = config::PostProcessShader.get();
-		const char* selectPopupName = T("Select Post-processing Shader");
-		if (ImGui::Button(selectPopupName))
-			ImGui::OpenPopup(selectPopupName);
-		if (!selectedPath.empty())
-		{
-			ImGui::SameLine();
-			if (ImGui::Button(T("Reload Shader")))
-				postprocess::requestShaderChainReload();
-			ImGui::SameLine();
-			if (ImGui::Button(T("Clear Shader"))) {
-				config::PostProcessShader.get().clear();
-				config::PostProcessShaderParameters.get().clear();
-				config::PostProcessShaderTechnique.get().clear();
-			}
-			ImGui::TextWrapped(T("Selected: %s"), selectedPath.c_str());
-		}
-
-		select_file_popup(selectPopupName, [](bool cancelled, const std::string& selection) {
-			if (!cancelled) {
-				config::PostProcessShader.get() = selection;
-				config::PostProcessShaderParameters.get().clear();
-				config::PostProcessShaderTechnique.get().clear();
-				postprocess::requestShaderChainReload();
-			}
-			return true;
-		}, true, ";glsl;slang;slangp;fx;");
-
-		const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
-		if (!status.error.empty())
-			ImGui::TextColored(ImVec4(1.f, .35f, .35f, 1.f), T("Rejected: %s"), status.error.c_str());
-		else if (!status.activePath.empty())
-			ImGui::TextColored(ImVec4(.35f, 1.f, .55f, 1.f), T("Active: %s"), status.activePath.c_str());
-		else
-			ImGui::TextDisabled("%s", T("No post-processing shader active."));
-		if (status.techniques.size() > 1) {
-			const int selectedTechnique = status.selectedTechnique >= 0
-					&& status.selectedTechnique < static_cast<int>(status.techniques.size())
-					? status.selectedTechnique : 0;
-			if (ImGui::BeginCombo(T("Technique"), status.techniques[selectedTechnique].c_str())) {
-				for (size_t index = 0; index < status.techniques.size(); ++index) {
-					const bool selected = static_cast<int>(index) == selectedTechnique;
-					if (ImGui::Selectable(status.techniques[index].c_str(), selected) && !selected) {
-						config::PostProcessShaderTechnique.get() = status.techniques[index];
-						postprocess::requestShaderChainReload();
-					}
-					if (selected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-		}
-		for (const postprocess::ShaderParameter& parameter : status.parameters) {
-			ImGui::PushID(parameter.name.c_str());
-			if (parameter.componentCount <= 1) {
-				float value = parameter.value;
-				if (parameter.minimum < parameter.maximum && parameter.step > 0.f
-						&& ImGui::SliderFloat(parameter.label.c_str(), &value, parameter.minimum, parameter.maximum)
-						&& postprocess::setShaderChainParameter(parameter.name, value))
-					config::PostProcessShaderParameters.get() = postprocess::serializeShaderChainParameterValues(
-							postprocess::getShaderChainStatus().parameters);
-				else if (parameter.minimum >= parameter.maximum || parameter.step <= 0.f)
-					ImGui::TextDisabled("%s: %.3f", parameter.label.c_str(), parameter.value);
-			}
-			else {
-				ImGui::TextUnformatted(parameter.label.c_str());
-				float values[16] {};
-				std::copy(parameter.values.begin(), parameter.values.end(), values);
-				bool changed = false;
-				for (uint32_t component = 0; component < parameter.componentCount; ++component) {
-					ImGui::PushID(static_cast<int>(component));
-					changed = ImGui::DragFloat("##component", &values[component],
-							parameter.stepValues[component] > 0.f ? parameter.stepValues[component] : 0.01f,
-							parameter.minimumValues[component], parameter.maximumValues[component]) || changed;
-					ImGui::PopID();
-				}
-				if (changed && postprocess::setShaderChainParameterComponents(parameter.name, values, parameter.componentCount))
-					config::PostProcessShaderParameters.get() = postprocess::serializeShaderChainParameterValues(
-							postprocess::getShaderChainStatus().parameters);
-			}
-			ImGui::PopID();
-		}
-	}
-
 	// Transparent Sorting section
 	if (RenderCollapsingHeader("TransparentSortingSection", ICON_FA_WAND_SPARKLES, T("Transparent Sorting"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -4582,6 +4508,760 @@ void renderVideoTab()
 			config::RendererType = perPixel ? RenderType::DirectX11_OIT : RenderType::DirectX11;
 			break;
 	}
+}
+
+struct ShaderBrowserEntry
+{
+	std::string path;
+	std::string displayPath;
+	postprocess::ShaderFormat format = postprocess::ShaderFormat::Unknown;
+};
+
+struct ShaderBrowserMetadata
+{
+	std::string name;
+	std::string description;
+	std::string author;
+	std::string performance;
+	bool mobileRecommended = false;
+};
+
+static std::vector<ShaderBrowserEntry> g_shaderBrowserEntries;
+static std::unordered_map<std::string, ShaderBrowserMetadata> g_shaderBrowserMetadata;
+static std::string g_shaderBrowserDirectory;
+static std::string g_shaderBrowserError;
+static std::string g_shaderCatalogWarning;
+static std::string g_shaderFilter;
+static bool g_shaderBrowserInitialized = false;
+
+struct ShaderPreviewState
+{
+	bool initialized = false;
+	std::vector<std::string> paths;
+	std::string technique;
+	std::string overrides;
+	postprocess::ShaderChain chain;
+	std::vector<postprocess::ShaderParameter> defaults;
+	std::string error;
+	uint64_t activationStatusGeneration = 0;
+	bool activationPending = false;
+};
+
+static ShaderPreviewState g_shaderPreview;
+static std::atomic_bool g_shaderLiveTune { false };
+
+static std::string defaultShaderDirectory()
+{
+	return get_writable_data_path("shaders/");
+}
+
+static std::string configuredShaderDirectory()
+{
+	return config::PostProcessShaderDirectory.get().empty()
+			? defaultShaderDirectory() : config::PostProcessShaderDirectory.get();
+}
+
+static std::string lowercaseAscii(std::string value)
+{
+	std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+		return static_cast<char>(std::tolower(character));
+	});
+	return value;
+}
+
+static std::string shaderCatalogKey(std::string path)
+{
+	std::replace(path.begin(), path.end(), '\\', '/');
+	while (path.rfind("./", 0) == 0)
+		path.erase(0, 2);
+#ifdef _WIN32
+	path = lowercaseAscii(std::move(path));
+#endif
+	return path;
+}
+
+static void loadShaderCatalog(const std::string& directory)
+{
+	constexpr size_t MaxCatalogBytes = 1024 * 1024;
+	g_shaderBrowserMetadata.clear();
+	g_shaderCatalogWarning.clear();
+	const std::string catalogPath = hostfs::storage().getSubPath(directory, "shader-catalog.json");
+	if (!hostfs::storage().exists(catalogPath))
+		return;
+
+	try {
+		std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(catalogPath, "rb"));
+		if (file == nullptr || file->size() < 0 || static_cast<uint64_t>(file->size()) > MaxCatalogBytes) {
+			g_shaderCatalogWarning = T("shader-catalog.json is unavailable or exceeds the 1 MiB safety limit.");
+			return;
+		}
+		std::string text(static_cast<size_t>(file->size()), '\0');
+		if (!text.empty() && file->read(text.data(), 1, text.size()) != text.size()) {
+			g_shaderCatalogWarning = T("shader-catalog.json could not be read.");
+			return;
+		}
+		const nlohmann::json catalog = nlohmann::json::parse(text, nullptr, false);
+		if (catalog.is_discarded() || !catalog.is_object() || !catalog.contains("shaders")
+				|| !catalog["shaders"].is_object()) {
+			g_shaderCatalogWarning = T("shader-catalog.json is malformed.");
+			return;
+		}
+		for (auto entry = catalog["shaders"].begin(); entry != catalog["shaders"].end(); ++entry) {
+			if (!entry.value().is_object())
+				continue;
+			ShaderBrowserMetadata metadata;
+			metadata.name = entry.value().value("name", std::string());
+			metadata.description = entry.value().value("description", std::string());
+			metadata.author = entry.value().value("author", std::string());
+			metadata.performance = entry.value().value("performance", std::string());
+			metadata.mobileRecommended = entry.value().value("mobile_recommended", false);
+			g_shaderBrowserMetadata.emplace(shaderCatalogKey(entry.key()), std::move(metadata));
+		}
+	}
+	catch (const std::exception& exception) {
+		g_shaderCatalogWarning = exception.what();
+	}
+}
+
+static std::string shaderDisplayPath(const std::string& root, const std::string& path)
+{
+	std::string normalizedRoot = root;
+	std::string normalizedPath = path;
+	std::replace(normalizedRoot.begin(), normalizedRoot.end(), '\\', '/');
+	std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
+	while (!normalizedRoot.empty() && normalizedRoot.back() == '/')
+		normalizedRoot.pop_back();
+#ifdef _WIN32
+	const bool insideRoot = lowercaseAscii(normalizedPath).compare(0, normalizedRoot.size(), lowercaseAscii(normalizedRoot)) == 0;
+#else
+	const bool insideRoot = normalizedPath.compare(0, normalizedRoot.size(), normalizedRoot) == 0;
+#endif
+	if (insideRoot && normalizedPath.size() > normalizedRoot.size()
+			&& normalizedPath[normalizedRoot.size()] == '/')
+		return normalizedPath.substr(normalizedRoot.size() + 1);
+	return normalizedPath;
+}
+
+static void refreshShaderBrowser()
+{
+	constexpr size_t MaxDirectories = 4096;
+	constexpr size_t MaxFiles = 16384;
+	constexpr size_t MaxDepth = 64;
+	g_shaderBrowserEntries.clear();
+	g_shaderBrowserError.clear();
+	g_shaderCatalogWarning.clear();
+	g_shaderBrowserDirectory = configuredShaderDirectory();
+	g_shaderBrowserInitialized = true;
+
+	try {
+		if (config::PostProcessShaderDirectory.get().empty()
+				&& !hostfs::storage().exists(g_shaderBrowserDirectory)
+				&& !make_directory(g_shaderBrowserDirectory)) {
+			g_shaderBrowserError = T("The default Data/shaders folder could not be created.");
+			return;
+		}
+		if (!hostfs::storage().exists(g_shaderBrowserDirectory)) {
+			g_shaderBrowserError = T("The selected shader folder does not exist or is unavailable.");
+			return;
+		}
+
+		std::vector<std::pair<std::string, size_t>> pendingDirectories {
+			{ g_shaderBrowserDirectory, 0 }
+		};
+		std::unordered_set<std::string> visitedDirectories;
+		while (!pendingDirectories.empty() && g_shaderBrowserEntries.size() < MaxFiles
+				&& visitedDirectories.size() < MaxDirectories) {
+			auto [directory, depth] = std::move(pendingDirectories.back());
+			pendingDirectories.pop_back();
+			if (!visitedDirectories.emplace(directory).second)
+				continue;
+			for (const hostfs::FileInfo& entry : hostfs::storage().listContent(directory)) {
+				if (entry.isDirectory) {
+					if (depth < MaxDepth)
+						pendingDirectories.emplace_back(entry.path, depth + 1);
+					continue;
+				}
+				const postprocess::ShaderFormat format = postprocess::detectFormat(entry.path);
+				if (format == postprocess::ShaderFormat::Unknown)
+					continue;
+				g_shaderBrowserEntries.push_back({ entry.path,
+						shaderDisplayPath(g_shaderBrowserDirectory, entry.path), format });
+				if (g_shaderBrowserEntries.size() == MaxFiles)
+					break;
+			}
+		}
+		if (!pendingDirectories.empty())
+			g_shaderBrowserError = T("The shader scan reached its safety limit. Choose a smaller shader folder.");
+		std::sort(g_shaderBrowserEntries.begin(), g_shaderBrowserEntries.end(), [](const ShaderBrowserEntry& left,
+				const ShaderBrowserEntry& right) {
+			return lowercaseAscii(left.displayPath) < lowercaseAscii(right.displayPath);
+		});
+		loadShaderCatalog(g_shaderBrowserDirectory);
+	}
+	catch (const std::exception& exception) {
+		g_shaderBrowserError = exception.what();
+	}
+}
+
+static bool rebuildShaderPreview()
+{
+	g_shaderPreview.initialized = true;
+	g_shaderPreview.paths = postprocess::configuredShaderPaths();
+	g_shaderPreview.technique = config::PostProcessShaderTechnique.get();
+	g_shaderPreview.overrides = config::PostProcessShaderParameters.get();
+	g_shaderPreview.chain = {};
+	g_shaderPreview.defaults.clear();
+	g_shaderPreview.error.clear();
+	if (g_shaderPreview.paths.empty())
+		return true;
+
+	postprocess::ShaderChain candidate;
+	if (!postprocess::loadShaderChain(g_shaderPreview.paths, candidate, g_shaderPreview.error))
+		return false;
+	g_shaderPreview.defaults = candidate.parameters;
+	postprocess::applyShaderChainParameterValues(candidate, g_shaderPreview.overrides);
+	g_shaderPreview.chain = std::move(candidate);
+	return true;
+}
+
+static void ensureShaderPreview()
+{
+	const std::vector<std::string> paths = postprocess::configuredShaderPaths();
+	if (!g_shaderPreview.initialized || paths != g_shaderPreview.paths
+			|| config::PostProcessShaderTechnique.get() != g_shaderPreview.technique
+			|| config::PostProcessShaderParameters.get() != g_shaderPreview.overrides)
+		rebuildShaderPreview();
+}
+
+static void requestShaderActivation()
+{
+	// The renderer publishes a new status after it has processed this request.
+	// Keeping the status generation avoids treating the previous stack as the
+	// newly selected one while the game is paused between rendered frames.
+	g_shaderPreview.activationStatusGeneration = postprocess::shaderChainStatusGeneration();
+	g_shaderPreview.activationPending = true;
+	postprocess::requestShaderChainReload();
+}
+
+static bool shaderActivationPending()
+{
+	if (g_shaderPreview.activationPending
+			&& postprocess::shaderChainStatusGeneration() != g_shaderPreview.activationStatusGeneration)
+		g_shaderPreview.activationPending = false;
+	return g_shaderPreview.activationPending;
+}
+
+static bool previewMatchesActiveShader()
+{
+	if (shaderActivationPending() || g_shaderPreview.paths.empty())
+		return false;
+	const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+	return status.error.empty() && !status.activePath.empty()
+			&& status.activePath == postprocess::shaderSelectionLabel(g_shaderPreview.paths)
+			&& status.parameters.size() == g_shaderPreview.chain.parameters.size();
+}
+
+static void shaderTextWrapped(const ImVec4& color, const char *format, ...)
+{
+	va_list arguments;
+	va_start(arguments, format);
+	ImGui::PushStyleColor(ImGuiCol_Text, color);
+	ImGui::TextWrappedV(format, arguments);
+	ImGui::PopStyleColor();
+	va_end(arguments);
+}
+
+static bool setPreviewParameter(const std::string& name, const float *values, uint32_t componentCount)
+{
+	if (values == nullptr || componentCount == 0 || componentCount > 16)
+		return false;
+	auto parameter = std::find_if(g_shaderPreview.chain.parameters.begin(), g_shaderPreview.chain.parameters.end(),
+			[&](const postprocess::ShaderParameter& candidate) { return candidate.name == name; });
+	if (parameter == g_shaderPreview.chain.parameters.end() || parameter->componentCount != componentCount)
+		return false;
+	for (uint32_t component = 0; component < componentCount; ++component) {
+		const float minimum = componentCount == 1 ? parameter->minimum : parameter->minimumValues[component];
+		const float maximum = componentCount == 1 ? parameter->maximum : parameter->maximumValues[component];
+		if (!std::isfinite(values[component])
+				|| (minimum < maximum && (values[component] < minimum || values[component] > maximum)))
+			return false;
+	}
+
+	std::copy_n(values, componentCount, parameter->values.begin());
+	parameter->value = parameter->values[0];
+	config::PostProcessShaderParameters.get() =
+			postprocess::serializeShaderChainParameterValues(g_shaderPreview.chain.parameters);
+	g_shaderPreview.overrides = config::PostProcessShaderParameters.get();
+	if (previewMatchesActiveShader()) {
+		if (componentCount == 1)
+			postprocess::setShaderChainParameter(name, values[0]);
+		else
+			postprocess::setShaderChainParameterComponents(name, values, componentCount);
+	}
+	return true;
+}
+
+static void resetShaderParameters()
+{
+	if (g_shaderPreview.defaults.size() != g_shaderPreview.chain.parameters.size())
+		return;
+	g_shaderPreview.chain.parameters = g_shaderPreview.defaults;
+	config::PostProcessShaderParameters.get().clear();
+	g_shaderPreview.overrides.clear();
+	if (previewMatchesActiveShader()) {
+		for (const postprocess::ShaderParameter& parameter : g_shaderPreview.chain.parameters) {
+			if (parameter.componentCount == 1)
+				postprocess::setShaderChainParameter(parameter.name, parameter.values[0]);
+			else
+				postprocess::setShaderChainParameterComponents(parameter.name,
+						parameter.values.data(), parameter.componentCount);
+		}
+	}
+	SaveSettings();
+}
+
+static void renderShaderActivationStatus()
+{
+	if (g_shaderPreview.paths.empty()) {
+		ImGui::TextDisabled("%s", T("No display shader selected."));
+		return;
+	}
+	if (!g_shaderPreview.error.empty()) {
+		shaderTextWrapped(ImVec4(1.f, .35f, .35f, 1.f), T("Invalid: %s"), g_shaderPreview.error.c_str());
+		return;
+	}
+	if (shaderActivationPending()) {
+		shaderTextWrapped(ImVec4(1.f, .75f, .25f, 1.f), "%s",
+				g_shaderLiveTune ? T("Loading on the current graphics API...")
+						: T("Ready. Start Live Tune or return to the game to activate it."));
+		return;
+	}
+
+	const postprocess::ShaderChainStatus status = postprocess::getShaderChainStatus();
+	if (!status.error.empty())
+		shaderTextWrapped(ImVec4(1.f, .35f, .35f, 1.f), T("Rejected: %s"), status.error.c_str());
+	else if (status.activePath == postprocess::shaderSelectionLabel(g_shaderPreview.paths))
+		shaderTextWrapped(ImVec4(.35f, 1.f, .55f, 1.f), T("Active: %s"), status.activePath.c_str());
+	else
+		shaderTextWrapped(ImVec4(1.f, .75f, .25f, 1.f), "%s", T("Parsed successfully; waiting for gameplay to activate."));
+}
+
+static void renderShaderParameterControls()
+{
+	if (g_shaderPreview.chain.techniques.size() > 1) {
+		const int selectedTechnique = g_shaderPreview.chain.selectedTechnique >= 0
+				&& g_shaderPreview.chain.selectedTechnique < static_cast<int>(g_shaderPreview.chain.techniques.size())
+				? g_shaderPreview.chain.selectedTechnique : 0;
+		if (ImGui::BeginCombo(T("Technique"), g_shaderPreview.chain.techniques[selectedTechnique].c_str())) {
+			for (size_t index = 0; index < g_shaderPreview.chain.techniques.size(); ++index) {
+				const bool selected = static_cast<int>(index) == selectedTechnique;
+				if (ImGui::Selectable(g_shaderPreview.chain.techniques[index].c_str(), selected) && !selected) {
+					config::PostProcessShaderTechnique.get() = g_shaderPreview.chain.techniques[index];
+					rebuildShaderPreview();
+					requestShaderActivation();
+					SaveSettings();
+				}
+				if (selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	}
+
+	if (g_shaderPreview.chain.parameters.empty()) {
+		ImGui::TextDisabled("%s", T("This shader stack exposes no adjustable parameters."));
+		return;
+	}
+	if (ImGui::SmallButton(T("Reset All Parameters")))
+		resetShaderParameters();
+	ImGui::Separator();
+
+	for (postprocess::ShaderParameter& parameter : g_shaderPreview.chain.parameters) {
+		ImGui::PushID(parameter.name.c_str());
+		bool changed = false;
+		bool saveAfterEdit = false;
+		if (parameter.componentCount <= 1) {
+			float value = parameter.value;
+			if (parameter.type == postprocess::SlangParameterType::Bool) {
+				ImGui::TextWrapped("%s", parameter.label.c_str());
+				bool enabled = value != 0.f;
+				changed = ImGui::Checkbox(T("Enabled"), &enabled);
+				value = enabled ? 1.f : 0.f;
+				saveAfterEdit = changed;
+			}
+			else if (!parameter.choiceLabels.empty()) {
+				const int selected = std::clamp(static_cast<int>(std::lround(value)), 0,
+						static_cast<int>(parameter.choiceLabels.size() - 1));
+				ImGui::TextWrapped("%s", parameter.label.c_str());
+				ImGui::SetNextItemWidth(-1.f);
+				if (ImGui::BeginCombo("##choice", parameter.choiceLabels[selected].c_str())) {
+					for (size_t index = 0; index < parameter.choiceLabels.size(); ++index) {
+						const bool isSelected = static_cast<int>(index) == selected;
+						if (ImGui::Selectable(parameter.choiceLabels[index].c_str(), isSelected) && !isSelected) {
+							value = static_cast<float>(index);
+							changed = true;
+							saveAfterEdit = true;
+						}
+						if (isSelected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+			}
+			else if (parameter.minimum < parameter.maximum) {
+				const double range = static_cast<double>(parameter.maximum) - parameter.minimum;
+				if (parameter.type == postprocess::SlangParameterType::Int) {
+					const int minimum = static_cast<int>(std::lround(parameter.minimum));
+					const int maximum = static_cast<int>(std::lround(parameter.maximum));
+					const int step = parameter.step > 0.f ? std::max(1, static_cast<int>(std::lround(parameter.step)))
+							: std::max(1, (maximum - minimum + 99) / 100);
+					const int stepCount = std::max(1, (maximum - minimum + step - 1) / step);
+					int stepIndex = std::clamp(static_cast<int>(std::lround((value - minimum) / step)), 0, stepCount);
+					ImGui::TextWrapped("%s: %d", parameter.label.c_str(), static_cast<int>(std::lround(value)));
+					ImGui::SetNextItemWidth(-1.f);
+					changed = ImGui::SliderInt("##value", &stepIndex, 0, stepCount, "");
+					value = static_cast<float>(std::min(maximum, minimum + stepIndex * step));
+				}
+				else {
+					const double step = parameter.step > 0.f ? parameter.step : range / 100.0;
+					const int stepCount = std::clamp(static_cast<int>(std::ceil(range / step)), 1, 1000000);
+					int stepIndex = std::clamp(static_cast<int>(std::lround((value - parameter.minimum) / step)), 0, stepCount);
+					ImGui::TextWrapped("%s: %.3f", parameter.label.c_str(), value);
+					ImGui::SetNextItemWidth(-1.f);
+					changed = ImGui::SliderInt("##value", &stepIndex, 0, stepCount, "");
+					value = static_cast<float>(std::clamp(parameter.minimum + stepIndex * step,
+							static_cast<double>(parameter.minimum), static_cast<double>(parameter.maximum)));
+				}
+				saveAfterEdit = ImGui::IsItemDeactivatedAfterEdit();
+			}
+			else
+				ImGui::TextDisabled("%s: %.3f", parameter.label.c_str(), parameter.value);
+			if (changed)
+				setPreviewParameter(parameter.name, &value, 1);
+		}
+		else {
+			ImGui::TextWrapped("%s", parameter.label.c_str());
+			float values[16] {};
+			std::copy(parameter.values.begin(), parameter.values.end(), values);
+			for (uint32_t component = 0; component < parameter.componentCount; ++component) {
+				ImGui::PushID(static_cast<int>(component));
+				const float minimum = parameter.minimumValues[component];
+				const float maximum = parameter.maximumValues[component];
+				const float step = parameter.stepValues[component] > 0.f ? parameter.stepValues[component] : 0.01f;
+				ImGui::TextDisabled("%u", component + 1);
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(-1.f);
+				changed = ImGui::DragFloat("##component", &values[component],
+						step,
+						minimum < maximum ? minimum : 0.f, minimum < maximum ? maximum : 0.f) || changed;
+				if (ImGui::IsItemEdited() && minimum < maximum)
+					values[component] = std::clamp(minimum + std::round((values[component] - minimum) / step) * step,
+							minimum, maximum);
+				saveAfterEdit = ImGui::IsItemDeactivatedAfterEdit() || saveAfterEdit;
+				ImGui::PopID();
+			}
+			if (changed)
+				setPreviewParameter(parameter.name, values, parameter.componentCount);
+		}
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+			ImGui::BeginTooltip();
+			ImGui::Text("%s", parameter.label.c_str());
+			ImGui::TextDisabled("%s", parameter.name.c_str());
+			ImGui::EndTooltip();
+		}
+		if (saveAfterEdit)
+			SaveSettings();
+		ImGui::PopID();
+	}
+}
+
+static void applyShaderSelection(const std::vector<std::string>& paths, bool resetOverrides = true)
+{
+	config::PostProcessShaders.get() = paths;
+	// Keep old single-path configurations interoperable with older builds.
+	config::PostProcessShader.get() = paths.size() == 1 ? paths.front() : std::string();
+	if (resetOverrides) {
+		config::PostProcessShaderParameters.get().clear();
+		config::PostProcessShaderTechnique.get().clear();
+	}
+	rebuildShaderPreview();
+	requestShaderActivation();
+}
+
+static std::string selectedShaderLabel(const std::string& path)
+{
+	const auto entry = std::find_if(g_shaderBrowserEntries.begin(), g_shaderBrowserEntries.end(),
+			[&](const ShaderBrowserEntry& value) { return value.path == path; });
+	if (entry == g_shaderBrowserEntries.end())
+		return path;
+	const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry->displayPath));
+	return metadata != g_shaderBrowserMetadata.end() && !metadata->second.name.empty()
+			? metadata->second.name : entry->displayPath;
+}
+
+void renderShaderTab()
+{
+	ImGui::TextDisabled("%s", T("Shader Configuration"));
+	ImGui::Separator();
+	ensureShaderPreview();
+
+	const std::string directory = configuredShaderDirectory();
+	if (!g_shaderBrowserInitialized || directory != g_shaderBrowserDirectory)
+		refreshShaderBrowser();
+
+	if (RenderCollapsingHeader("ShaderLibrarySection", ICON_FA_FOLDER_OPEN, T("Shader Library"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::TextWrapped("%s", T("Hollycast scans this folder recursively for GLSL, GLSLP, Slang, Slang presets, and supported ReShade FX files."));
+		ImGui::TextWrapped(T("Folder: %s"), directory.c_str());
+
+		const char *folderPopup = T("Select Shader Folder");
+		if (ImGui::Button(T("Change Folder")))
+			ImGui::OpenPopup(folderPopup);
+		ImGui::SameLine();
+		if (ImGui::Button(T("Refresh List")))
+			refreshShaderBrowser();
+		if (!config::PostProcessShaderDirectory.get().empty()) {
+			ImGui::SameLine();
+			if (ImGui::Button(T("Use Default Folder"))) {
+				config::PostProcessShaderDirectory.get().clear();
+				refreshShaderBrowser();
+			}
+		}
+		select_file_popup(folderPopup, [](bool cancelled, const std::string& selection) {
+			if (!cancelled && !selection.empty()) {
+				config::PostProcessShaderDirectory.get() = selection;
+				refreshShaderBrowser();
+			}
+			return true;
+		}, false);
+
+		std::vector<std::string> selectedPaths = postprocess::configuredShaderPaths();
+		ImGui::Text(T("Recognized: %u    Selected layers: %u / %u"),
+				static_cast<unsigned>(g_shaderBrowserEntries.size()), static_cast<unsigned>(selectedPaths.size()),
+				static_cast<unsigned>(postprocess::MaxShaderLayers));
+		if (!g_shaderBrowserError.empty())
+			ImGui::TextColored(ImVec4(1.f, .55f, .25f, 1.f), "%s", g_shaderBrowserError.c_str());
+		if (!g_shaderCatalogWarning.empty())
+			ImGui::TextColored(ImVec4(1.f, .75f, .25f, 1.f), "%s", g_shaderCatalogWarning.c_str());
+
+		ImGui::SetNextItemWidth(-1.f);
+		ImGui::InputTextWithHint("##ShaderFilter", T("Filter recognized shaders..."), &g_shaderFilter);
+		const std::string loweredFilter = lowercaseAscii(g_shaderFilter);
+		std::vector<size_t> visibleEntries;
+		visibleEntries.reserve(g_shaderBrowserEntries.size());
+		for (size_t index = 0; index < g_shaderBrowserEntries.size(); ++index) {
+			const ShaderBrowserEntry& entry = g_shaderBrowserEntries[index];
+			const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry.displayPath));
+			const bool metadataMatches = metadata != g_shaderBrowserMetadata.end()
+					&& (lowercaseAscii(metadata->second.name).find(loweredFilter) != std::string::npos
+							|| lowercaseAscii(metadata->second.description).find(loweredFilter) != std::string::npos
+							|| lowercaseAscii(metadata->second.author).find(loweredFilter) != std::string::npos);
+			if (loweredFilter.empty() || lowercaseAscii(entry.displayPath).find(loweredFilter) != std::string::npos
+					|| metadataMatches)
+				visibleEntries.push_back(index);
+		}
+
+		ImGui::BeginChild("RecognizedShaderList", ImVec2(0.f, SettingsLayoutScaled(260.f)),
+				ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
+		if (visibleEntries.empty())
+			ImGui::TextDisabled("%s", g_shaderBrowserEntries.empty()
+					? T("No recognized shaders were found in this folder.") : T("No shaders match the current filter."));
+		ImGuiListClipper clipper;
+		clipper.Begin(static_cast<int>(visibleEntries.size()));
+		while (clipper.Step()) {
+			for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+				const ShaderBrowserEntry& entry = g_shaderBrowserEntries[visibleEntries[row]];
+				ImGui::PushID(entry.path.c_str());
+				const auto selected = std::find(selectedPaths.begin(), selectedPaths.end(), entry.path);
+				bool enabled = selected != selectedPaths.end();
+				const bool canEnable = enabled || selectedPaths.size() < postprocess::MaxShaderLayers;
+				if (!canEnable)
+					ImGui::BeginDisabled();
+				if (ImGui::Checkbox("##Selected", &enabled)) {
+					if (enabled)
+						selectedPaths.push_back(entry.path);
+					else
+						selectedPaths.erase(std::remove(selectedPaths.begin(), selectedPaths.end(), entry.path), selectedPaths.end());
+					applyShaderSelection(selectedPaths);
+				}
+				if (!canEnable)
+					ImGui::EndDisabled();
+				ImGui::SameLine();
+				const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry.displayPath));
+				const bool hasDisplayName = metadata != g_shaderBrowserMetadata.end() && !metadata->second.name.empty();
+				ImGui::TextUnformatted(hasDisplayName ? metadata->second.name.c_str() : entry.displayPath.c_str());
+				ImGui::SameLine();
+				ImGui::TextDisabled("(%s)", postprocess::formatName(entry.format));
+				if (ImGui::IsItemHovered()) {
+					ImGui::BeginTooltip();
+					if (hasDisplayName)
+						ImGui::TextUnformatted(metadata->second.name.c_str());
+					ImGui::TextWrapped("%s", entry.displayPath.c_str());
+					ImGui::TextDisabled(T("Format: %s"), postprocess::formatName(entry.format));
+					if (metadata != g_shaderBrowserMetadata.end()) {
+						if (!metadata->second.description.empty())
+							ImGui::TextWrapped("%s", metadata->second.description.c_str());
+						if (!metadata->second.author.empty())
+							ImGui::TextDisabled(T("Author: %s"), metadata->second.author.c_str());
+						if (!metadata->second.performance.empty())
+							ImGui::TextDisabled(T("Performance: %s"), metadata->second.performance.c_str());
+						if (metadata->second.mobileRecommended)
+							ImGui::TextColored(ImVec4(.35f, 1.f, .55f, 1.f), "%s", T("Recommended for mobile GPUs"));
+					}
+					ImGui::Separator();
+					ImGui::TextDisabled("%s", enabled
+							? T("Selected. Stack compatibility is shown below.")
+							: T("Graphics API compatibility is checked when selected and activated."));
+					ImGui::EndTooltip();
+				}
+				ImGui::PopID();
+			}
+		}
+		ImGui::EndChild();
+	}
+
+	std::vector<std::string> selectedPaths = postprocess::configuredShaderPaths();
+	if (RenderCollapsingHeader("ShaderLayersSection", ICON_FA_WAND_MAGIC, T("Active Shader Layers"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::TextWrapped("%s", T("Layers run from top to bottom. A preset remains one selectable layer even when it contains several internal passes."));
+		if (selectedPaths.size() > 1)
+			ImGui::TextDisabled("%s", T("Parameters with the same name are shared across selected layers."));
+		if (selectedPaths.empty())
+			ImGui::TextDisabled("%s", T("No shader layers selected."));
+		else if (ImGui::BeginTable("SelectedShaderLayers", 4,
+				ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
+			ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, SettingsLayoutScaled(28.f));
+			ImGui::TableSetupColumn(T("Shader"), ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn(T("Order"), ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn(T("Remove"), ImGuiTableColumnFlags_WidthFixed);
+			int moveFrom = -1;
+			int moveTo = -1;
+			int removeIndex = -1;
+			for (size_t index = 0; index < selectedPaths.size(); ++index) {
+				ImGui::PushID(static_cast<int>(index));
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::Text("%u", static_cast<unsigned>(index + 1));
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextWrapped("%s", selectedShaderLabel(selectedPaths[index]).c_str());
+				ImGui::TableSetColumnIndex(2);
+				if (index == 0)
+					ImGui::BeginDisabled();
+				if (ImGui::SmallButton(T("Up"))) {
+					moveFrom = static_cast<int>(index);
+					moveTo = static_cast<int>(index - 1);
+				}
+				if (index == 0)
+					ImGui::EndDisabled();
+				ImGui::SameLine();
+				if (index + 1 == selectedPaths.size())
+					ImGui::BeginDisabled();
+				if (ImGui::SmallButton(T("Down"))) {
+					moveFrom = static_cast<int>(index);
+					moveTo = static_cast<int>(index + 1);
+				}
+				if (index + 1 == selectedPaths.size())
+					ImGui::EndDisabled();
+				ImGui::TableSetColumnIndex(3);
+				if (ImGui::SmallButton(T("Remove")))
+					removeIndex = static_cast<int>(index);
+				ImGui::PopID();
+			}
+			ImGui::EndTable();
+			if (removeIndex >= 0) {
+				selectedPaths.erase(selectedPaths.begin() + removeIndex);
+				applyShaderSelection(selectedPaths);
+			}
+			else if (moveFrom >= 0 && moveTo >= 0) {
+				std::swap(selectedPaths[moveFrom], selectedPaths[moveTo]);
+				applyShaderSelection(selectedPaths, false);
+			}
+		}
+
+		if (!selectedPaths.empty()) {
+			if (ImGui::Button(T("Reload Active Stack"))) {
+				requestShaderActivation();
+				rebuildShaderPreview();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(T("Clear All")))
+				applyShaderSelection({});
+			ImGui::SameLine();
+			const bool canLiveTune = game_started && !ggpo::active() && achievements::canPause()
+					&& g_shaderPreview.error.empty();
+			if (!canLiveTune)
+				ImGui::BeginDisabled();
+			if (ImGui::Button(T("Live Tune"))) {
+				g_shaderLiveTune = true;
+				SaveSettings();
+				gui_setState(GuiState::Closed);
+			}
+			if (!canLiveTune)
+				ImGui::EndDisabled();
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+				ImGui::SetTooltip("%s", !game_started ? T("Start a game to tune shader parameters live.")
+						: T("The selected stack must parse successfully and gameplay must be pausable."));
+		}
+	}
+
+	if (RenderCollapsingHeader("ShaderStatusSection", ICON_FA_SLIDERS, T("Status and Parameters"), ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		renderShaderActivationStatus();
+		renderShaderParameterControls();
+	}
+}
+
+void renderShaderLiveTuneOverlay()
+{
+	if (!g_shaderLiveTune || !game_started)
+		return;
+	ensureShaderPreview();
+
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
+#ifdef __ANDROID__
+	const float panelHeight = std::max(displaySize.y * .48f, uiScaled(260.f));
+	ImGui::SetNextWindowPos(ImVec2(0.f, displaySize.y - panelHeight), ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(displaySize.x, panelHeight), ImGuiCond_Always);
+	flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+#else
+	const float margin = uiScaled(18.f);
+	const ImVec2 maximumSize(std::max(1.f, displaySize.x - margin * 2.f),
+			std::max(1.f, displaySize.y - uiScaled(96.f)));
+	const ImVec2 panelSize(std::min(uiScaled(820.f), maximumSize.x),
+			std::min(uiScaled(440.f), maximumSize.y));
+	const ImVec2 minimumSize(std::min(uiScaled(560.f), maximumSize.x),
+			std::min(uiScaled(260.f), maximumSize.y));
+	ImGui::SetNextWindowPos(ImVec2(displaySize.x - panelSize.x - margin, uiScaled(48.f)), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(panelSize, ImGuiCond_Once);
+	ImGui::SetNextWindowSizeConstraints(minimumSize, maximumSize);
+#endif
+	ImGui::SetNextWindowBgAlpha(.94f);
+	bool open = true;
+	bool returnToSettings = false;
+	if (ImGui::Begin(T("Shader Live Tune###ShaderLiveTune"), &open, flags)) {
+		if (ImGui::Button(T("Back to Shader Page")))
+			returnToSettings = true;
+		ImGui::SameLine();
+		ImGui::TextDisabled(T("%u layer(s)"), static_cast<unsigned>(g_shaderPreview.paths.size()));
+		ImGui::Separator();
+		renderShaderActivationStatus();
+		ImGui::Separator();
+		renderShaderParameterControls();
+	}
+	ImGui::End();
+
+	if (returnToSettings) {
+		g_shaderLiveTune = false;
+		gui_open_shader_settings();
+	}
+	else if (!open)
+		g_shaderLiveTune = false;
+}
+
+void closeShaderLiveTune()
+{
+	g_shaderLiveTune = false;
 }
 
 void renderAudioTab()

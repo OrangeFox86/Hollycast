@@ -1104,7 +1104,19 @@ void VulkanContext::Present() noexcept
 		}
 }
 
-void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio)
+static vk::Rect2D getPresentRect(int outputWidth, int outputHeight, float aspectRatio)
+{
+	const int topInset = getScaledTopInset();
+	const int drawableHeight = outputHeight - topInset;
+	int dx = 0;
+	int dy = 0;
+	getWindowboxDimensions(outputWidth, drawableHeight, aspectRatio, dx, dy, config::Rotate90);
+	return vk::Rect2D(vk::Offset2D(dx, dy + topInset),
+			vk::Extent2D(outputWidth - dx * 2, drawableHeight - dy * 2));
+}
+
+void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio,
+		bool presentationTransformApplied)
 {
 	QuadVertex vtx[4] {
 		{ -1, -1, 0, 0, 0 },
@@ -1124,24 +1136,18 @@ void VulkanContext::DrawFrame(vk::ImageView imageView, const vk::Extent2D& exten
 	static const float scopeColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	CommandBufferDebugScope _(commandBuffer, "DrawFrame", scopeColor);
 
-	if (config::Rotate90)
+	const bool rotateAtPresentation = config::Rotate90 && !presentationTransformApplied;
+	if (rotateAtPresentation)
 		quadRotatePipeline->BindPipeline(commandBuffer);
 	else
 		quadPipeline->BindPipeline(commandBuffer);
 
-	// Adjust 'viewport.y', 'viewport.height', 'Offset2D.y', and 'Extent2D.height'
-	// to avoid framebuffer overlapping with the menu bar
-	int topInset = getScaledTopInset();
-	int outheight = height - topInset;
-
-	int dx = 0;
-	int dy = 0;
-	getWindowboxDimensions(width, outheight, aspectRatio, dx, dy, config::Rotate90);
-
-	vk::Viewport viewport(dx, dy + topInset, width - dx * 2, outheight - dy * 2);
+	const vk::Rect2D presentRect = getPresentRect(width, height, aspectRatio);
+	vk::Viewport viewport(static_cast<float>(presentRect.offset.x), static_cast<float>(presentRect.offset.y),
+			static_cast<float>(presentRect.extent.width), static_cast<float>(presentRect.extent.height));
 	commandBuffer.setViewport(0, viewport);
-	commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(dx, dy + topInset), vk::Extent2D(width - dx * 2, outheight - dy * 2)));
-	if (config::Rotate90)
+	commandBuffer.setScissor(0, presentRect);
+	if (rotateAtPresentation)
 		quadRotateDrawer->Draw(commandBuffer, imageView, vtx, !config::LinearInterpolation);
 	else
 		quadDrawer->Draw(commandBuffer, imageView, vtx, !config::LinearInterpolation);
@@ -1174,23 +1180,31 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 	lastFrameView = imageView;
 	lastFrameExtent = extent;
 	lastFrameAR = aspectRatio;
+	bool presentationTransformApplied = image ? false : lastFramePresentationTransformApplied;
 
 	if (imageView && IsValid())
 	{
 		try {
 			NewFrame();
 			bool processed = false;
+			vk::Extent2D drawExtent = extent;
 			if (image && shaderChain) {
 				vk::ImageView processedView;
+				const vk::Rect2D presentRect = getPresentRect(width, height, aspectRatio);
 				processed = shaderChain->render(image, imageView, extent,
-						{ static_cast<int>(extent.width), static_cast<int>(extent.height), static_cast<int>(width),
-								static_cast<int>(height), static_cast<uint32_t>(FrameCount) }, processedView);
+						{ static_cast<int>(extent.width), static_cast<int>(extent.height),
+								static_cast<int>(presentRect.extent.width), static_cast<int>(presentRect.extent.height),
+								static_cast<uint32_t>(FrameCount), config::Rotate90 }, processedView,
+						presentationTransformApplied);
 				if (processed)
 					imageView = processedView;
+				if (processed && presentationTransformApplied)
+					drawExtent = presentRect.extent;
 			}
 			lastFrameView = imageView;
-			lastFrameExtent = extent;
+			lastFrameExtent = drawExtent;
 			lastFrameAR = aspectRatio;
+			lastFramePresentationTransformApplied = presentationTransformApplied;
 			auto overlayCmdBuffer = PrepareOverlay(config::FloatVMUs, true);
 			gui_draw_osd();
 			if (GetVendorID() == VulkanContext::VENDOR_NVIDIA && image && !processed)
@@ -1215,7 +1229,7 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 			BeginRenderPass();
 
 			if (lastFrameView) // Might have been nullified if swap chain recreated
-				DrawFrame(imageView, extent, aspectRatio);
+				DrawFrame(imageView, drawExtent, aspectRatio, presentationTransformApplied);
 
 			DrawOverlay(settings.display.uiScale, config::FloatVMUs, true);
 			imguiDriver->renderDrawData(ImGui::GetDrawData(), false);
@@ -1232,7 +1246,7 @@ void VulkanContext::PresentFrame(vk::Image image, vk::ImageView imageView, const
 void VulkanContext::PresentLastFrame()
 {
 	if (lastFrameView && IsValid())
-		DrawFrame(lastFrameView, lastFrameExtent, lastFrameAR);
+		DrawFrame(lastFrameView, lastFrameExtent, lastFrameAR, lastFramePresentationTransformApplied);
 }
 
 void VulkanContext::term()

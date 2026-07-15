@@ -28,8 +28,8 @@ class Dx11ShaderChain
 {
 public:
 	void init(const ComPtr<ID3D11Device>& device, const ComPtr<ID3D11DeviceContext>& deviceContext, Quad *quad);
-	bool render(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height, uint32_t frameCount,
-			ComPtr<ID3D11ShaderResourceView>& outputView);
+	bool render(ComPtr<ID3D11ShaderResourceView>& sourceView, const postprocess::ShaderFrameInfo& frame,
+			ComPtr<ID3D11ShaderResourceView>& outputView, bool& presentationTransformApplied);
 	void term();
 
 private:
@@ -37,8 +37,9 @@ private:
 		float sourceSize[2];
 		float outputSize[2];
 		int frameCount;
-		float padding[3];
-		float parameters[16];
+		int rotation;
+		float originalSize[2];
+		float parameters[postprocess::MaxShaderParameterComponents];
 	};
 	struct Target {
 		ComPtr<ID3D11Texture2D> texture;
@@ -66,6 +67,8 @@ private:
 		std::vector<ResourceBinding> resources;
 		std::vector<postprocess::SlangParameter> parameters;
 		std::vector<bool> outputNeedsMipmaps;
+		std::vector<DXGI_FORMAT> outputFormats;
+		uint32_t historyDepth = 1;
 	};
 	using TargetRing = std::vector<Target>;
 	using PassTargets = std::vector<TargetRing>;
@@ -76,20 +79,22 @@ private:
 	bool prepareMipmappedSource(ComPtr<ID3D11ShaderResourceView>& sourceView, int width, int height,
 			ComPtr<ID3D11ShaderResourceView>& mipmappedView);
 	bool ensureLookupTextures(std::string& error);
-	void unbindPixelShaderSource() const;
+	void unbindPixelShaderSource(UINT count = 1) const;
 
 	ComPtr<ID3D11Device> device;
 	ComPtr<ID3D11DeviceContext> deviceContext;
 	std::vector<PassTargets> targets;
+	Target displayInput;
 	Target mipmapSource;
 	TargetRing sourceHistory;
-	uint32_t historyDepth = 1;
+	uint32_t sourceHistoryDepth = 1;
 	bool needsSourceHistory = false;
+	bool wantsUnscaledInput = false;
 	std::vector<Program> programs;
 	std::vector<LookupTexture> lookupTextures;
 	std::vector<postprocess::ShaderParameter> parameters;
 	Quad *quad = nullptr;
-	std::string configuredPath;
+	std::vector<std::string> configuredPaths;
 	uint64_t configuredGeneration = 0;
 	uint64_t parameterGeneration = 0;
 	std::string activePath;

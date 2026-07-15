@@ -54,6 +54,7 @@
 #endif
 #include "vgamepad.h"
 #include "settings.h"
+#include "settings_new.h"
 #include "oslib/i18n.h"
 #include "gui_font.h"
 using namespace i18n;
@@ -118,6 +119,7 @@ static void emuEventCallback(Event event, void *)
 	case Event::Terminate:
 		GamepadDevice::load_system_mappings();
 		game_started = false;
+		SettingsNew::closeShaderLiveTune();
 		break;
 	default:
 		break;
@@ -471,6 +473,22 @@ void gui_open_settings()
 	else if (gui_state == GuiState::Pause)
 	{
 		gui_setState(GuiState::Commands);
+	}
+}
+
+void gui_open_shader_settings()
+{
+	const LockGuard lock(guiMutex);
+	if (gui_state != GuiState::Closed || !game_started || ggpo::active() || !achievements::canPause())
+		return;
+
+	try {
+		vgamepad::hide();
+		emu.stop();
+		SettingsNew::openTab(SettingsNew::SettingsTab::Shader);
+		gui_setState(GuiState::Settings);
+	} catch (const FlycastException& e) {
+		gui_stop_game(e.what());
 	}
 }
 
@@ -1807,6 +1825,7 @@ void gui_draw_osd()
 	if (!settings.raHardcoreMode)
 		lua::overlay();
 	vgamepad::draw();
+	SettingsNew::renderShaderLiveTuneOverlay();
 	// Render menu bar on top during gameplay
 	GuiMenu::renderMainMenuBar();
 
@@ -2028,6 +2047,8 @@ void gui_togglePause()
 void gui_setState(GuiState newState)
 {
 	gui_state = newState;
+	if (newState != GuiState::Closed)
+		SettingsNew::closeShaderLiveTune();
 	if (newState == GuiState::Closed)
 	{
 		clearThumbnailCache();

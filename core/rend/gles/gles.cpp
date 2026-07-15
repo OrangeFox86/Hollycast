@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <memory>
+#include <string>
 
 #ifdef GLES
 #ifndef GL_RED
@@ -627,7 +628,19 @@ void findGLVersion()
 
 struct ShaderUniforms_t ShaderUniforms;
 
-GLuint gl_CompileShader(const char* shader,GLuint type)
+void appendShaderDiagnostic(std::string *diagnostics, const char *stage, const std::string& message)
+{
+	if (diagnostics == nullptr || diagnostics->size() >= 4096)
+		return;
+	std::string entry;
+	if (!diagnostics->empty())
+		entry.push_back('\n');
+	entry.append(stage).append(": ").append(message);
+	const size_t remaining = 4096 - diagnostics->size();
+	diagnostics->append(entry, 0, entry.size() < remaining ? entry.size() : remaining);
+}
+
+GLuint gl_CompileShader(const char* shader, GLuint type, std::string *diagnostics)
 {
 	GLint result;
 	GLint compile_log_len;
@@ -639,25 +652,28 @@ GLuint gl_CompileShader(const char* shader,GLuint type)
 	glGetShaderiv(rv, GL_COMPILE_STATUS, &result);
 	glGetShaderiv(rv, GL_INFO_LOG_LENGTH, &compile_log_len);
 
-	if (!result && compile_log_len>0)
+	if (!result)
 	{
-		char* compile_log=(char*)malloc(compile_log_len);
-		*compile_log=0;
-
-		glGetShaderInfoLog(rv, compile_log_len, &compile_log_len, compile_log);
-		WARN_LOG(RENDERER, "Shader: %s \n%s", result ? "compiled!" : "failed to compile", compile_log);
-
-		free(compile_log);
+		std::string compileLog;
+		if (compile_log_len > 0) {
+			compileLog.resize(static_cast<size_t>(compile_log_len), '\0');
+			glGetShaderInfoLog(rv, compile_log_len, &compile_log_len, compileLog.data());
+			compileLog.resize(static_cast<size_t>(compile_log_len));
+		}
+		if (compileLog.empty())
+			compileLog = "compilation failed without a driver diagnostic";
+		WARN_LOG(RENDERER, "Shader failed to compile:\n%s", compileLog.c_str());
+		appendShaderDiagnostic(diagnostics, type == GL_VERTEX_SHADER ? "Vertex shader" : "Fragment shader", compileLog);
 	}
 
 	return rv;
 }
 
-GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader)
+GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader, std::string *diagnostics)
 {
 	//create shaders
-	GLuint vs = gl_CompileShader(vertexShader, GL_VERTEX_SHADER);
-	GLuint ps = gl_CompileShader(fragmentShader, GL_FRAGMENT_SHADER);
+	GLuint vs = gl_CompileShader(vertexShader, GL_VERTEX_SHADER, diagnostics);
+	GLuint ps = gl_CompileShader(fragmentShader, GL_FRAGMENT_SHADER, diagnostics);
 
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vs);
@@ -688,16 +704,18 @@ GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader)
 	GLint compile_log_len;
 	glGetProgramiv(program, GL_INFO_LOG_LENGTH, &compile_log_len);
 
-	if (!result && compile_log_len>0)
+	if (!result)
 	{
-		compile_log_len+= 1024;
-		char* compile_log=(char*)malloc(compile_log_len);
-		*compile_log=0;
-
-		glGetProgramInfoLog(program, compile_log_len, &compile_log_len, compile_log);
-		WARN_LOG(RENDERER, "Shader linking: %s \n (%d bytes), - %s -", result ? "linked" : "failed to link", compile_log_len, compile_log);
-
-		free(compile_log);
+		std::string linkLog;
+		if (compile_log_len > 0) {
+			linkLog.resize(static_cast<size_t>(compile_log_len), '\0');
+			glGetProgramInfoLog(program, compile_log_len, &compile_log_len, linkLog.data());
+			linkLog.resize(static_cast<size_t>(compile_log_len));
+		}
+		if (linkLog.empty())
+			linkLog = "linking failed without a driver diagnostic";
+		WARN_LOG(RENDERER, "Shader linking failed:\n%s", linkLog.c_str());
+		appendShaderDiagnostic(diagnostics, "Shader link", linkLog);
 
 		// Dump the shaders source for troubleshooting
 		INFO_LOG(RENDERER, "// VERTEX SHADER\n%s\n// END", vertexShader);
