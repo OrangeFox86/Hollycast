@@ -64,108 +64,357 @@ std::string trim(const std::string& value)
 	return value.substr(first, last - first + 1);
 }
 
+class PreprocessorExpressionParser {
+public:
+	PreprocessorExpressionParser(std::string_view expression,
+			const std::unordered_map<std::string, std::string>& defines, unsigned depth = 0)
+		: expression(expression), defines(defines), depth(depth) {}
+
+	bool evaluate(bool& result)
+	{
+		long long value = 0;
+		if (!evaluateValue(value))
+			return false;
+		result = value != 0;
+		return true;
+	}
+
+	bool evaluateValue(long long& value)
+	{
+		if (!parseLogicalOr(value))
+			return false;
+		skipWhitespace();
+		if (position != expression.size())
+			return false;
+		return true;
+	}
+
+private:
+	void skipWhitespace()
+	{
+		while (position < expression.size() && std::isspace(static_cast<unsigned char>(expression[position])))
+			++position;
+	}
+
+	bool match(std::string_view token)
+	{
+		skipWhitespace();
+		if (expression.substr(position, token.size()) != token)
+			return false;
+		position += token.size();
+		return true;
+	}
+
+	bool matchSingle(char token, char doubled)
+	{
+		skipWhitespace();
+		if (position >= expression.size() || expression[position] != token
+				|| (position + 1 < expression.size() && expression[position + 1] == doubled))
+			return false;
+		++position;
+		return true;
+	}
+
+	bool takeIdentifier(std::string& identifier)
+	{
+		skipWhitespace();
+		if (position >= expression.size() || !isIdentifierStart(expression[position]))
+			return false;
+		const size_t begin = position++;
+		while (position < expression.size() && isIdentifierPart(expression[position]))
+			++position;
+		identifier.assign(expression.substr(begin, position - begin));
+		return true;
+	}
+
+	bool parseLogicalOr(long long& value)
+	{
+		if (!parseLogicalAnd(value))
+			return false;
+		while (match("||")) {
+			long long right = 0;
+			if (!parseLogicalAnd(right))
+				return false;
+			value = value || right;
+		}
+		return true;
+	}
+
+	bool parseLogicalAnd(long long& value)
+	{
+		if (!parseBitwiseOr(value))
+			return false;
+		while (match("&&")) {
+			long long right = 0;
+			if (!parseBitwiseOr(right))
+				return false;
+			value = value && right;
+		}
+		return true;
+	}
+
+	bool parseBitwiseOr(long long& value)
+	{
+		if (!parseBitwiseXor(value))
+			return false;
+		while (matchSingle('|', '|')) {
+			long long right = 0;
+			if (!parseBitwiseXor(right))
+				return false;
+			value |= right;
+		}
+		return true;
+	}
+
+	bool parseBitwiseXor(long long& value)
+	{
+		if (!parseBitwiseAnd(value))
+			return false;
+		while (match("^")) {
+			long long right = 0;
+			if (!parseBitwiseAnd(right))
+				return false;
+			value ^= right;
+		}
+		return true;
+	}
+
+	bool parseBitwiseAnd(long long& value)
+	{
+		if (!parseEquality(value))
+			return false;
+		while (matchSingle('&', '&')) {
+			long long right = 0;
+			if (!parseEquality(right))
+				return false;
+			value &= right;
+		}
+		return true;
+	}
+
+	bool parseEquality(long long& value)
+	{
+		if (!parseRelational(value))
+			return false;
+		for (;;) {
+			const bool equal = match("==");
+			const bool notEqual = !equal && match("!=");
+			if (!equal && !notEqual)
+				return true;
+			long long right = 0;
+			if (!parseRelational(right))
+				return false;
+			value = equal ? value == right : value != right;
+		}
+	}
+
+	bool parseRelational(long long& value)
+	{
+		if (!parseShift(value))
+			return false;
+		for (;;) {
+			int operation = 0;
+			if (match("<=")) operation = 1;
+			else if (match(">=")) operation = 2;
+			else if (matchSingle('<', '<')) operation = 3;
+			else if (matchSingle('>', '>')) operation = 4;
+			else return true;
+			long long right = 0;
+			if (!parseShift(right))
+				return false;
+			value = operation == 1 ? value <= right : operation == 2 ? value >= right
+					: operation == 3 ? value < right : value > right;
+		}
+	}
+
+	bool parseShift(long long& value)
+	{
+		if (!parseAdditive(value))
+			return false;
+		for (;;) {
+			const bool left = match("<<");
+			const bool rightShift = !left && match(">>");
+			if (!left && !rightShift)
+				return true;
+			long long right = 0;
+			if (!parseAdditive(right) || right < 0 || right >= 64)
+				return false;
+			value = left ? value << right : value >> right;
+		}
+	}
+
+	bool parseAdditive(long long& value)
+	{
+		if (!parseMultiplicative(value))
+			return false;
+		for (;;) {
+			const bool add = match("+");
+			const bool subtract = !add && match("-");
+			if (!add && !subtract)
+				return true;
+			long long right = 0;
+			if (!parseMultiplicative(right))
+				return false;
+			value = add ? value + right : value - right;
+		}
+	}
+
+	bool parseMultiplicative(long long& value)
+	{
+		if (!parseUnary(value))
+			return false;
+		for (;;) {
+			int operation = 0;
+			if (match("*")) operation = 1;
+			else if (match("/")) operation = 2;
+			else if (match("%")) operation = 3;
+			else return true;
+			long long right = 0;
+			if (!parseUnary(right) || ((operation == 2 || operation == 3) && right == 0))
+				return false;
+			value = operation == 1 ? value * right : operation == 2 ? value / right : value % right;
+		}
+	}
+
+	bool parseUnary(long long& value)
+	{
+		if (match("!")) {
+			if (!parseUnary(value))
+				return false;
+			value = !value;
+			return true;
+		}
+		if (match("~")) {
+			if (!parseUnary(value))
+				return false;
+			value = ~value;
+			return true;
+		}
+		if (match("+"))
+			return parseUnary(value);
+		if (match("-")) {
+			if (!parseUnary(value))
+				return false;
+			value = -value;
+			return true;
+		}
+		return parsePrimary(value);
+	}
+
+	bool parsePrimary(long long& value)
+	{
+		if (match("(")) {
+			if (!parseLogicalOr(value) || !match(")"))
+				return false;
+			return true;
+		}
+
+		skipWhitespace();
+		const size_t begin = position;
+		if (position < expression.size() && std::isdigit(static_cast<unsigned char>(expression[position]))) {
+			const std::string remaining(expression.substr(position));
+			char *end = nullptr;
+			value = std::strtoll(remaining.c_str(), &end, 0);
+			if (end == remaining.c_str())
+				return false;
+			position += static_cast<size_t>(end - remaining.c_str());
+			while (position < expression.size() && (expression[position] == 'u' || expression[position] == 'U'
+					|| expression[position] == 'l' || expression[position] == 'L'))
+				++position;
+			return true;
+		}
+
+		std::string identifier;
+		if (!takeIdentifier(identifier)) {
+			position = begin;
+			return false;
+		}
+		if (identifier == "defined") {
+			const bool parenthesized = match("(");
+			std::string name;
+			if (!takeIdentifier(name) || (parenthesized && !match(")")))
+				return false;
+			value = defines.count(name) != 0;
+			return true;
+		}
+		const auto define = defines.find(identifier);
+		if (define == defines.end()) {
+			value = 0;
+			return true;
+		}
+		if (depth >= 16 || define->second.empty())
+			return false;
+		long long nested = 0;
+		if (!PreprocessorExpressionParser(define->second, defines, depth + 1).evaluateValue(nested))
+			return false;
+		value = nested;
+		return true;
+	}
+
+	std::string_view expression;
+	const std::unordered_map<std::string, std::string>& defines;
+	unsigned depth;
+	size_t position = 0;
+};
+
 bool evaluateCondition(const std::string& expression, const std::unordered_map<std::string, std::string>& defines,
 		bool& result)
 {
-	std::function<bool(std::string, bool&)> parse = [&](std::string value, bool& parsed) -> bool {
-		value = trim(value);
-		while (value.size() >= 2 && value.front() == '(' && value.back() == ')') {
-			int depth = 0;
-			bool encloses = true;
-			for (size_t index = 0; index < value.size(); ++index) {
-				if (value[index] == '(') ++depth;
-				else if (value[index] == ')' && --depth == 0 && index + 1 != value.size()) { encloses = false; break; }
-			}
-			if (!encloses) break;
-			value = trim(value.substr(1, value.size() - 2));
-		}
-		auto split = [&](const char *op) -> size_t {
-			int depth = 0;
-			for (size_t index = 0; index + 1 < value.size(); ++index) {
-				if (value[index] == '(') ++depth;
-				else if (value[index] == ')') --depth;
-				if (depth == 0 && value.compare(index, 2, op) == 0) return index;
-			}
-			return std::string::npos;
-		};
-		if (const size_t splitAt = split("||"); splitAt != std::string::npos) {
-			bool left = false, right = false;
-			if (!parse(value.substr(0, splitAt), left) || !parse(value.substr(splitAt + 2), right)) return false;
-			parsed = left || right;
-			return true;
-		}
-		if (const size_t splitAt = split("&&"); splitAt != std::string::npos) {
-			bool left = false, right = false;
-			if (!parse(value.substr(0, splitAt), left) || !parse(value.substr(splitAt + 2), right)) return false;
-			parsed = left && right;
-			return true;
-		}
-		if (!value.empty() && value.front() == '!') {
-			if (!parse(value.substr(1), parsed)) return false;
-			parsed = !parsed;
-			return true;
-		}
-		const std::regex comparison(R"(^(.*?)(==|!=|<=|>=|<|>)(.*?)$)");
-		std::smatch match;
-		if (std::regex_match(value, match, comparison)) {
-			const std::string leftText = trim(match[1].str());
-			const std::string rightText = trim(match[3].str());
-			auto numericValue = [&](const std::string& text, long long& number) {
-				const auto define = defines.find(text);
-				if (define == defines.end() && !text.empty() && isIdentifierStart(text.front())
-						&& std::all_of(text.begin() + 1, text.end(), isIdentifierPart)) {
-					number = 0;
-					return true;
-				}
-				const std::string value = define == defines.end() ? text : define->second;
-			char *end = nullptr;
-			number = std::strtoll(value.c_str(), &end, 0);
-			return end != value.c_str() && *end == '\0';
-		};
-		long long left = 0;
-		long long right = 0;
-		if (!numericValue(leftText, left) || !numericValue(rightText, right)) return false;
-			const std::string op = match[2].str();
-			parsed = op == "==" ? left == right : op == "!=" ? left != right : op == "<=" ? left <= right
-					: op == ">=" ? left >= right : op == "<" ? left < right : left > right;
-			return true;
-		}
-		if (value.rfind("defined", 0) == 0) {
-			const size_t open = value.find('(');
-			const size_t close = value.rfind(')');
-			const std::string name = open != std::string::npos && close > open ? trim(value.substr(open + 1, close - open - 1)) : trim(value.substr(7));
-			if (name.empty() || (open != std::string::npos && close != value.size() - 1)) return false;
-			parsed = defines.count(name) != 0;
-			return true;
-		}
-		const auto define = defines.find(value);
-		if (define == defines.end() && !value.empty() && isIdentifierStart(value.front())
-				&& std::all_of(value.begin() + 1, value.end(), isIdentifierPart)) {
-			parsed = false;
-			return true;
-		}
-		const std::string numeric = define == defines.end() ? value : define->second;
-		char *end = nullptr;
-		const long long number = std::strtoll(numeric.c_str(), &end, 0);
-		if (end == numeric.c_str() || *end != '\0') return false;
-		parsed = number != 0;
-		return true;
-	};
-	return parse(expression, result);
+	return PreprocessorExpressionParser(expression, defines).evaluate(result);
 }
 
-void expandObjectMacros(std::string& line, const std::unordered_map<std::string, std::string>& defines)
+std::vector<bool> codeMask(const std::string& line, bool startsInBlockComment, bool *endsInBlockComment = nullptr)
 {
-	for (unsigned pass = 0; pass < 8; ++pass) {
+	std::vector<bool> mask(line.size(), false);
+	bool inBlockComment = startsInBlockComment;
+	for (size_t index = 0; index < line.size();) {
+		if (inBlockComment) {
+			const size_t end = line.find("*/", index);
+			if (end == std::string::npos)
+				break;
+			index = end + 2;
+			inBlockComment = false;
+			continue;
+		}
+		if (index + 1 < line.size() && line[index] == '/' && line[index + 1] == '/')
+			break;
+		if (index + 1 < line.size() && line[index] == '/' && line[index + 1] == '*') {
+			inBlockComment = true;
+			index += 2;
+			continue;
+		}
+		if (line[index] == '"' || line[index] == '\'') {
+			const char quote = line[index++];
+			while (index < line.size()) {
+				if (line[index] == '\\' && index + 1 < line.size())
+					index += 2;
+				else if (line[index++] == quote)
+					break;
+			}
+			continue;
+		}
+		mask[index++] = true;
+	}
+	if (endsInBlockComment != nullptr)
+		*endsInBlockComment = inBlockComment;
+	return mask;
+}
+
+void expandObjectMacros(std::string& line, const std::unordered_map<std::string, std::string>& defines,
+		bool startsInBlockComment, unsigned maxPasses = 8)
+{
+	for (unsigned pass = 0; pass < maxPasses; ++pass) {
+		const std::vector<bool> mask = codeMask(line, startsInBlockComment);
 		std::string expanded;
 		bool changed = false;
 		for (size_t index = 0; index < line.size();) {
-			if (!std::isalpha(static_cast<unsigned char>(line[index])) && line[index] != '_') {
+			if (!mask[index] || (!std::isalpha(static_cast<unsigned char>(line[index])) && line[index] != '_')) {
 				expanded += line[index++];
 				continue;
 			}
 			const size_t begin = index++;
-			while (index < line.size() && (std::isalnum(static_cast<unsigned char>(line[index])) || line[index] == '_'))
+			while (index < line.size() && mask[index]
+					&& (std::isalnum(static_cast<unsigned char>(line[index])) || line[index] == '_'))
 				++index;
 			const std::string name = line.substr(begin, index - begin);
 			const auto define = defines.find(name);
@@ -187,22 +436,29 @@ struct FunctionMacro {
 	std::string body;
 };
 
-void expandFunctionMacros(std::string& line, const std::unordered_map<std::string, FunctionMacro>& defines)
+void expandFunctionMacros(std::string& line, const std::unordered_map<std::string, FunctionMacro>& defines,
+		bool startsInBlockComment)
 {
 	for (unsigned pass = 0; pass < 8; ++pass) {
 		bool changed = false;
 		for (const auto& [name, macro] : defines) {
 			size_t search = 0;
 			while ((search = line.find(name, search)) != std::string::npos) {
+				const std::vector<bool> mask = codeMask(line, startsInBlockComment);
+				if (!mask[search]) {
+					search += name.size();
+					continue;
+				}
 				const bool leftBoundary = search == 0 || (!std::isalnum(static_cast<unsigned char>(line[search - 1])) && line[search - 1] != '_');
 				const size_t open = line.find_first_not_of(" \t", search + name.size());
-				if (!leftBoundary || open == std::string::npos || line[open] != '(') {
+				if (!leftBoundary || open == std::string::npos || !mask[open] || line[open] != '(') {
 					search += name.size();
 					continue;
 				}
 				int depth = 1;
 				size_t close = open + 1;
 				for (; close < line.size() && depth != 0; ++close) {
+					if (!mask[close]) continue;
 					if (line[close] == '(') ++depth;
 					else if (line[close] == ')') --depth;
 				}
@@ -213,6 +469,7 @@ void expandFunctionMacros(std::string& line, const std::unordered_map<std::strin
 				depth = 0;
 				for (size_t index = begin; index <= closeParenthesis; ++index) {
 					const char character = index < closeParenthesis ? line[index] : ',';
+					if (index < closeParenthesis && !mask[index]) continue;
 					if (character == '(') ++depth;
 					else if (character == ')') --depth;
 					if (character == ',' && depth == 0) {
@@ -226,10 +483,12 @@ void expandFunctionMacros(std::string& line, const std::unordered_map<std::strin
 					continue;
 				}
 				std::string replacement = macro.body;
-				for (size_t argument = 0; argument < macro.arguments.size(); ++argument) {
-					const std::regex parameter("\\b" + macro.arguments[argument] + "\\b");
-					replacement = std::regex_replace(replacement, parameter, arguments[argument]);
-				}
+				std::unordered_map<std::string, std::string> replacements;
+				for (size_t argument = 0; argument < macro.arguments.size(); ++argument)
+					replacements.emplace(macro.arguments[argument], arguments[argument]);
+				// Substitute parameters once. Rescanning the injected argument would
+				// mistake swizzles such as `pos.x` for another use of parameter `x`.
+				expandObjectMacros(replacement, replacements, false, 1);
 				// close already points one past ')'. Consuming close + 1 also ate the
 				// following comma or semicolon from valid shader expressions.
 				line.replace(search, close - search, replacement);
@@ -256,20 +515,29 @@ bool preprocess(const std::string& source,
 	auto active = [&] { return conditionals.empty() || conditionals.back().active; };
 	std::istringstream lines(source);
 	std::string line;
+	bool inBlockComment = false;
 	output.clear();
 	size_t lineNumber = 0;
 	while (std::getline(lines, line)) {
 		++lineNumber;
-		const std::string stripped = trim(line);
-		if (stripped.empty() || stripped.front() != '#') {
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		const bool startsInBlockComment = inBlockComment;
+		const std::vector<bool> mask = codeMask(line, startsInBlockComment, &inBlockComment);
+		size_t directiveStart = 0;
+		while (directiveStart < line.size() && (!mask[directiveStart]
+				|| std::isspace(static_cast<unsigned char>(line[directiveStart]))))
+			++directiveStart;
+		if (directiveStart == line.size() || line[directiveStart] != '#') {
 			if (active()) {
-				expandFunctionMacros(line, functionDefines);
-				expandObjectMacros(line, defines);
-				expandFunctionMacros(line, functionDefines);
+				expandFunctionMacros(line, functionDefines, startsInBlockComment);
+				expandObjectMacros(line, defines, startsInBlockComment);
+				expandFunctionMacros(line, functionDefines, startsInBlockComment);
 				output += line + '\n';
 			}
 			continue;
 		}
+		const std::string stripped = trim(line.substr(directiveStart));
 		std::istringstream directive(stripped.substr(1));
 		std::string command;
 		directive >> command;
@@ -286,9 +554,12 @@ bool preprocess(const std::string& source,
 			if (!parentActive) condition = false;
 			else if (command == "ifdef") condition = defines.count(argument) != 0;
 			else if (command == "ifndef") condition = defines.count(argument) == 0;
-			else if (!evaluateCondition(argument, defines, condition)) {
-				error = "line " + std::to_string(lineNumber) + ": unsupported shader #if condition.";
-				return false;
+			else {
+				expandFunctionMacros(argument, functionDefines, false);
+				if (!evaluateCondition(argument, defines, condition)) {
+					error = "line " + std::to_string(lineNumber) + ": unsupported shader #if condition.";
+					return false;
+				}
 			}
 			conditionals.push_back({ parentActive, condition, parentActive && condition });
 			continue;
@@ -300,10 +571,12 @@ bool preprocess(const std::string& source,
 			}
 			Conditional& conditional = conditionals.back();
 			bool condition = false;
-			if (conditional.parentActive && !conditional.branchTaken
-					&& !evaluateCondition(argument, defines, condition)) {
-				error = "line " + std::to_string(lineNumber) + ": unsupported shader #elif condition.";
-				return false;
+			if (conditional.parentActive && !conditional.branchTaken) {
+				expandFunctionMacros(argument, functionDefines, false);
+				if (!evaluateCondition(argument, defines, condition)) {
+					error = "line " + std::to_string(lineNumber) + ": unsupported shader #elif condition.";
+					return false;
+				}
 			}
 			conditional.active = conditional.parentActive && !conditional.branchTaken && condition;
 			conditional.branchTaken = conditional.branchTaken || condition;
@@ -483,30 +756,8 @@ public:
 	bool parse()
 	{
 		while (!isEnd()) {
-			if (current().kind == TokenKind::Directive) {
-				if (isIncludeDirective(current().text))
-					return fail("includes are not permitted in ReShade FX effects.");
-				effect.preprocessorDirectives.push_back(current().text);
-				++position;
-			}
-			else if (match(";")) {
-				continue;
-			}
-			else if (isIdentifier("uniform")) {
-				if (!parseUniform())
-					return false;
-			}
-			else if (isIdentifier("technique")) {
-				if (!parseTechnique())
-					return false;
-			}
-			else if (isIdentifier("struct")) {
-				if (!parseStruct())
-					return false;
-			}
-			else if (!parseTopLevelDeclaration()) {
+			if (!parseDeclaration())
 				return false;
-			}
 		}
 		selectFirstRunnablePass();
 		return true;
@@ -537,24 +788,65 @@ private:
 		++position;
 		return true;
 	}
+	bool parseDeclaration()
+	{
+		if (current().kind == TokenKind::Directive) {
+			if (isIncludeDirective(current().text))
+				return fail("includes are not permitted in ReShade FX effects.");
+			effect.preprocessorDirectives.push_back(current().text);
+			++position;
+			return true;
+		}
+		if (match(";"))
+			return true;
+		if (isIdentifier("namespace"))
+			return parseNamespace();
+		if (isIdentifier("uniform"))
+			return parseUniform();
+		if (isIdentifier("technique"))
+			return parseTechnique();
+		if (isIdentifier("struct"))
+			return parseStruct();
+		return parseTopLevelDeclaration();
+	}
+	bool parseNamespace()
+	{
+		++position;
+		std::string name;
+		if (!takeIdentifier(name, "namespace name") || !match("{"))
+			return false;
+		while (!isEnd() && !isSymbol("}"))
+			if (!parseDeclaration())
+				return false;
+		if (!match("}"))
+			return fail("unterminated namespace.");
+		if (isSymbol(";"))
+			++position;
+		return true;
+	}
 	bool consumeBalanced(const char *open, const char *close, size_t& begin, size_t& end)
 	{
 		if (!match(open))
 			return fail(std::string("expected '") + open + "'.");
+		const size_t openLine = tokens[position - 1].line;
 		begin = tokens[position - 1].begin;
 		int depth = 1;
 		while (!isEnd()) {
-			if (match(open))
+			if (match(open)) {
 				++depth;
-			else if (match(close) && --depth == 0) {
-				end = tokens[position - 1].end;
-				return true;
+				continue;
 			}
-			else {
-				++position;
+			if (match(close)) {
+				if (--depth == 0) {
+					end = tokens[position - 1].end;
+					return true;
+				}
+				continue;
 			}
+			++position;
 		}
-		return fail(std::string("unterminated '") + open + "' block.");
+		return fail(std::string("unterminated '") + open + "' block opened on line "
+				+ std::to_string(openLine) + ".");
 	}
 	std::string range(size_t begin, size_t end) const { return source.substr(begin, end - begin); }
 	static bool isAnnotationType(const std::string& value)
@@ -585,8 +877,12 @@ private:
 			if (isSymbol(";") || isSymbol(">"))
 				return fail("expected annotation value.");
 			if (current().kind == TokenKind::String) {
-				annotations.push_back({ std::move(name), current().text });
-				++position;
+				std::string value;
+				do {
+					value += current().text;
+					++position;
+				} while (current().kind == TokenKind::String);
+				annotations.push_back({ std::move(name), std::move(value) });
 				if (isSymbol(";"))
 					++position;
 				continue;
@@ -757,8 +1053,11 @@ private:
 			return false;
 		if (isSymbol("("))
 			return parseFunction(typeName, name, declarationBegin);
-		std::string ignored;
-		return consumeStatement(declarationBegin, ignored);
+		std::string declaration;
+		if (!consumeStatement(declarationBegin, declaration))
+			return false;
+		effect.globals.push_back(std::move(declaration));
+		return true;
 	}
 	bool parseResource(std::string typeName, size_t declarationBegin)
 	{
@@ -874,8 +1173,24 @@ bool preprocessShaderSource(const std::string& source,
 
 bool parseReShadeEffect(const std::string& source, ReShadeEffect& effect, std::string& error)
 {
+	if (std::regex_search(source, std::regex(
+			R"(\bReShade\s*::\s*(?:DepthBuffer|GetLinearizedDepth)\b)"))) {
+		error = "ReShade FX requires a depth buffer, which is unavailable to display shader chains.";
+		return false;
+	}
+	// Advertise the fixed host profile implemented by HollyCast. Buffer values
+	// remain expressions so every backend receives the current pass dimensions.
+	const std::unordered_map<std::string, std::string> hostDefines {
+		{ "__RESHADE__", "60000" },
+		{ "__RESHADE_FXC__", "1" },
+		{ "BUFFER_WIDTH", "OutputSize.x" },
+		{ "BUFFER_HEIGHT", "OutputSize.y" },
+		{ "BUFFER_RCP_WIDTH", "(1.0 / OutputSize.x)" },
+		{ "BUFFER_RCP_HEIGHT", "(1.0 / OutputSize.y)" },
+		{ "BUFFER_COLOR_BIT_DEPTH", "8" },
+	};
 	std::string preprocessed;
-	if (!preprocessShaderSource(source, {}, preprocessed, error))
+	if (!preprocessShaderSource(source, hostDefines, preprocessed, error))
 		return false;
 	std::vector<Token> tokens;
 	if (!lex(preprocessed, tokens, error))

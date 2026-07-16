@@ -28,9 +28,16 @@
 
 namespace postprocess {
 
-// Vulkan guarantees 128 bytes of push constants. Frame metadata consumes 32,
-// leaving 24 scalar parameter components with identical storage on every backend.
-inline constexpr uint32_t MaxShaderParameterComponents = 24;
+// Bound reflected controls to keep UI and upload costs predictable. Vulkan uses
+// a uniform buffer for these values, so this is no longer constrained by the
+// 128-byte minimum push-constant guarantee.
+inline constexpr uint32_t MaxShaderParameterComponents = 256;
+inline constexpr size_t MaxShaderSourceBytes = 8u * 1024u * 1024u;
+inline constexpr size_t MaxExpandedShaderSourceBytes = 32u * 1024u * 1024u;
+inline constexpr size_t MaxShaderLookupTextures = 64;
+inline constexpr size_t MaxShaderLookupFileBytes = 64u * 1024u * 1024u;
+inline constexpr int MaxShaderTargetDimension = 16384;
+inline constexpr uint64_t MaxShaderChainTargetBytes = 512ull * 1024ull * 1024ull;
 
 enum class ShaderFormat {
 	Unknown,
@@ -117,6 +124,13 @@ struct ShaderPassInput {
 	uint32_t historyOffset = 1;
 };
 
+struct ShaderPassSampler {
+	std::string bindingName;
+	bool linearFilter = false;
+	bool useMipmaps = false;
+	ShaderWrapMode wrapMode = ShaderWrapMode::ClampToEdge;
+};
+
 // Every pass has a primary output. Additional outputs are explicit so a
 // backend can allocate compatible attachments without inferring their format
 // from unrelated sampler declarations.
@@ -129,6 +143,9 @@ struct ShaderPassOutput {
 
 struct ShaderParameter {
 	std::string name;
+	// Multi-layer stacks may expose the same shader uniform more than once.
+	// key is the stable UI/config identity while name remains the real binding.
+	std::string key;
 	std::string label;
 	float value = 0.f;
 	float minimum = 0.f;
@@ -145,6 +162,10 @@ struct ShaderParameter {
 	// ReShade combo/radio annotations expose named integer choices. An empty
 	// list means the parameter uses its declared numeric range instead.
 	std::vector<std::string> choiceLabels;
+	// Preset values are user-authored overrides, not reflected defaults. Keep
+	// that distinction while later passes contribute the parameter metadata.
+	bool hasPresetValue = false;
+	uint32_t layerIndex = 0;
 };
 
 struct ShaderPass {
@@ -153,6 +174,7 @@ struct ShaderPass {
 	// the pass so recursive Slang includes cannot escape through a nested file.
 	std::string packageRoot;
 	std::string alias;
+	uint32_t layerIndex = 0;
 	ShaderFormat format = ShaderFormat::Unknown;
 	ScaleType scaleTypeX = ScaleType::Source;
 	ScaleType scaleTypeY = ScaleType::Source;
@@ -168,13 +190,26 @@ struct ShaderPass {
 	ShaderBlendFactor sourceBlend = ShaderBlendFactor::One;
 	ShaderBlendFactor destinationBlend = ShaderBlendFactor::Zero;
 	ShaderBlendOperation blendOperation = ShaderBlendOperation::Add;
+	// Ordered UI layers can switch from the raw renderer image to display space
+	// once. Marking the boundary on the pass preserves mixed Slang/display stacks.
+	bool composeDisplayInput = false;
 	// Empty means one implicit color output named by alias. ReShade pass states
 	// populate this with their RenderTargetN texture names.
 	std::vector<ShaderPassOutput> outputs;
 	std::vector<ShaderPassInput> inputs;
+	// ReShade permits different sampler state for bindings that reference the
+	// same texture. Keep it per binding so every backend can preserve that state.
+	std::vector<ShaderPassSampler> samplers;
 	// ReShade effects can expose multiple ordered passes from one source file.
 	uint32_t effectTechnique = InvalidShaderPass;
 	uint32_t effectPass = InvalidShaderPass;
+};
+
+struct ShaderTechniqueGroup {
+	size_t layerIndex = 0;
+	std::string label;
+	std::vector<std::string> techniques;
+	int selectedTechnique = -1;
 };
 
 // This is deliberately backend-neutral: it gives every renderer the same
@@ -217,6 +252,9 @@ struct ShaderPassSource {
 	// RetroArch GLSL uses a vec4 fullscreen position, while HollyCast's native
 	// portable vertex contract exposes the underlying vec3 attribute.
 	bool retroArchGlsl = false;
+	// DuckStation's legacy GLSL dialect receives a host-provided helper API and
+	// keeps native input sizing even after the display-composition boundary.
+	bool duckStationGlsl = false;
 	std::vector<ShaderParameter> parameters;
 	std::vector<SlangParameter> slangParameters;
 	std::vector<SlangResource> slangResources;
@@ -229,6 +267,7 @@ struct ShaderChain {
 	std::vector<ShaderPresetTexture> textures;
 	std::vector<std::string> techniques;
 	int selectedTechnique = -1;
+	std::vector<ShaderTechniqueGroup> techniqueGroups;
 	// Source is parsed once during validation, then shared by every backend
 	// compiler. Reload explicitly invalidates this cache through a new chain.
 	std::vector<ShaderPassSource> sources;
@@ -245,6 +284,10 @@ const char *formatName(ShaderFormat format);
 // rounded to the nearest pixel so all backends use identical chain geometry.
 bool resolveTargetSize(const ShaderPass& pass, const ShaderFrameInfo& frame,
 		int& width, int& height, std::string& error);
+bool accumulateShaderTargetBytes(int width, int height, ShaderTargetFormat format,
+		const std::string& formatName, bool mipmapped, uint32_t copies,
+		uint64_t& totalBytes, std::string& error);
+bool validateShaderLookupTexture(int width, int height, std::string& error);
 
 // A normal display chain sees the composed presentation image. Presets that
 // explicitly own source/viewport scaling retain the raw input and leave the
@@ -268,6 +311,7 @@ void reportShaderChainStatus(const std::string& activePath, const std::string& e
 		const std::vector<std::string>& techniques = {}, int selectedTechnique = -1);
 bool setShaderChainParameter(const std::string& name, float value);
 bool setShaderChainParameterComponents(const std::string& name, const float *values, uint32_t componentCount);
+const std::string& shaderParameterKey(const ShaderParameter& parameter);
 void requestShaderChainReload();
 uint64_t shaderChainReloadGeneration();
 
@@ -275,6 +319,7 @@ uint64_t shaderChainReloadGeneration();
 // stale entries are ignored so changing packages cannot poison activation.
 void applyShaderChainParameterValues(ShaderChain& chain, const std::string& values);
 std::string serializeShaderChainParameterValues(const std::vector<ShaderParameter>& parameters);
+std::string serializeShaderTechniqueSelections(const std::vector<ShaderTechniqueGroup>& groups);
 
 // Parses preset documents without touching storage. This keeps validation
 // deterministic and lets import/UI code report malformed presets before activation.

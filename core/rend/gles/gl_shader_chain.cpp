@@ -132,7 +132,7 @@ std::string fragmentPreamble(const std::vector<postprocess::ShaderParameter>& pa
 	std::unordered_set<std::string> emittedParameters;
 	for (const postprocess::ShaderParameter& parameter : parameters)
 		if (!hasUniformDeclaration(source, parameter.name) && emittedParameters.emplace(parameter.name).second)
-			preamble += "uniform float " + parameter.name + ";\n";
+			preamble += "uniform " + std::string(glslType(parameter.type)) + " " + parameter.name + ";\n";
 	for (const postprocess::SlangParameter& parameter : slangParameters)
 		if (!hasUniformDeclaration(source, parameter.name) && emittedParameters.emplace(parameter.name).second)
 			preamble += "uniform " + std::string(glslType(parameter.type)) + " " + parameter.name + ";\n";
@@ -171,9 +171,13 @@ GLint glWrapMode(postprocess::ShaderWrapMode mode)
 	case postprocess::ShaderWrapMode::Repeat: return GL_REPEAT;
 	case postprocess::ShaderWrapMode::MirroredRepeat: return GL_MIRRORED_REPEAT;
 	case postprocess::ShaderWrapMode::ClampToBorder:
-		// GLES does not guarantee border-clamp support, so edge clamp is the
-		// portable equivalent used for package lookup textures on every GL target.
+		// Desktop GL guarantees transparent border sampling. GLES has no portable
+		// border-clamp state, so retain edge clamp there.
+#ifndef GLES
+		return GL_CLAMP_TO_BORDER;
+#else
 		return GL_CLAMP_TO_EDGE;
+#endif
 	case postprocess::ShaderWrapMode::ClampToEdge: return GL_CLAMP_TO_EDGE;
 	}
 	return GL_CLAMP_TO_EDGE;
@@ -253,6 +257,18 @@ bool glTargetFormat(const postprocess::ShaderPass& pass, GLenum& internalFormat,
 	return true;
 }
 
+bool usesSrgbFramebuffer(const postprocess::ShaderPass& pass)
+{
+	const auto isSrgb = [](postprocess::ShaderTargetFormat format, const std::string& formatName) {
+		return format == postprocess::ShaderTargetFormat::Srgb || formatName == "R8G8B8A8_SRGB";
+	};
+	if (pass.outputs.empty())
+		return isSrgb(pass.targetFormat, pass.targetFormatName);
+	return std::any_of(pass.outputs.begin(), pass.outputs.end(), [&](const postprocess::ShaderPassOutput& output) {
+		return isSrgb(output.targetFormat, output.targetFormatName);
+	});
+}
+
 std::unique_ptr<GlFramebuffer> createTarget(const postprocess::ShaderPass& pass, int width, int height, std::string& error)
 {
 	GLenum internalFormat;
@@ -268,6 +284,12 @@ std::unique_ptr<GlFramebuffer> createTarget(const postprocess::ShaderPass& pass,
 bool GlShaderChain::ensureMrtTarget(MrtTarget& target, const postprocess::ShaderPass& pass,
 		int width, int height, std::string& error)
 {
+	GLint maxTextureSize = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+	if (width <= 0 || height <= 0 || width > maxTextureSize || height > maxTextureSize) {
+		error = "OpenGL post-processing target exceeds the device texture-size limit.";
+		return false;
+	}
 	const uint32_t outputCount = pass.outputs.empty() ? 1u : static_cast<uint32_t>(pass.outputs.size());
 	const bool matching = target.outputs.size() == outputCount && std::all_of(target.outputs.begin(), target.outputs.end(),
 			[&](const std::unique_ptr<GlFramebuffer>& output) {
@@ -275,6 +297,7 @@ bool GlShaderChain::ensureMrtTarget(MrtTarget& target, const postprocess::Shader
 			});
 	if (matching && target.framebuffer != 0)
 		return true;
+	target.initialized = false;
 	if (target.framebuffer != 0) {
 		glDeleteFramebuffers(1, &target.framebuffer);
 		target.framebuffer = 0;
@@ -303,12 +326,18 @@ bool GlShaderChain::ensureMrtTarget(MrtTarget& target, const postprocess::Shader
 	{
 #ifdef GLES2
 		error = "OpenGL MRT shader passes require OpenGL or GLES 3.0.";
+		glDeleteFramebuffers(1, &target.framebuffer);
+		target.framebuffer = 0;
+		target.outputs.clear();
 		return false;
 #else
 		GLint maxDrawBuffers = 0;
 		glGetIntegerv(GL_MAX_DRAW_BUFFERS, &maxDrawBuffers);
 		if (maxDrawBuffers < static_cast<GLint>(outputCount)) {
 			error = "OpenGL does not provide enough draw buffers for this shader pass.";
+			glDeleteFramebuffers(1, &target.framebuffer);
+			target.framebuffer = 0;
+			target.outputs.clear();
 			return false;
 		}
 		glDrawBuffers(outputCount, attachments.data());
@@ -321,8 +350,17 @@ bool GlShaderChain::ensureMrtTarget(MrtTarget& target, const postprocess::Shader
 		target.outputs.clear();
 		return false;
 	}
+#ifndef GLES2
+	if (usesSrgbFramebuffer(pass))
+		glcache.Enable(GL_FRAMEBUFFER_SRGB);
+	else
+		glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
 	glcache.ClearColor(0.f, 0.f, 0.f, 0.f);
 	glClear(GL_COLOR_BUFFER_BIT);
+#ifndef GLES2
+	glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
 	return true;
 }
 
@@ -375,9 +413,18 @@ bool GlShaderChain::ensureResources()
 
 void GlShaderChain::deletePrograms(std::vector<Program>& programs)
 {
-	for (Program& program : programs)
+	for (Program& program : programs) {
+#ifndef GLES2
+		if (glDeleteSamplers != nullptr) {
+			for (ResourceUniform& resource : program.resources) {
+				if (resource.sampler != 0) glDeleteSamplers(1, &resource.sampler);
+				if (resource.mipSampler != 0) glDeleteSamplers(1, &resource.mipSampler);
+			}
+		}
+#endif
 		if (program.handle != 0)
 			glcache.DeleteProgram(program.handle);
+	}
 	programs.clear();
 }
 
@@ -401,12 +448,18 @@ bool GlShaderChain::ensureLookupTextures(std::string& error)
 
 bool GlShaderChain::ensureLookupTextures(std::vector<LookupTexture>& textures, std::string& error)
 {
+	uint64_t lookupBytes = 0;
 	for (LookupTexture& lookup : textures) {
 		if (lookup.texture != 0)
 			continue;
 		std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(lookup.config.path, "rb"));
 		if (!file) {
 			error = "Unable to open post-processing lookup texture: " + lookup.config.path;
+			return false;
+		}
+		const s64 fileSize = file->size();
+		if (fileSize < 0 || static_cast<uint64_t>(fileSize) > postprocess::MaxShaderLookupFileBytes) {
+			error = "Post-processing lookup texture exceeds the 64 MiB file limit: " + lookup.config.path;
 			return false;
 		}
 		int width = 0;
@@ -418,6 +471,16 @@ bool GlShaderChain::ensureLookupTextures(std::vector<LookupTexture>& textures, s
 			error = "Unable to decode post-processing lookup texture: " + lookup.config.path;
 			return false;
 		}
+		if (!postprocess::validateShaderLookupTexture(width, height, error)) {
+			stbi_image_free(pixels);
+			return false;
+		}
+		if (!postprocess::accumulateShaderTargetBytes(width, height,
+				postprocess::ShaderTargetFormat::Default, {}, lookup.config.useMipmaps,
+				1, lookupBytes, error)) {
+			stbi_image_free(pixels);
+			return false;
+		}
 		glGenTextures(1, &lookup.texture);
 		glActiveTexture(GL_TEXTURE0);
 		glcache.InvalidateTextureBinding();
@@ -425,7 +488,9 @@ bool GlShaderChain::ensureLookupTextures(std::vector<LookupTexture>& textures, s
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 		stbi_image_free(pixels);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-				lookup.config.useMipmaps ? GL_LINEAR_MIPMAP_LINEAR : lookup.config.linearFilter ? GL_LINEAR : GL_NEAREST);
+				lookup.config.useMipmaps
+						? (lookup.config.linearFilter ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_LINEAR)
+						: lookup.config.linearFilter ? GL_LINEAR : GL_NEAREST);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, lookup.config.linearFilter ? GL_LINEAR : GL_NEAREST);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, glWrapMode(lookup.config.wrapMode));
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, glWrapMode(lookup.config.wrapMode));
@@ -476,6 +541,11 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 		}
 
 		try {
+			std::vector<postprocess::ShaderParameter> passParameters;
+			std::copy_if(chain.parameters.begin(), chain.parameters.end(), std::back_inserter(passParameters),
+					[&](const postprocess::ShaderParameter& parameter) {
+						return parameter.layerIndex == pass.layerIndex;
+					});
 			PostProcessSource vertexSource;
 			vertexSource.addSource(VertexCompatShader);
 			if (vertexBody.empty())
@@ -492,10 +562,11 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 			}
 			PostProcessSource fragmentSource;
 			fragmentSource.addSource(PixelCompatShader)
-					.addSource(fragmentPreamble(chain.parameters, passSource->slangParameters,
+					.addSource(fragmentPreamble(passParameters, passSource->slangParameters,
 							passSource->slangResources, shaderBody, outputCount))
 					.addSource(shaderBody);
 			Program program;
+			program.duckStationGlsl = passSource->duckStationGlsl;
 			const std::string vertexShader = vertexSource.generate();
 			program.handle = gl_CompileAndLink(vertexShader.c_str(), fragmentSource.generate().c_str(), &error);
 			program.pass = pass;
@@ -505,16 +576,16 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 			program.outputSizeUniform = glGetUniformLocation(program.handle, "OutputSize");
 			program.frameCountUniform = glGetUniformLocation(program.handle, "FrameCount");
 			program.rotationUniform = glGetUniformLocation(program.handle, "Rotation");
-			for (const postprocess::ShaderParameter& parameter : chain.parameters)
+			for (const postprocess::ShaderParameter& parameter : passParameters)
 				program.parameters.push_back({ glGetUniformLocation(program.handle, parameter.name.c_str()), parameter.name,
-						parameter.type, parameter.values });
+						parameter.layerIndex, parameter.type, parameter.values });
 			for (const postprocess::SlangParameter& parameter : passSource->slangParameters) {
 				if (std::any_of(program.parameters.begin(), program.parameters.end(), [&](const ParameterUniform& value) {
 					return value.name == parameter.name;
 				}))
 					continue;
 				program.parameters.push_back({ glGetUniformLocation(program.handle, parameter.name.c_str()), parameter.name,
-						parameter.type, parameter.defaultValue.values });
+						pass.layerIndex, parameter.type, parameter.defaultValue.values });
 			}
 
 			GLuint textureUnit = 0;
@@ -541,8 +612,31 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 					deletePrograms(candidate);
 					return false;
 				}
+				uint32_t lookupIndex = postprocess::InvalidShaderPass;
+				if (input->kind == postprocess::ShaderInputKind::LookupTexture) {
+					const auto lookup = std::find_if(chain.textures.begin(), chain.textures.end(), [&](const postprocess::ShaderPresetTexture& texture) {
+						return texture.name == input->resourceName;
+					});
+					if (lookup == chain.textures.end()) {
+						error = "Shader lookup texture '" + input->resourceName + "' was not resolved.";
+						glcache.DeleteProgram(program.handle);
+						deletePrograms(candidate);
+						return false;
+					}
+					lookupIndex = static_cast<uint32_t>(std::distance(chain.textures.begin(), lookup));
+				}
 				ResourceUniform binding { glGetUniformLocation(program.handle, resource.name.c_str()), input->kind,
-						input->sourcePass, input->sourceOutput, input->historyOffset, input->resourceName, textureUnit++ };
+						input->sourcePass, input->sourceOutput, input->historyOffset, input->resourceName,
+						lookupIndex, textureUnit++ };
+				const auto samplerConfig = std::find_if(pass.samplers.begin(), pass.samplers.end(), [&](const auto& sampler) {
+					return sampler.bindingName == resource.name;
+				});
+				if (samplerConfig != pass.samplers.end() && input->kind != postprocess::ShaderInputKind::LookupTexture) {
+					binding.hasSamplerState = true;
+					binding.linearFilter = samplerConfig->linearFilter;
+					binding.useMipmaps = samplerConfig->useMipmaps;
+					binding.wrapMode = samplerConfig->wrapMode;
+				}
 				if (resource.name == "Source") {
 					hasSource = true;
 				}
@@ -556,8 +650,39 @@ bool GlShaderChain::compileCandidate(const postprocess::ShaderChain& chain,
 					return false;
 				}
 				program.resources.push_back({ program.sourceUniform, postprocess::ShaderInputKind::Source,
-						postprocess::InvalidShaderPass, 0, 1, {}, textureUnit });
+						postprocess::InvalidShaderPass, 0, 1, {}, postprocess::InvalidShaderPass, textureUnit });
 			}
+#ifndef GLES2
+			if (glGenSamplers != nullptr && glSamplerParameteri != nullptr) {
+				for (ResourceUniform& binding : program.resources) {
+					if (!binding.hasSamplerState)
+						continue;
+					glGenSamplers(1, &binding.sampler);
+					glGenSamplers(1, &binding.mipSampler);
+					if (binding.sampler == 0 || binding.mipSampler == 0) {
+						if (glDeleteSamplers != nullptr)
+							for (ResourceUniform& allocated : program.resources) {
+								if (allocated.sampler != 0) glDeleteSamplers(1, &allocated.sampler);
+								if (allocated.mipSampler != 0) glDeleteSamplers(1, &allocated.mipSampler);
+							}
+						error = "OpenGL could not create ReShade sampler state.";
+						glcache.DeleteProgram(program.handle);
+						deletePrograms(candidate);
+						return false;
+					}
+					const GLint wrap = glWrapMode(binding.wrapMode);
+					for (const GLuint sampler : { binding.sampler, binding.mipSampler }) {
+						glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER, binding.linearFilter ? GL_LINEAR : GL_NEAREST);
+						glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, wrap);
+						glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, wrap);
+					}
+					glSamplerParameteri(binding.sampler, GL_TEXTURE_MIN_FILTER,
+							binding.linearFilter ? GL_LINEAR : GL_NEAREST);
+					glSamplerParameteri(binding.mipSampler, GL_TEXTURE_MIN_FILTER,
+							binding.linearFilter ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST);
+				}
+			}
+#endif
 			candidate.push_back(std::move(program));
 		} catch (const RendererException& exception) {
 			if (error.empty())
@@ -591,7 +716,6 @@ bool GlShaderChain::activate(const postprocess::ShaderChain& chain, std::string&
 	deleteLookupTextures();
 	programs = std::move(candidate);
 	lookupTextures = std::move(candidateLookupTextures);
-	wantsUnscaledInput = chain.wantsUnscaledInput;
 	sourceHistoryDepth = 1;
 	needsSourceHistory = false;
 	for (const postprocess::ShaderPass& pass : chain.passes)
@@ -612,6 +736,7 @@ bool GlShaderChain::activate(const postprocess::ShaderChain& chain, std::string&
 		}
 	targets.clear();
 	displayInput.reset();
+	mipmapInput.reset();
 	sourceHistory.clear();
 	error.clear();
 	return true;
@@ -632,7 +757,8 @@ void GlShaderChain::updateConfiguredChain()
 		deleteLookupTextures();
 		targets.clear();
 		displayInput.reset();
-		wantsUnscaledInput = false;
+		mipmapInput.reset();
+		sourceHistory.clear();
 		activePath.clear();
 		postprocess::reportShaderChainStatus({}, {});
 		return;
@@ -680,7 +806,7 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 			for (Program& program : programs)
 				for (ParameterUniform& parameter : program.parameters) {
 					auto configured = std::find_if(status.parameters.begin(), status.parameters.end(), [&](const postprocess::ShaderParameter& value) {
-						return value.name == parameter.name;
+						return value.name == parameter.name && value.layerIndex == parameter.layerIndex;
 					});
 					if (configured != status.parameters.end())
 						std::copy_n(configured->values.begin(), configured->componentCount, parameter.values.begin());
@@ -691,8 +817,48 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		targets.resize(programs.size());
 	GLuint inputTexture = sourceTexture;
 	GLuint originalTexture = sourceTexture;
-	const bool composeDisplayInput = postprocess::shouldComposeDisplayInput(frame, wantsUnscaledInput);
-	if (composeDisplayInput) {
+	bool inputHasMipmaps = false;
+	struct SourceTextureState {
+		GLuint texture;
+		bool captured = false;
+		GLint minFilter = GL_LINEAR;
+		GLint magFilter = GL_LINEAR;
+		GLint wrapS = GL_CLAMP_TO_EDGE;
+		GLint wrapT = GL_CLAMP_TO_EDGE;
+		void capture()
+		{
+			if (captured)
+				return;
+			glcache.InvalidateTextureBinding();
+			glcache.BindTexture(GL_TEXTURE_2D, texture);
+			glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &minFilter);
+			glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &magFilter);
+			glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &wrapS);
+			glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &wrapT);
+			captured = true;
+		}
+		~SourceTextureState()
+		{
+			if (!captured)
+				return;
+			glActiveTexture(GL_TEXTURE0);
+			glcache.InvalidateTextureBinding();
+			glcache.BindTexture(GL_TEXTURE_2D, texture);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+		}
+	} sourceTextureState { sourceTexture };
+	bool displaySpaceReached = false;
+	int originalWidth = passFrame.sourceWidth;
+	int originalHeight = passFrame.sourceHeight;
+	auto composeDisplayInput = [&]() {
+		if (displaySpaceReached)
+			return true;
+		displaySpaceReached = true;
+		if (!postprocess::shouldComposeDisplayInput(frame, false))
+			return true;
 		if (displayInput == nullptr || displayInput->getWidth() != frame.viewportWidth
 				|| displayInput->getHeight() != frame.viewportHeight)
 			displayInput = std::make_unique<GlFramebuffer>(frame.viewportWidth, frame.viewportHeight, false, true);
@@ -701,12 +867,15 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		glcache.Disable(GL_STENCIL_TEST);
 		glcache.Disable(GL_CULL_FACE);
 		glcache.Disable(GL_BLEND);
+#ifndef GLES2
+		glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
 		displayInput->bind();
 		glViewport(0, 0, frame.viewportWidth, frame.viewportHeight);
 		glcache.UseProgram(frame.rotationPending ? copyRotateProgram : copyProgram);
 		glActiveTexture(GL_TEXTURE0);
 		glcache.InvalidateTextureBinding();
-		glcache.BindTexture(GL_TEXTURE_2D, sourceTexture);
+		glcache.BindTexture(GL_TEXTURE_2D, inputTexture);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
 		glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, config::LinearInterpolation ? GL_LINEAR : GL_NEAREST);
 		const GLint sourceUniform = frame.rotationPending ? copyRotateSourceUniform : copySourceUniform;
@@ -717,29 +886,112 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		GlVertexArray::unbind();
 		inputTexture = displayInput->getTexture();
 		originalTexture = inputTexture;
+		inputHasMipmaps = false;
 		passFrame.sourceWidth = frame.viewportWidth;
 		passFrame.sourceHeight = frame.viewportHeight;
+		originalWidth = passFrame.sourceWidth;
+		originalHeight = passFrame.sourceHeight;
+		presentationTransformApplied = true;
+		return true;
+	};
+	if (programs.front().pass.composeDisplayInput && !composeDisplayInput())
+		return nullptr;
+
+	postprocess::ShaderFrameInfo sizeFrame = frame;
+	bool sizeDisplaySpaceReached = false;
+	uint64_t targetBytes = 0;
+	std::string targetBudgetError;
+	const auto displayBoundary = std::find_if(programs.begin(), programs.end(), [](const Program& program) {
+		return program.pass.composeDisplayInput;
+	});
+	if (displayBoundary != programs.end() && postprocess::shouldComposeDisplayInput(frame, false)
+			&& !postprocess::accumulateShaderTargetBytes(frame.viewportWidth, frame.viewportHeight,
+					postprocess::ShaderTargetFormat::Default, {}, displayBoundary->pass.useMipmaps,
+					1, targetBytes, targetBudgetError)) {
+		postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+		return nullptr;
 	}
-	const int originalWidth = passFrame.sourceWidth;
-	const int originalHeight = passFrame.sourceHeight;
+	if (programs.front().pass.useMipmaps
+			&& !(programs.front().pass.composeDisplayInput && postprocess::shouldComposeDisplayInput(frame, false))
+			&& !postprocess::accumulateShaderTargetBytes(frame.sourceWidth, frame.sourceHeight,
+					postprocess::ShaderTargetFormat::Default, {}, true, 1, targetBytes, targetBudgetError)) {
+		postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+		return nullptr;
+	}
+	for (size_t index = 0; index < programs.size(); ++index) {
+		if (programs[index].pass.composeDisplayInput && !sizeDisplaySpaceReached) {
+			sizeDisplaySpaceReached = true;
+			if (postprocess::shouldComposeDisplayInput(frame, false)) {
+				sizeFrame.sourceWidth = frame.viewportWidth;
+				sizeFrame.sourceHeight = frame.viewportHeight;
+			}
+		}
+		std::string error;
+		if (!postprocess::resolveTargetSize(programs[index].pass, sizeFrame,
+				programs[index].targetWidth, programs[index].targetHeight, error)) {
+			postprocess::reportShaderChainStatus(activePath, error);
+			return nullptr;
+		}
+		sizeFrame.sourceWidth = programs[index].targetWidth;
+		sizeFrame.sourceHeight = programs[index].targetHeight;
+		const uint32_t outputCount = programs[index].pass.outputs.empty()
+				? 1u : static_cast<uint32_t>(programs[index].pass.outputs.size());
+		for (uint32_t output = 0; output < outputCount; ++output) {
+			const postprocess::ShaderPassOutput config = programs[index].pass.outputs.empty()
+					? postprocess::ShaderPassOutput {} : programs[index].pass.outputs[output];
+			const postprocess::ShaderTargetFormat format = programs[index].pass.outputs.empty()
+					? programs[index].pass.targetFormat : config.targetFormat;
+			const std::string& formatName = programs[index].pass.outputs.empty()
+					? programs[index].pass.targetFormatName : config.targetFormatName;
+			if (!postprocess::accumulateShaderTargetBytes(programs[index].targetWidth, programs[index].targetHeight,
+					format, formatName, programs[index].outputNeedsMipmaps[output],
+					programs[index].historyDepth, targetBytes, targetBudgetError)) {
+				postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+				return nullptr;
+			}
+		}
+		MrtTargetRing& targetRing = targets[index];
+		if (targetRing.size() != programs[index].historyDepth)
+			targetRing.resize(programs[index].historyDepth);
+		for (std::unique_ptr<MrtTarget>& target : targetRing) {
+			if (target == nullptr)
+				target = std::make_unique<MrtTarget>();
+			if (!ensureMrtTarget(*target, programs[index].pass, programs[index].targetWidth,
+					programs[index].targetHeight, error)) {
+				postprocess::reportShaderChainStatus(activePath, error);
+				return nullptr;
+			}
+		}
+	}
 	if (needsSourceHistory) {
+		if (!postprocess::accumulateShaderTargetBytes(passFrame.sourceWidth, passFrame.sourceHeight,
+				postprocess::ShaderTargetFormat::Default, {}, false, sourceHistoryDepth,
+				targetBytes, targetBudgetError)) {
+			postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+			return nullptr;
+		}
 		if (sourceHistory.size() != sourceHistoryDepth)
 			sourceHistory.resize(sourceHistoryDepth);
-		for (std::unique_ptr<GlFramebuffer>& target : sourceHistory)
-			if (target == nullptr || target->getWidth() != passFrame.sourceWidth || target->getHeight() != passFrame.sourceHeight) {
-				target = std::make_unique<GlFramebuffer>(passFrame.sourceWidth, passFrame.sourceHeight, false, true);
-				target->bind();
+		for (HistoryTarget& target : sourceHistory)
+			if (target.framebuffer == nullptr || target.framebuffer->getWidth() != passFrame.sourceWidth
+					|| target.framebuffer->getHeight() != passFrame.sourceHeight) {
+				target.framebuffer = std::make_unique<GlFramebuffer>(passFrame.sourceWidth, passFrame.sourceHeight, false, true);
+				target.initialized = false;
+				target.framebuffer->bind();
 				glcache.ClearColor(0.f, 0.f, 0.f, 0.f);
 				glClear(GL_COLOR_BUFFER_BIT);
 			}
 		const size_t currentSourceTarget = frame.frameCount % sourceHistoryDepth;
-		GlFramebuffer *historyTarget = sourceHistory[currentSourceTarget].get();
+		HistoryTarget& historyTarget = sourceHistory[currentSourceTarget];
 		glcache.Disable(GL_SCISSOR_TEST);
 		glcache.Disable(GL_DEPTH_TEST);
 		glcache.Disable(GL_STENCIL_TEST);
 		glcache.Disable(GL_CULL_FACE);
 		glcache.Disable(GL_BLEND);
-		historyTarget->bind();
+#ifndef GLES2
+		glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
+		historyTarget.framebuffer->bind();
 		glViewport(0, 0, passFrame.sourceWidth, passFrame.sourceHeight);
 		glcache.UseProgram(copyProgram);
 		glActiveTexture(GL_TEXTURE0);
@@ -750,111 +1002,190 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		vertexArray.bind(vertexBuffer.get());
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		GlVertexArray::unbind();
+		historyTarget.renderedFrame = frame.frameCount;
+		historyTarget.initialized = true;
 	}
-	bool inputHasMipmaps = false;
 	GlFramebuffer *output = nullptr;
+	const auto disableFramebufferSrgb = [] {
+#ifndef GLES2
+		glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
+	};
 	for (size_t index = 0; index < programs.size(); ++index) {
 		Program& program = programs[index];
-		const size_t currentTarget = frame.frameCount % program.historyDepth;
-		int outputWidth;
-		int outputHeight;
-		std::string error;
-		if (!postprocess::resolveTargetSize(program.pass, passFrame, outputWidth, outputHeight, error))
+		if (program.pass.composeDisplayInput && !composeDisplayInput())
 			return nullptr;
-
-		MrtTargetRing& targetRing = targets[index];
-		if (targetRing.size() != program.historyDepth)
-			targetRing.resize(program.historyDepth);
-		for (std::unique_ptr<MrtTarget>& target : targetRing) {
-			if (target == nullptr)
-				target = std::make_unique<MrtTarget>();
-			if (!ensureMrtTarget(*target, program.pass, outputWidth, outputHeight, error)) {
-				postprocess::reportShaderChainStatus(activePath, error);
-				return nullptr;
+		if (program.pass.useMipmaps && !inputHasMipmaps) {
+			if (inputTexture == sourceTexture) {
+				if (mipmapInput == nullptr || mipmapInput->getWidth() != passFrame.sourceWidth
+						|| mipmapInput->getHeight() != passFrame.sourceHeight)
+					mipmapInput = std::make_unique<GlFramebuffer>(passFrame.sourceWidth, passFrame.sourceHeight, false, true);
+				glcache.Disable(GL_SCISSOR_TEST);
+				glcache.Disable(GL_DEPTH_TEST);
+				glcache.Disable(GL_STENCIL_TEST);
+				glcache.Disable(GL_CULL_FACE);
+				glcache.Disable(GL_BLEND);
+#ifndef GLES2
+				glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
+				mipmapInput->bind();
+				glViewport(0, 0, passFrame.sourceWidth, passFrame.sourceHeight);
+				glcache.UseProgram(copyProgram);
+				glActiveTexture(GL_TEXTURE0);
+				sourceTextureState.capture();
+				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				if (copySourceUniform != -1)
+					glUniform1i(copySourceUniform, 0);
+				vertexArray.bind(vertexBuffer.get());
+				glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+				GlVertexArray::unbind();
+				inputTexture = mipmapInput->getTexture();
 			}
+			glActiveTexture(GL_TEXTURE0);
+			glcache.InvalidateTextureBinding();
+			glcache.BindTexture(GL_TEXTURE_2D, inputTexture);
+			glGenerateMipmap(GL_TEXTURE_2D);
+			inputHasMipmaps = true;
 		}
+		const size_t currentTarget = frame.frameCount % program.historyDepth;
+		const int outputWidth = program.targetWidth;
+		const int outputHeight = program.targetHeight;
+		std::string error;
+		MrtTargetRing& targetRing = targets[index];
 		MrtTarget *target = targetRing[currentTarget].get();
 
 		glcache.Disable(GL_SCISSOR_TEST);
 		glcache.Disable(GL_DEPTH_TEST);
 		glcache.Disable(GL_STENCIL_TEST);
 		glcache.Disable(GL_CULL_FACE);
+		glBindFramebuffer(GL_FRAMEBUFFER, target->framebuffer);
+#ifndef GLES2
+		if (usesSrgbFramebuffer(program.pass))
+			glcache.Enable(GL_FRAMEBUFFER_SRGB);
+		else
+			glcache.Disable(GL_FRAMEBUFFER_SRGB);
+#endif
+		glViewport(0, 0, outputWidth, outputHeight);
 		if (program.pass.blendEnabled) {
+			// ReShade blends against the current backbuffer. Seed HollyCast's
+			// private pass target with the current input before applying the pass.
+			glcache.Disable(GL_BLEND);
+			glcache.UseProgram(copyProgram);
+			glActiveTexture(GL_TEXTURE0);
+			glcache.InvalidateTextureBinding();
+			glcache.BindTexture(GL_TEXTURE_2D, inputTexture);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+					program.pass.linearFilter ? GL_LINEAR : GL_NEAREST);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+					program.pass.linearFilter ? GL_LINEAR : GL_NEAREST);
+			if (copySourceUniform != -1)
+				glUniform1i(copySourceUniform, 0);
+			vertexArray.bind(vertexBuffer.get());
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			GlVertexArray::unbind();
 			glcache.Enable(GL_BLEND);
 			glcache.BlendFunc(glBlendFactor(program.pass.sourceBlend), glBlendFactor(program.pass.destinationBlend));
 			glcache.BlendEquation(glBlendOperation(program.pass.blendOperation));
 		}
-		else {
+		else
 			glcache.Disable(GL_BLEND);
-		}
-		glBindFramebuffer(GL_FRAMEBUFFER, target->framebuffer);
-		glViewport(0, 0, outputWidth, outputHeight);
 		glcache.UseProgram(program.handle);
 		for (const ResourceUniform& resource : program.resources) {
 			GLuint texture = inputTexture;
 			const LookupTexture *lookup = nullptr;
-			const size_t sourceCurrentTarget = resource.sourcePass == postprocess::InvalidShaderPass
-					? 0 : frame.frameCount % programs[resource.sourcePass].historyDepth;
+			bool resourceHasMipmaps = false;
 			if ((resource.kind == postprocess::ShaderInputKind::PassOutput
 						|| resource.kind == postprocess::ShaderInputKind::History
 						|| resource.kind == postprocess::ShaderInputKind::Feedback)
 					&& resource.sourcePass != postprocess::InvalidShaderPass
 					&& (resource.sourcePass >= targets.size()
-							|| resource.sourceOutput >= targets[resource.sourcePass][sourceCurrentTarget]->outputs.size())) {
+							|| targets[resource.sourcePass].empty()
+							|| resource.sourceOutput >= targets[resource.sourcePass].front()->outputs.size())) {
 				error = "OpenGL shader graph references an invalid pass output.";
 				postprocess::reportShaderChainStatus(activePath, error);
+				disableFramebufferSrgb();
 				return nullptr;
 			}
 			switch (resource.kind) {
 			case postprocess::ShaderInputKind::Source:
+				resourceHasMipmaps = inputHasMipmaps;
 				break;
 			case postprocess::ShaderInputKind::Original:
 				texture = originalTexture;
 				break;
-			case postprocess::ShaderInputKind::PassOutput:
-				texture = targets[resource.sourcePass][sourceCurrentTarget]->outputs[resource.sourceOutput]->getTexture();
+			case postprocess::ShaderInputKind::PassOutput: {
+				MrtTarget *sourceTarget = targets[resource.sourcePass]
+						[frame.frameCount % programs[resource.sourcePass].historyDepth].get();
+				if (!sourceTarget->initialized || sourceTarget->renderedFrame != frame.frameCount) {
+					error = "OpenGL shader pass input was not rendered for the current frame.";
+					postprocess::reportShaderChainStatus(activePath, error);
+					disableFramebufferSrgb();
+					return nullptr;
+				}
+				texture = sourceTarget->outputs[resource.sourceOutput]->getTexture();
+				resourceHasMipmaps = programs[resource.sourcePass].outputNeedsMipmaps[resource.sourceOutput];
 				break;
+			}
 			case postprocess::ShaderInputKind::History:
 			case postprocess::ShaderInputKind::Feedback:
 			{
 				const uint32_t offset = resource.kind == postprocess::ShaderInputKind::Feedback ? 1 : resource.historyOffset;
-				const uint32_t sourceDepth = resource.sourcePass == postprocess::InvalidShaderPass
-						? sourceHistoryDepth : programs[resource.sourcePass].historyDepth;
-				const size_t historyTarget = (frame.frameCount + sourceDepth - offset % sourceDepth) % sourceDepth;
-				texture = resource.sourcePass == postprocess::InvalidShaderPass
-						? sourceHistory[historyTarget]->getTexture()
-						: targets[resource.sourcePass][historyTarget]->outputs[resource.sourceOutput]->getTexture();
+				if (frame.frameCount < offset) {
+					texture = originalTexture;
+					break;
+				}
+				const uint32_t requestedFrame = frame.frameCount - offset;
+				if (resource.sourcePass == postprocess::InvalidShaderPass) {
+					const HistoryTarget& history = sourceHistory[requestedFrame % sourceHistoryDepth];
+					texture = history.initialized && history.renderedFrame == requestedFrame
+							? history.framebuffer->getTexture() : originalTexture;
+				}
+				else {
+					const uint32_t sourceDepth = programs[resource.sourcePass].historyDepth;
+					const MrtTarget *history = targets[resource.sourcePass][requestedFrame % sourceDepth].get();
+					texture = history->initialized && history->renderedFrame == requestedFrame
+							? history->outputs[resource.sourceOutput]->getTexture() : originalTexture;
+					resourceHasMipmaps = history->initialized && history->renderedFrame == requestedFrame
+							&& programs[resource.sourcePass].outputNeedsMipmaps[resource.sourceOutput];
+				}
 				break;
 			}
 			case postprocess::ShaderInputKind::LookupTexture:
-				const auto lookupIt = std::find_if(lookupTextures.begin(), lookupTextures.end(), [&](const LookupTexture& value) {
-					return value.config.name == resource.resourceName;
-				});
-				if (lookupIt == lookupTextures.end())
+				if (resource.lookupIndex >= lookupTextures.size()) {
+					disableFramebufferSrgb();
 					return nullptr;
-				lookup = &*lookupIt;
+				}
+				lookup = &lookupTextures[resource.lookupIndex];
 				texture = lookup->texture;
+				resourceHasMipmaps = lookup->config.useMipmaps;
 				break;
 			}
 			glActiveTexture(GL_TEXTURE0 + resource.unit);
 			glcache.InvalidateTextureBinding();
 			glcache.BindTexture(GL_TEXTURE_2D, texture);
-			if (resource.kind == postprocess::ShaderInputKind::Source && program.pass.useMipmaps && !inputHasMipmaps) {
-				glGenerateMipmap(GL_TEXTURE_2D);
-				inputHasMipmaps = true;
-			}
+			if (texture == sourceTexture)
+				sourceTextureState.capture();
+			const bool linearFilter = lookup != nullptr ? lookup->config.linearFilter
+					: resource.hasSamplerState ? resource.linearFilter : program.pass.linearFilter;
+			const bool sampleMipmaps = resourceHasMipmaps && (lookup != nullptr ? lookup->config.useMipmaps
+					: resource.hasSamplerState ? resource.useMipmaps : true);
+			const postprocess::ShaderWrapMode wrapMode = lookup != nullptr ? lookup->config.wrapMode
+					: resource.hasSamplerState ? resource.wrapMode : postprocess::ShaderWrapMode::ClampToEdge;
 			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-					lookup != nullptr ? (lookup->config.useMipmaps ? GL_LINEAR_MIPMAP_LINEAR
-							: lookup->config.linearFilter ? GL_LINEAR : GL_NEAREST)
-						: program.pass.useMipmaps && resource.kind == postprocess::ShaderInputKind::Source
-							? GL_LINEAR_MIPMAP_LINEAR : program.pass.linearFilter ? GL_LINEAR : GL_NEAREST);
+					sampleMipmaps ? (linearFilter ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST)
+							: linearFilter ? GL_LINEAR : GL_NEAREST);
 			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-					lookup != nullptr ? (lookup->config.linearFilter ? GL_LINEAR : GL_NEAREST)
-						: program.pass.linearFilter ? GL_LINEAR : GL_NEAREST);
-			if (lookup != nullptr) {
-				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, glWrapMode(lookup->config.wrapMode));
-				glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, glWrapMode(lookup->config.wrapMode));
-			}
+					linearFilter ? GL_LINEAR : GL_NEAREST);
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, glWrapMode(wrapMode));
+			glcache.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, glWrapMode(wrapMode));
+#ifndef GLES2
+			if (glBindSampler != nullptr)
+				glBindSampler(resource.unit, resource.sampler == 0 ? 0
+						: sampleMipmaps ? resource.mipSampler : resource.sampler);
+#endif
 			if (resource.location != -1)
 				glUniform1i(resource.location, static_cast<GLint>(resource.unit));
 		}
@@ -863,7 +1194,9 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		if (program.sourceSizeUniform != -1)
 			glUniform2f(program.sourceSizeUniform, static_cast<float>(passFrame.sourceWidth), static_cast<float>(passFrame.sourceHeight));
 		if (program.originalSizeUniform != -1)
-			glUniform2f(program.originalSizeUniform, static_cast<float>(originalWidth), static_cast<float>(originalHeight));
+			glUniform2f(program.originalSizeUniform,
+					static_cast<float>(program.duckStationGlsl ? frame.sourceWidth : originalWidth),
+					static_cast<float>(program.duckStationGlsl ? frame.sourceHeight : originalHeight));
 		if (program.outputSizeUniform != -1)
 			glUniform2f(program.outputSizeUniform, static_cast<float>(outputWidth), static_cast<float>(outputHeight));
 		if (program.frameCountUniform != -1)
@@ -890,6 +1223,11 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 		vertexArray.bind(vertexBuffer.get());
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		GlVertexArray::unbind();
+#ifndef GLES2
+		if (glBindSampler != nullptr)
+			for (const ResourceUniform& resource : program.resources)
+				glBindSampler(resource.unit, 0);
+#endif
 		for (uint32_t outputIndex = 0; outputIndex < target->outputs.size(); ++outputIndex) {
 			if (program.outputNeedsMipmaps[outputIndex]) {
 				glActiveTexture(GL_TEXTURE0);
@@ -899,14 +1237,16 @@ GlFramebuffer *GlShaderChain::render(GLuint sourceTexture, const postprocess::Sh
 			}
 		}
 
+		target->renderedFrame = frame.frameCount;
+		target->initialized = true;
 		inputTexture = target->outputs[0]->getTexture();
 		inputHasMipmaps = program.outputNeedsMipmaps[0];
 		passFrame.sourceWidth = outputWidth;
 		passFrame.sourceHeight = outputHeight;
 		output = target->outputs[0].get();
 	}
+	disableFramebufferSrgb();
 	glCheck();
-	presentationTransformApplied = composeDisplayInput;
 	return output;
 }
 
@@ -916,6 +1256,7 @@ void GlShaderChain::term()
 	deleteLookupTextures();
 	targets.clear();
 	displayInput.reset();
+	mipmapInput.reset();
 	sourceHistory.clear();
 	vertexBuffer.reset();
 	if (copyProgram != 0)
@@ -930,7 +1271,6 @@ void GlShaderChain::term()
 	configuredPaths.clear();
 	configuredGeneration = 0;
 	parameterGeneration = 0;
-	wantsUnscaledInput = false;
 	activePath.clear();
 	sourceHistoryDepth = 1;
 	needsSourceHistory = false;

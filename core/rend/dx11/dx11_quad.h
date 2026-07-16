@@ -26,7 +26,9 @@
 class Quad
 {
 public:
-	static constexpr size_t ConstantBufferBytes = sizeof(float) * 24;
+	// Post-processing may expose up to 256 scalar controls in addition to its
+	// eight frame-metadata scalars. Other quad users upload only their own prefix.
+	static constexpr size_t ConstantBufferBytes = sizeof(float) * 264;
 
 	void init(const ComPtr<ID3D11Device>& device, ComPtr<ID3D11DeviceContext> deviceContext, DX11Shaders *shaders)
 	{
@@ -81,7 +83,7 @@ public:
 		// Constant buffer
 		{
 			D3D11_BUFFER_DESC desc{};
-			// Post-processing supplies a 96-byte frame block; ordinary quad draws
+			// Post-processing supplies a 128-byte frame block; ordinary quad draws
 			// still write their four-float color at the beginning of this buffer.
 			desc.ByteWidth = ConstantBufferBytes;
 			desc.Usage = D3D11_USAGE_DYNAMIC;

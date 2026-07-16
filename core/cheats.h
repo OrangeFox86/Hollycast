@@ -2,6 +2,7 @@
     Created on: Sep 23, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -21,6 +22,7 @@
 #pragma once
 #include "types.h"
 
+#include <atomic>
 #include <vector>
 
 struct WidescreenCheat
@@ -57,11 +59,12 @@ struct Cheat
 	u32 repeatAddressIncrement = 0;
 	u32 destAddress = 0;
 	bool builtIn;
+	bool widescreen;
 
 	Cheat(Type type = Type::disabled, const std::string& description = "", bool enabled = false,
-			u32 size = 0, u32 address = 0, u32 value = 0, bool builtIn = false)
+			u32 size = 0, u32 address = 0, u32 value = 0, bool builtIn = false, bool widescreen = false)
 		: type(type), description(description), enabled(enabled),
-		  size(size), address(address), value(value), builtIn(builtIn)
+		  size(size), address(address), value(value), builtIn(builtIn), widescreen(widescreen)
 	{
 	}
 };
@@ -77,22 +80,29 @@ public:
 	size_t cheatCount() const { return cheats.size(); }
 	const std::string& cheatDescription(size_t index) const { return cheats[index].description; }
 	bool cheatEnabled(size_t index) const { return cheats[index].enabled; }
-	void enableCheat(size_t index, bool enabled) { cheats[index].enabled = enabled; }
+	void enableCheat(size_t index, bool enabled);
+	bool cheatWidescreen(size_t index) const { return cheats[index].widescreen; }
+	void setCheatWidescreen(size_t index, bool widescreen);
 	void loadCheatFile(const std::string& filename);
 	void saveCheatFile(const std::string& filename);
 	// Returns true if using 16:9 anamorphic screen ratio
 	bool isWidescreen() const { return widescreen_cheat != nullptr; }
-	void addGameSharkCheat(const std::string& name, const std::string& s);
+	// Manual cheats must opt in explicitly; arbitrary memory writes cannot be
+	// identified as widescreen safely by the renderer.
+	bool hasManualWidescreenCheat() const { return manualWidescreenActive.load(std::memory_order_relaxed); }
+	void addGameSharkCheat(const std::string& name, const std::string& s, bool widescreen = false);
 
 private:
 	u32 readRam(u32 addr, u32 bits);
 	void writeRam(u32 addr, u32 value, u32 bits);
 	void setActive(bool active);
+	void refreshManualWidescreenState();
 
 	static const WidescreenCheat widescreen_cheats[];
 	static const WidescreenCheat naomi_widescreen_cheats[];
 	const WidescreenCheat *widescreen_cheat = nullptr;
 	bool active = false;
+	std::atomic_bool manualWidescreenActive { false };
 	std::vector<Cheat> cheats;
 	std::string gameId;
 

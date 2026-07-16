@@ -44,6 +44,7 @@ private:
 	struct ParameterUniform {
 		GLint location = -1;
 		std::string name;
+		uint32_t layerIndex = 0;
 		postprocess::SlangParameterType type = postprocess::SlangParameterType::Float;
 		std::array<float, 16> values {};
 	};
@@ -54,7 +55,14 @@ private:
 		uint32_t sourceOutput = 0;
 		uint32_t historyOffset = 1;
 		std::string resourceName;
+		uint32_t lookupIndex = postprocess::InvalidShaderPass;
 		GLuint unit = 0;
+		bool hasSamplerState = false;
+		bool linearFilter = false;
+		bool useMipmaps = false;
+		postprocess::ShaderWrapMode wrapMode = postprocess::ShaderWrapMode::ClampToEdge;
+		GLuint sampler = 0;
+		GLuint mipSampler = 0;
 	};
 	struct LookupTexture {
 		postprocess::ShaderPresetTexture config;
@@ -69,20 +77,29 @@ private:
 		GLint outputSizeUniform = -1;
 		GLint frameCountUniform = -1;
 		GLint rotationUniform = -1;
+		bool duckStationGlsl = false;
 		std::vector<ParameterUniform> parameters;
 		std::vector<ResourceUniform> resources;
 		std::vector<bool> outputNeedsMipmaps;
 		uint32_t historyDepth = 1;
+		int targetWidth = 0;
+		int targetHeight = 0;
 	};
 	struct MrtTarget {
 		std::vector<std::unique_ptr<GlFramebuffer>> outputs;
 		GLuint framebuffer = 0;
+		uint32_t renderedFrame = 0;
+		bool initialized = false;
 		~MrtTarget() {
 			if (framebuffer != 0)
 				glDeleteFramebuffers(1, &framebuffer);
 		}
 	};
-	using TargetRing = std::vector<std::unique_ptr<GlFramebuffer>>;
+	struct HistoryTarget {
+		std::unique_ptr<GlFramebuffer> framebuffer;
+		uint32_t renderedFrame = 0;
+		bool initialized = false;
+	};
 	using MrtTargetRing = std::vector<std::unique_ptr<MrtTarget>>;
 
 	bool ensureResources();
@@ -101,10 +118,10 @@ private:
 	std::string activePath;
 	std::vector<MrtTargetRing> targets;
 	std::unique_ptr<GlFramebuffer> displayInput;
-	TargetRing sourceHistory;
+	std::unique_ptr<GlFramebuffer> mipmapInput;
+	std::vector<HistoryTarget> sourceHistory;
 	uint32_t sourceHistoryDepth = 1;
 	bool needsSourceHistory = false;
-	bool wantsUnscaledInput = false;
 	uint64_t parameterGeneration = 0;
 	std::vector<LookupTexture> lookupTextures;
 	std::unique_ptr<GlBuffer> vertexBuffer;

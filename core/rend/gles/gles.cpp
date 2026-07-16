@@ -640,6 +640,15 @@ void appendShaderDiagnostic(std::string *diagnostics, const char *stage, const s
 	diagnostics->append(entry, 0, entry.size() < remaining ? entry.size() : remaining);
 }
 
+void logShaderExcerpt(const char *label, const char *source)
+{
+	constexpr size_t MaxLoggedShaderBytes = 2048;
+	const size_t length = std::char_traits<char>::length(source);
+	INFO_LOG(RENDERER, "// %s (%zu bytes)\n%.*s%s\n// END", label, length,
+			static_cast<int>(std::min(length, MaxLoggedShaderBytes)), source,
+			length > MaxLoggedShaderBytes ? "\n// SOURCE TRUNCATED" : "");
+}
+
 GLuint gl_CompileShader(const char* shader, GLuint type, std::string *diagnostics)
 {
 	GLint result;
@@ -718,8 +727,8 @@ GLuint gl_CompileAndLink(const char *vertexShader, const char *fragmentShader, s
 		appendShaderDiagnostic(diagnostics, "Shader link", linkLog);
 
 		// Dump the shaders source for troubleshooting
-		INFO_LOG(RENDERER, "// VERTEX SHADER\n%s\n// END", vertexShader);
-		INFO_LOG(RENDERER, "// FRAGMENT SHADER\n%s\n// END", fragmentShader);
+		logShaderExcerpt("VERTEX SHADER", vertexShader);
+		logShaderExcerpt("FRAGMENT SHADER", fragmentShader);
 		// Candidate shader chains may fail during import. Release the failed
 		// program here so a rejected candidate cannot leak GL objects.
 		glDeleteProgram(program);

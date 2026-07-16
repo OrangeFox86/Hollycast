@@ -11,6 +11,7 @@
 #pragma once
 
 #include "rend/postprocess/shader_chain.h"
+#include "buffer.h"
 #include "quad.h"
 #include "texture.h"
 
@@ -64,6 +65,10 @@ private:
 	struct Binding {
 		postprocess::ShaderPassInput input;
 		uint32_t descriptorBinding = 0;
+		uint32_t lookupIndex = postprocess::InvalidShaderPass;
+		vk::UniqueSampler sampler;
+		vk::UniqueSampler mipSampler;
+		bool useMipmaps = false;
 	};
 	struct Program {
 		struct Output {
@@ -77,10 +82,22 @@ private:
 		vk::UniqueShaderModule fragmentShader;
 		vk::UniqueRenderPass renderPass;
 		vk::UniquePipeline pipeline;
+		vk::UniquePipeline blendCopyPipeline;
 		std::vector<Output> outputs;
 		std::vector<Binding> bindings;
 		std::vector<postprocess::SlangParameter> parameters;
+		std::vector<uint32_t> parameterIndices;
+		std::vector<bool> targetWasInitialized;
+		std::vector<vk::ImageMemoryBarrier> targetBarriers;
+		std::vector<vk::DescriptorImageInfo> imageInfos;
+		std::vector<vk::WriteDescriptorSet> descriptorWrites;
+		std::vector<std::unique_ptr<BufferData>> parameterBuffers;
+		std::vector<vk::ClearValue> clearColors;
+		std::vector<vk::ImageMemoryBarrier> blendBarriers;
+		bool duckStationGlsl = false;
 		uint32_t historyDepth = 1;
+		uint32_t targetWidth = 0;
+		uint32_t targetHeight = 0;
 	};
 	struct LookupTexture {
 		postprocess::ShaderPresetTexture config;
@@ -89,6 +106,9 @@ private:
 	};
 
 	bool updateConfiguredChain();
+	bool renderInternal(vk::Image sourceImage, vk::ImageView sourceView, const vk::Extent2D& extent,
+			const postprocess::ShaderFrameInfo& frame, vk::ImageView& outputView,
+			bool& presentationTransformApplied);
 	bool compileCandidate(const postprocess::ShaderChain& chain, std::vector<Program>& candidate, std::string& error);
 	bool ensureTarget(Target& target, const vk::Extent2D& extent, vk::Format format, bool mipmapped);
 	bool ensureTargetSet(TargetSet& targets, const Program& program, const vk::Extent2D& extent);
@@ -97,8 +117,11 @@ private:
 	void generateMipmaps(vk::CommandBuffer commandBuffer, const Target& target, bool existingContents) const;
 	vk::UniquePipeline createPipeline(vk::ShaderModule vertexShader, vk::ShaderModule fragmentShader, vk::RenderPass renderPass,
 			const postprocess::ShaderPass& pass, size_t colorAttachmentCount) const;
-	vk::UniqueRenderPass createRenderPass(const std::vector<vk::Format>& formats) const;
+	vk::UniqueRenderPass createRenderPass(const std::vector<vk::Format>& formats, bool preserveContents = false) const;
 	bool ensureLookupTextures(vk::CommandBuffer commandBuffer, std::string& error);
+	bool ensureLookupTextures(vk::CommandBuffer commandBuffer, std::vector<LookupTexture>& textures,
+			std::string& error);
+	bool validateLookupTextures(const std::vector<LookupTexture>& textures, std::string& error) const;
 	void ensureResources();
 
 	vk::UniqueRenderPass renderPass;
@@ -114,10 +137,11 @@ private:
 	std::unique_ptr<QuadBuffer> quadBuffer;
 	std::vector<std::vector<vk::UniqueDescriptorSet>> descriptorSets;
 	std::vector<vk::UniqueDescriptorSet> sourceDescriptorSets;
+	std::vector<vk::UniqueDescriptorSet> displayDescriptorSets;
 	std::vector<std::vector<std::vector<TargetSet>>> targets;
 	std::vector<std::vector<Target>> sourceTargets;
+	std::vector<Target> displayTargets;
 	uint32_t sourceHistoryDepth = 1;
-	bool wantsUnscaledInput = false;
 	std::vector<Program> programs;
 	std::vector<LookupTexture> lookupTextures;
 	std::vector<postprocess::ShaderParameter> parameters;

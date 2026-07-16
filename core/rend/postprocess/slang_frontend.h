@@ -13,9 +13,15 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace postprocess {
+
+// Shader packages always use C-locale numeric syntax, regardless of the
+// language selected by the host UI.
+bool parseShaderFloat(std::string_view text, float& value);
+bool parseShaderUnsigned(std::string_view text, uint32_t& value);
 
 enum class SlangParameterType {
 	Float,
@@ -43,6 +49,9 @@ struct SlangParameter {
 	SlangParameterValue maximum;
 	SlangParameterValue step;
 };
+
+// Shared typed-range contract for every shader frontend.
+bool validateSlangParameter(const SlangParameter& parameter, std::string& error);
 
 enum class SlangResourceType {
 	Sampler1D,

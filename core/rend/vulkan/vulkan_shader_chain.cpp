@@ -20,7 +20,9 @@
 
 #include <algorithm>
 #include <regex>
+#include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -30,8 +32,11 @@ layout (push_constant) uniform ShaderFrame
 {
 	vec4 sizes;
 	uvec4 frame;
-	vec4 parameters[6];
 } shaderFrame;
+layout (set = 0, binding = 16) uniform ShaderParameters
+{
+	vec4 parameters[64];
+} shaderParameters;
 #define SourceSize shaderFrame.sizes.xy
 #define OutputSize shaderFrame.sizes.zw
 #define FrameCount int(shaderFrame.frame.x)
@@ -49,8 +54,11 @@ layout (push_constant) uniform ShaderFrame
 {
 	vec4 sizes;
 	uvec4 frame;
-	vec4 parameters[6];
 } shaderFrame;
+layout (set = 0, binding = 16) uniform ShaderParameters
+{
+	vec4 parameters[64];
+} shaderParameters;
 #define SourceSize shaderFrame.sizes.xy
 #define OutputSize shaderFrame.sizes.zw
 #define FrameCount int(shaderFrame.frame.x)
@@ -64,6 +72,17 @@ constexpr uint32_t MaxShaderInputs = 16;
 // Custom vertex stages may sample the same graph resources as fragment stages.
 constexpr vk::PipelineStageFlags ShaderReadStages =
 		vk::PipelineStageFlagBits::eVertexShader | vk::PipelineStageFlagBits::eFragmentShader;
+
+vk::SamplerAddressMode samplerAddressMode(postprocess::ShaderWrapMode mode)
+{
+	switch (mode) {
+	case postprocess::ShaderWrapMode::Repeat: return vk::SamplerAddressMode::eRepeat;
+	case postprocess::ShaderWrapMode::MirroredRepeat: return vk::SamplerAddressMode::eMirroredRepeat;
+	case postprocess::ShaderWrapMode::ClampToBorder: return vk::SamplerAddressMode::eClampToBorder;
+	case postprocess::ShaderWrapMode::ClampToEdge: return vk::SamplerAddressMode::eClampToEdge;
+	}
+	return vk::SamplerAddressMode::eClampToEdge;
+}
 
 void removeVersionDirective(std::string& source)
 {
@@ -79,11 +98,16 @@ struct ShaderFrameUniforms {
 	uint32_t rotation;
 	uint32_t originalWidth;
 	uint32_t originalHeight;
+};
+
+struct alignas(16) ShaderParameterUniforms {
 	float parameters[postprocess::MaxShaderParameterComponents];
 };
 
-static_assert(postprocess::MaxShaderParameterComponents == 24,
-		"Update the Vulkan shader preambles when changing the shared limit.");
+static_assert(postprocess::MaxShaderParameterComponents == 256,
+		"Update the Vulkan shader parameter blocks when changing the shared limit.");
+static_assert(sizeof(ShaderFrameUniforms) <= 128,
+		"Shader frame metadata must fit Vulkan's guaranteed push-constant size.");
 
 bool isSampled2D(postprocess::SlangResourceType type)
 {
@@ -135,7 +159,7 @@ vk::BlendOp blendOperation(postprocess::ShaderBlendOperation operation)
 std::string glslParameterValue(const postprocess::SlangParameter& parameter, uint32_t offset)
 {
 	const auto value = [](uint32_t index) {
-		return "shaderFrame.parameters[" + std::to_string(index / 4) + "][" + std::to_string(index % 4) + "]";
+		return "shaderParameters.parameters[" + std::to_string(index / 4) + "][" + std::to_string(index % 4) + "]";
 	};
 	const auto composite = [&](const char *type, uint32_t components) {
 		std::string result = std::string(type) + "(";
@@ -194,23 +218,58 @@ void removeResourceDeclarations(std::string& source, const std::vector<postproce
 	source = std::move(cleaned);
 }
 
+bool collectVaryingLocations(const std::string& source, const char *direction,
+		std::unordered_map<std::string, uint32_t>& locations,
+		std::unordered_set<uint32_t>& usedLocations, std::string& error)
+{
+	const std::regex declaration("^\\s*layout\\s*\\(\\s*location\\s*=\\s*([0-9]+)\\s*\\)\\s*(?:flat\\s+)?"
+			+ std::string(direction)
+			+ R"(\s+(?:(?:lowp|mediump|highp)\s+)?(?:float|int|uint|[iu]?vec[2-4])\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$)");
+	std::istringstream lines(source);
+	for (std::string line; std::getline(lines, line);) {
+		std::smatch match;
+		if (!std::regex_match(line, match, declaration))
+			continue;
+		uint32_t location;
+		if (!postprocess::parseShaderUnsigned(match[1].str(), location)) {
+			error = "Vulkan shader varying location is invalid.";
+			return false;
+		}
+		const std::string name = match[2].str();
+		if (location == 0 && name != "vTexCoord") {
+			error = "Vulkan shader varying location zero is reserved for vTexCoord.";
+			return false;
+		}
+		if (const auto existing = locations.find(name); existing != locations.end() && existing->second != location) {
+			error = "Vulkan shader varying '" + name + "' changes explicit location between stages.";
+			return false;
+		}
+		locations[name] = location;
+		usedLocations.insert(location);
+	}
+	return true;
+}
+
 void addVaryingLocations(std::string& source, const char *direction,
-		std::unordered_map<std::string, uint32_t>& locations)
+		std::unordered_map<std::string, uint32_t>& locations,
+		std::unordered_set<uint32_t>& usedLocations)
 {
 	const std::regex declaration("^(\\s*)(?:(flat)\\s+)?" + std::string(direction)
 			+ R"(\s+(?:(?:lowp|mediump|highp)\s+)?(?:float|int|uint|[iu]?vec[2-4])\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$)");
 	std::istringstream lines(source);
 	std::string normalized;
 	uint32_t nextLocation = 1;
-	for (const auto& location : locations)
-		nextLocation = std::max(nextLocation, location.second + 1);
 	for (std::string line; std::getline(lines, line);) {
 		std::smatch match;
 		if (std::regex_match(line, match, declaration)) {
 			const std::string name = match[3].str();
-			auto [location, inserted] = locations.emplace(name, nextLocation);
-			if (inserted)
-				++nextLocation;
+			auto location = locations.find(name);
+			if (location == locations.end()) {
+				while (usedLocations.count(nextLocation) != 0)
+					++nextLocation;
+				location = locations.emplace(name, nextLocation).first;
+				usedLocations.insert(nextLocation++);
+			}
 			const size_t content = line.find_first_not_of(" \t");
 			line = match[1].str() + "layout (location = " + std::to_string(location->second) + ") "
 					+ line.substr(content);
@@ -297,15 +356,21 @@ bool postprocess::buildVulkanShaderSources(const ShaderPassSource& source,
 	removeResourceDeclarations(fragment, parameters);
 	std::string vertex = source.vertex;
 	std::unordered_map<std::string, uint32_t> varyingLocations;
+	std::unordered_set<uint32_t> usedVaryingLocations { 0 };
 	if (!vertex.empty()) {
 		removeVersionDirective(vertex);
 		removeResourceDeclarations(vertex, parameters);
-		addVaryingLocations(vertex, "out", varyingLocations);
 	}
-	addVaryingLocations(fragment, "in", varyingLocations);
+	if ((!vertex.empty() && !collectVaryingLocations(vertex, "out", varyingLocations, usedVaryingLocations, error))
+			|| !collectVaryingLocations(fragment, "in", varyingLocations, usedVaryingLocations, error))
+		return false;
+	if (!vertex.empty())
+		addVaryingLocations(vertex, "out", varyingLocations, usedVaryingLocations);
+	addVaryingLocations(fragment, "in", varyingLocations, usedVaryingLocations);
 	const std::string fragmentHeader = fragmentPreamble(parameters, bindings, outputCount);
 	if (fragmentHeader.empty()) {
-		error = "Vulkan shader chains may use at most 24 parameter components per pass.";
+		error = "Vulkan shader chains may use at most "
+				+ std::to_string(postprocess::MaxShaderParameterComponents) + " parameter components per pass.";
 		return false;
 	}
 	fragmentSource = VulkanSource().addSource(fragmentHeader).addSource(fragment).generate();
@@ -313,7 +378,8 @@ bool postprocess::buildVulkanShaderSources(const ShaderPassSource& source,
 	if (!vertex.empty()) {
 		const std::string vertexHeader = vertexPreamble(parameters, bindings, source.retroArchGlsl);
 		if (vertexHeader.empty()) {
-			error = "Vulkan shader chains may use at most 24 parameter components per pass.";
+			error = "Vulkan shader chains may use at most "
+					+ std::to_string(postprocess::MaxShaderParameterComponents) + " parameter components per pass.";
 			return false;
 		}
 		vertexSource = VulkanSource().addSource(vertexHeader).addSource(vertex).generate();
@@ -335,10 +401,13 @@ void VulkanShaderChain::ensureResources()
 	VulkanContext *context = VulkanContext::Instance();
 	renderPass = createRenderPass({ vk::Format::eR8G8B8A8Unorm });
 
-	std::array<vk::DescriptorSetLayoutBinding, MaxShaderInputs> bindings;
-	for (uint32_t index = 0; index < bindings.size(); ++index)
+	std::array<vk::DescriptorSetLayoutBinding, MaxShaderInputs + 1> bindings;
+	for (uint32_t index = 0; index < MaxShaderInputs; ++index)
 		bindings[index] = vk::DescriptorSetLayoutBinding(index, vk::DescriptorType::eCombinedImageSampler, 1,
 				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+	bindings[MaxShaderInputs] = vk::DescriptorSetLayoutBinding(MaxShaderInputs,
+			vk::DescriptorType::eUniformBuffer, 1,
+			vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
 	descriptorSetLayout = context->GetDevice().createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo({}, bindings));
 	const vk::PushConstantRange pushConstants(vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(ShaderFrameUniforms));
 	pipelineLayout = context->GetDevice().createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo({}, descriptorSetLayout.get(), pushConstants));
@@ -351,7 +420,7 @@ void VulkanShaderChain::ensureResources()
 	// A view with only level zero must not be sampled at a higher LOD. Mipmapped
 	// targets use the matching unrestricted sampler below.
 	mipLinearSampler = context->GetDevice().createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
-			vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eClampToEdge, vk::SamplerAddressMode::eClampToEdge,
+			vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eClampToEdge, vk::SamplerAddressMode::eClampToEdge,
 			vk::SamplerAddressMode::eClampToEdge));
 	mipNearestSampler = context->GetDevice().createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eNearest, vk::Filter::eNearest,
 			vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eClampToEdge, vk::SamplerAddressMode::eClampToEdge,
@@ -365,7 +434,7 @@ void VulkanShaderChain::ensureResources()
 			copyFragmentShader.get(), renderPass.get(), copyPass, 1);
 }
 
-vk::UniqueRenderPass VulkanShaderChain::createRenderPass(const std::vector<vk::Format>& formats) const
+vk::UniqueRenderPass VulkanShaderChain::createRenderPass(const std::vector<vk::Format>& formats, bool preserveContents) const
 {
 	VulkanContext *context = VulkanContext::Instance();
 	std::vector<vk::AttachmentDescription> attachments;
@@ -374,7 +443,8 @@ vk::UniqueRenderPass VulkanShaderChain::createRenderPass(const std::vector<vk::F
 	colorAttachments.reserve(formats.size());
 	for (size_t index = 0; index < formats.size(); ++index) {
 		attachments.emplace_back(vk::AttachmentDescription({}, formats[index], vk::SampleCountFlagBits::e1,
-				vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eStore,
+				preserveContents ? vk::AttachmentLoadOp::eLoad : vk::AttachmentLoadOp::eDontCare,
+				vk::AttachmentStoreOp::eStore,
 				vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 				vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal));
 		colorAttachments.emplace_back(static_cast<uint32_t>(index), vk::ImageLayout::eColorAttachmentOptimal);
@@ -432,6 +502,8 @@ bool VulkanShaderChain::compileCandidate(const postprocess::ShaderChain& chain, 
 		std::vector<postprocess::SlangParameter> typedParameters = passSource->slangParameters;
 		if (typedParameters.empty())
 			for (const postprocess::ShaderParameter& parameter : chain.parameters) {
+				if (parameter.layerIndex != pass.layerIndex)
+					continue;
 				postprocess::SlangParameter typed;
 				typed.name = parameter.name;
 				typed.type = parameter.type;
@@ -453,7 +525,15 @@ bool VulkanShaderChain::compileCandidate(const postprocess::ShaderChain& chain, 
 		}
 		Program program;
 		program.pass = pass;
+		program.duckStationGlsl = passSource->duckStationGlsl;
 		program.parameters = std::move(typedParameters);
+		for (const postprocess::SlangParameter& parameter : program.parameters) {
+			const auto configured = std::find_if(chain.parameters.begin(), chain.parameters.end(), [&](const postprocess::ShaderParameter& value) {
+				return value.name == parameter.name && value.layerIndex == pass.layerIndex;
+			});
+			program.parameterIndices.push_back(configured == chain.parameters.end() ? postprocess::InvalidShaderPass
+					: static_cast<uint32_t>(std::distance(chain.parameters.begin(), configured)));
+		}
 		program.outputs.reserve(outputs.size());
 		std::vector<vk::Format> targetFormats;
 		targetFormats.reserve(outputs.size());
@@ -504,8 +584,58 @@ bool VulkanShaderChain::compileCandidate(const postprocess::ShaderChain& chain, 
 		if (!postprocess::buildVulkanShaderSources(*passSource, program.parameters, shaderBindings,
 				static_cast<uint32_t>(program.outputs.size()), source, vertexSource, error))
 			return false;
-		for (size_t index = 0; index < shaderBindings.size(); ++index)
-			program.bindings.push_back({ shaderBindings[index], static_cast<uint32_t>(index + 1) });
+		for (size_t index = 0; index < shaderBindings.size(); ++index) {
+			uint32_t lookupIndex = postprocess::InvalidShaderPass;
+			if (shaderBindings[index].kind == postprocess::ShaderInputKind::LookupTexture) {
+				const auto lookup = std::find_if(chain.textures.begin(), chain.textures.end(), [&](const postprocess::ShaderPresetTexture& texture) {
+					return texture.name == shaderBindings[index].resourceName;
+				});
+				if (lookup == chain.textures.end()) {
+					error = "Vulkan lookup texture '" + shaderBindings[index].resourceName + "' was not resolved.";
+					return false;
+				}
+				lookupIndex = static_cast<uint32_t>(std::distance(chain.textures.begin(), lookup));
+			}
+			Binding binding;
+			binding.input = shaderBindings[index];
+			binding.descriptorBinding = static_cast<uint32_t>(index + 1);
+			binding.lookupIndex = lookupIndex;
+			const auto samplerConfig = std::find_if(pass.samplers.begin(), pass.samplers.end(), [&](const auto& sampler) {
+				return sampler.bindingName == shaderBindings[index].bindingName;
+			});
+			if (samplerConfig != pass.samplers.end()
+					&& shaderBindings[index].kind != postprocess::ShaderInputKind::LookupTexture) {
+				vk::SamplerCreateInfo samplerInfo;
+				samplerInfo.magFilter = samplerConfig->linearFilter ? vk::Filter::eLinear : vk::Filter::eNearest;
+				samplerInfo.minFilter = samplerInfo.magFilter;
+				samplerInfo.mipmapMode = vk::SamplerMipmapMode::eNearest;
+				samplerInfo.addressModeU = samplerAddressMode(samplerConfig->wrapMode);
+				samplerInfo.addressModeV = samplerInfo.addressModeW = samplerInfo.addressModeU;
+				samplerInfo.borderColor = vk::BorderColor::eFloatTransparentBlack;
+				samplerInfo.maxLod = 0.f;
+				try {
+					binding.sampler = context->GetDevice().createSamplerUnique(samplerInfo);
+					samplerInfo.mipmapMode = samplerConfig->linearFilter
+							? vk::SamplerMipmapMode::eLinear : vk::SamplerMipmapMode::eNearest;
+					samplerInfo.maxLod = vk::LodClampNone;
+					binding.mipSampler = context->GetDevice().createSamplerUnique(samplerInfo);
+				}
+				catch (const vk::SystemError& exception) {
+					error = "Vulkan could not create ReShade sampler '" + samplerConfig->bindingName
+							+ "': " + exception.what();
+					return false;
+				}
+				binding.useMipmaps = samplerConfig->useMipmaps;
+			}
+			program.bindings.push_back(std::move(binding));
+		}
+		program.targetWasInitialized.reserve(program.outputs.size());
+		program.targetBarriers.reserve(program.outputs.size());
+		program.imageInfos.reserve(program.bindings.size() + 1);
+		program.descriptorWrites.reserve(program.bindings.size() + 1);
+		program.clearColors.assign(program.outputs.size(),
+				vk::ClearValue(vk::ClearColorValue(std::array<float, 4> { 0.f, 0.f, 0.f, 1.f })));
+		program.blendBarriers.reserve(program.outputs.size());
 		if (!vertexSource.empty()) {
 			if (!ShaderCompiler::TryCompile(vk::ShaderStageFlagBits::eVertex,
 					vertexSource, program.vertexShader, error))
@@ -514,9 +644,12 @@ bool VulkanShaderChain::compileCandidate(const postprocess::ShaderChain& chain, 
 		if (!ShaderCompiler::TryCompile(vk::ShaderStageFlagBits::eFragment, source, program.fragmentShader, error))
 			return false;
 		try {
-			program.renderPass = createRenderPass(targetFormats);
+			program.renderPass = createRenderPass(targetFormats, program.pass.blendEnabled);
 			program.pipeline = createPipeline(program.vertexShader.get(), program.fragmentShader.get(), program.renderPass.get(),
 					program.pass, program.outputs.size());
+			if (program.pass.blendEnabled)
+				program.blendCopyPipeline = createPipeline({}, copyFragmentShader.get(), program.renderPass.get(),
+						postprocess::ShaderPass {}, program.outputs.size());
 		} catch (const vk::SystemError& exception) {
 			error = exception.what();
 			return false;
@@ -534,17 +667,20 @@ bool VulkanShaderChain::updateConfiguredChain()
 	if (requestedPaths == configuredPaths && generation == configuredGeneration)
 		return !programs.empty();
 	auto releaseActiveResources = [&] {
-		if (programs.empty() && targets.empty() && sourceTargets.empty() && lookupTextures.empty()
-				&& descriptorSets.empty() && sourceDescriptorSets.empty())
+		if (programs.empty() && targets.empty() && sourceTargets.empty() && displayTargets.empty()
+				&& lookupTextures.empty() && descriptorSets.empty() && sourceDescriptorSets.empty()
+				&& displayDescriptorSets.empty())
 			return;
 		// A live reload can retire resources referenced by any swapchain image.
 		// Waiting only on this rare transition keeps normal frames stall-free.
 		VulkanContext::Instance()->GetDevice().waitIdle();
 		targets.clear();
 		sourceTargets.clear();
+		displayTargets.clear();
 		lookupTextures.clear();
 		descriptorSets.clear();
 		sourceDescriptorSets.clear();
+		displayDescriptorSets.clear();
 		programs.clear();
 	};
 	configuredPaths = requestedPaths;
@@ -599,10 +735,18 @@ bool VulkanShaderChain::updateConfiguredChain()
 				postprocess::reportShaderChainStatus(activePath, error);
 				return !programs.empty();
 			}
+	std::vector<LookupTexture> candidateLookupTextures;
+	candidateLookupTextures.reserve(chain.textures.size());
+	for (const postprocess::ShaderPresetTexture& texture : chain.textures)
+		candidateLookupTextures.push_back({ texture });
+	if (!validateLookupTextures(candidateLookupTextures, error)) {
+		postprocess::reportShaderChainStatus(activePath, error);
+		WARN_LOG(RENDERER, "Post-processing shader '%s' was not activated: %s", requestedLabel.c_str(), error.c_str());
+		return !programs.empty();
+	}
 	releaseActiveResources();
 	programs = std::move(candidate);
 	parameters = std::move(chain.parameters);
-	wantsUnscaledInput = chain.wantsUnscaledInput;
 	sourceHistoryDepth = 1;
 	for (const postprocess::ShaderPass& pass : chain.passes)
 		for (const postprocess::ShaderPassInput& input : pass.inputs) {
@@ -616,9 +760,7 @@ bool VulkanShaderChain::updateConfiguredChain()
 			else
 				programs[input.sourcePass].historyDepth = std::max(programs[input.sourcePass].historyDepth, requiredDepth);
 		}
-	lookupTextures.reserve(chain.textures.size());
-	for (const postprocess::ShaderPresetTexture& texture : chain.textures)
-		lookupTextures.push_back({ texture });
+	lookupTextures = std::move(candidateLookupTextures);
 	activePath = requestedLabel;
 	postprocess::reportShaderChainStatus(activePath, {}, parameters,
 			chain.techniques, chain.selectedTechnique);
@@ -629,6 +771,9 @@ bool VulkanShaderChain::updateConfiguredChain()
 bool VulkanShaderChain::ensureTarget(Target& target, const vk::Extent2D& extent, vk::Format format,
 		bool mipmapped)
 {
+	const uint32_t maxDimension = VulkanContext::Instance()->GetPhysicalDevice().getProperties().limits.maxImageDimension2D;
+	if (extent.width == 0 || extent.height == 0 || extent.width > maxDimension || extent.height > maxDimension)
+		throw std::runtime_error("Vulkan post-processing target exceeds the device texture-size limit.");
 	uint32_t mipLevels = 1;
 	for (uint32_t dimension = std::max(extent.width, extent.height); mipmapped && dimension > 1; dimension >>= 1)
 		++mipLevels;
@@ -761,12 +906,58 @@ void VulkanShaderChain::generateMipmaps(vk::CommandBuffer commandBuffer, const T
 
 bool VulkanShaderChain::ensureLookupTextures(vk::CommandBuffer commandBuffer, std::string& error)
 {
-	for (LookupTexture& lookup : lookupTextures) {
+	return ensureLookupTextures(commandBuffer, lookupTextures, error);
+}
+
+bool VulkanShaderChain::validateLookupTextures(const std::vector<LookupTexture>& textures, std::string& error) const
+{
+	uint64_t lookupBytes = 0;
+	for (const LookupTexture& lookup : textures) {
+		std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(lookup.config.path, "rb"));
+		if (!file) {
+			error = "Unable to open post-processing lookup texture: " + lookup.config.path;
+			return false;
+		}
+		const s64 fileSize = file->size();
+		if (fileSize < 0 || static_cast<uint64_t>(fileSize) > postprocess::MaxShaderLookupFileBytes) {
+			error = "Post-processing lookup texture exceeds the 64 MiB file limit: " + lookup.config.path;
+			return false;
+		}
+		int width;
+		int height;
+		int channels;
+		u8 *pixels = stbi_load_from_file(file.get(), &width, &height, &channels, STBI_rgb_alpha);
+		if (!pixels) {
+			error = "Unable to decode post-processing lookup texture: " + lookup.config.path;
+			return false;
+		}
+		if (!postprocess::validateShaderLookupTexture(width, height, error)
+				|| !postprocess::accumulateShaderTargetBytes(width, height,
+						postprocess::ShaderTargetFormat::Default, {}, lookup.config.useMipmaps,
+						1, lookupBytes, error)) {
+			stbi_image_free(pixels);
+			return false;
+		}
+		stbi_image_free(pixels);
+	}
+	return true;
+}
+
+bool VulkanShaderChain::ensureLookupTextures(vk::CommandBuffer commandBuffer,
+		std::vector<LookupTexture>& textures, std::string& error)
+{
+	uint64_t lookupBytes = 0;
+	for (LookupTexture& lookup : textures) {
 		if (lookup.texture)
 			continue;
 		std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(lookup.config.path, "rb"));
 		if (!file) {
 			error = "Unable to open post-processing lookup texture: " + lookup.config.path;
+			return false;
+		}
+		const s64 fileSize = file->size();
+		if (fileSize < 0 || static_cast<uint64_t>(fileSize) > postprocess::MaxShaderLookupFileBytes) {
+			error = "Post-processing lookup texture exceeds the 64 MiB file limit: " + lookup.config.path;
 			return false;
 		}
 		int width;
@@ -777,6 +968,16 @@ bool VulkanShaderChain::ensureLookupTextures(vk::CommandBuffer commandBuffer, st
 			if (pixels)
 				stbi_image_free(pixels);
 			error = "Unable to decode post-processing lookup texture: " + lookup.config.path;
+			return false;
+		}
+		if (!postprocess::validateShaderLookupTexture(width, height, error)) {
+			stbi_image_free(pixels);
+			return false;
+		}
+		if (!postprocess::accumulateShaderTargetBytes(width, height,
+				postprocess::ShaderTargetFormat::Default, {}, lookup.config.useMipmaps,
+				1, lookupBytes, error)) {
+			stbi_image_free(pixels);
 			return false;
 		}
 		try {
@@ -811,10 +1012,30 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		const postprocess::ShaderFrameInfo& frame, vk::ImageView& outputView,
 		bool& presentationTransformApplied)
 {
+	try {
+		return renderInternal(sourceImage, sourceView, extent, frame, outputView, presentationTransformApplied);
+	} catch (const std::exception& exception) {
+		try {
+			postprocess::reportShaderChainStatus(activePath, exception.what());
+			WARN_LOG(RENDERER, "Vulkan post-processing failed: %s", exception.what());
+		} catch (...) {
+			// PresentFrame is noexcept; diagnostics must never turn recovery into termination.
+		}
+		return false;
+	} catch (...) {
+		return false;
+	}
+}
+
+bool VulkanShaderChain::renderInternal(vk::Image sourceImage, vk::ImageView sourceView, const vk::Extent2D& extent,
+		const postprocess::ShaderFrameInfo& frame, vk::ImageView& outputView,
+		bool& presentationTransformApplied)
+{
 	presentationTransformApplied = false;
 	if (!updateConfiguredChain() || !sourceImage || !sourceView || extent.width == 0 || extent.height == 0)
 		return false;
 	VulkanContext *context = VulkanContext::Instance();
+	vk::CommandBuffer commandBuffer = context->GetCurrentCommandBuffer();
 	const size_t imageIndex = static_cast<size_t>(context->GetCurrentImageIndex());
 	if (targets.size() <= imageIndex)
 		targets.resize(imageIndex + 1);
@@ -822,7 +1043,6 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		targets[imageIndex].resize(programs.size());
 	if (sourceTargets.size() <= imageIndex)
 		sourceTargets.resize(imageIndex + 1);
-	vk::CommandBuffer commandBuffer = context->GetCurrentCommandBuffer();
 	std::string lookupError;
 	if (!ensureLookupTextures(commandBuffer, lookupError)) {
 		postprocess::reportShaderChainStatus(activePath, lookupError);
@@ -849,41 +1069,167 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		if (status.activePath == activePath && status.error.empty())
 			parameters = status.parameters;
 	}
+	uint64_t targetBytes = 0;
+	std::string targetBudgetError;
+	const uint32_t swapchainCopies = std::max(1u, context->GetSwapChainSize());
+	postprocess::ShaderFrameInfo budgetFrame = frame;
+	const auto displayBoundary = std::find_if(programs.begin(), programs.end(), [](const Program& program) {
+		return program.pass.composeDisplayInput;
+	});
+	if (displayBoundary != programs.end() && postprocess::shouldComposeDisplayInput(frame, false)) {
+		if (!postprocess::accumulateShaderTargetBytes(frame.viewportWidth, frame.viewportHeight,
+				postprocess::ShaderTargetFormat::Default, {}, displayBoundary->pass.useMipmaps,
+				swapchainCopies, targetBytes, targetBudgetError)) {
+			postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+			return false;
+		}
+		if (displayBoundary == programs.begin()) {
+			budgetFrame.sourceWidth = frame.viewportWidth;
+			budgetFrame.sourceHeight = frame.viewportHeight;
+		}
+	}
+	if ((programs.front().pass.useMipmaps || sourceHistoryDepth > 1)
+			&& !postprocess::accumulateShaderTargetBytes(budgetFrame.sourceWidth, budgetFrame.sourceHeight,
+					postprocess::ShaderTargetFormat::Default, {}, programs.front().pass.useMipmaps,
+					sourceHistoryDepth * swapchainCopies, targetBytes, targetBudgetError)) {
+		postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+		return false;
+	}
+	bool budgetDisplaySpaceReached = false;
+	for (Program& program : programs) {
+		if (program.pass.composeDisplayInput && !budgetDisplaySpaceReached) {
+			budgetDisplaySpaceReached = true;
+			if (postprocess::shouldComposeDisplayInput(frame, false)) {
+				budgetFrame.sourceWidth = frame.viewportWidth;
+				budgetFrame.sourceHeight = frame.viewportHeight;
+			}
+		}
+		int width;
+		int height;
+		if (!postprocess::resolveTargetSize(program.pass, budgetFrame, width, height, targetBudgetError)) {
+			postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+			return false;
+		}
+		program.targetWidth = static_cast<uint32_t>(width);
+		program.targetHeight = static_cast<uint32_t>(height);
+		for (const Program::Output& output : program.outputs)
+			if (!postprocess::accumulateShaderTargetBytes(width, height, output.config.targetFormat,
+					output.config.targetFormatName, output.needsMipmaps,
+					program.historyDepth * swapchainCopies, targetBytes, targetBudgetError)) {
+				postprocess::reportShaderChainStatus(activePath, targetBudgetError);
+				return false;
+			}
+		budgetFrame.sourceWidth = width;
+		budgetFrame.sourceHeight = height;
+	}
 	vk::ImageView inputView = sourceView;
 	vk::ImageView originalView = sourceView;
+	vk::Extent2D inputExtent = extent;
+	vk::Extent2D originalExtent = extent;
 	bool inputHasMipmaps = false;
+	bool displaySpaceReached = false;
+	if (displayTargets.size() <= imageIndex)
+		displayTargets.resize(imageIndex + 1);
+	if (displayDescriptorSets.size() <= imageIndex)
+		displayDescriptorSets.resize(imageIndex + 1);
+	auto composeDisplayInput = [&](bool needsMipmaps) {
+		if (displaySpaceReached)
+			return true;
+		displaySpaceReached = true;
+		if (!postprocess::shouldComposeDisplayInput(frame, false))
+			return true;
+		const vk::Extent2D displayExtent(static_cast<uint32_t>(frame.viewportWidth),
+				static_cast<uint32_t>(frame.viewportHeight));
+		Target& displayTarget = displayTargets[imageIndex];
+		try {
+			const bool allocated = ensureTarget(displayTarget, displayExtent,
+					vk::Format::eR8G8B8A8Unorm, needsMipmaps);
+			const bool initialized = displayTarget.initialized && !allocated;
+			const vk::ImageMemoryBarrier targetBarrier(initialized ? vk::AccessFlagBits::eShaderRead : vk::AccessFlags(),
+					vk::AccessFlagBits::eColorAttachmentWrite,
+					initialized ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eUndefined,
+					vk::ImageLayout::eColorAttachmentOptimal, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+					displayTarget.image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+			commandBuffer.pipelineBarrier(initialized ? ShaderReadStages : vk::PipelineStageFlagBits::eTopOfPipe,
+					vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, nullptr, nullptr, targetBarrier);
+			if (!displayDescriptorSets[imageIndex])
+				displayDescriptorSets[imageIndex] = std::move(context->GetDevice().allocateDescriptorSetsUnique(
+						vk::DescriptorSetAllocateInfo(context->GetDescriptorPool(), descriptorSetLayout.get())).front());
+			const vk::Sampler sampler = config::LinearInterpolation ? linearSampler.get() : nearestSampler.get();
+			const vk::DescriptorImageInfo imageInfo(sampler, inputView, vk::ImageLayout::eShaderReadOnlyOptimal);
+			context->GetDevice().updateDescriptorSets(vk::WriteDescriptorSet(displayDescriptorSets[imageIndex].get(), 0, 0,
+					vk::DescriptorType::eCombinedImageSampler, imageInfo), nullptr);
+			if (!displayTarget.framebuffer) {
+				const std::array<vk::ImageView, 1> attachments = { displayTarget.renderView.get() };
+				displayTarget.framebuffer = context->GetDevice().createFramebufferUnique(
+						vk::FramebufferCreateInfo({}, renderPass.get(), attachments,
+							displayExtent.width, displayExtent.height, 1));
+			}
+			const vk::ClearValue clearColor(vk::ClearColorValue(std::array<float, 4> { 0.f, 0.f, 0.f, 1.f }));
+			commandBuffer.beginRenderPass(vk::RenderPassBeginInfo(renderPass.get(), displayTarget.framebuffer.get(),
+					vk::Rect2D({}, displayExtent), clearColor), vk::SubpassContents::eInline);
+			commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+					frame.rotationPending ? copyRotatePipeline.get() : copyPipeline.get());
+			commandBuffer.setViewport(0, vk::Viewport(0.f, 0.f, static_cast<float>(displayExtent.width),
+					static_cast<float>(displayExtent.height), 0.f, 1.f));
+			commandBuffer.setScissor(0, vk::Rect2D({}, displayExtent));
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout.get(), 0,
+					displayDescriptorSets[imageIndex].get(), nullptr);
+			quadBuffer->Update();
+			quadBuffer->Bind(commandBuffer);
+			quadBuffer->Draw(commandBuffer);
+			commandBuffer.endRenderPass();
+			if (needsMipmaps)
+				generateMipmaps(commandBuffer, displayTarget, initialized);
+			displayTarget.renderedFrame = frame.frameCount;
+			displayTarget.initialized = true;
+		} catch (const std::exception& exception) {
+			postprocess::reportShaderChainStatus(activePath, exception.what());
+			WARN_LOG(RENDERER, "Post-processing display composition failed: %s", exception.what());
+			return false;
+		}
+		inputView = displayTarget.sampleView.get();
+		originalView = inputView;
+		inputExtent = displayExtent;
+		originalExtent = displayExtent;
+		inputHasMipmaps = needsMipmaps;
+		passFrame.sourceWidth = frame.viewportWidth;
+		passFrame.sourceHeight = frame.viewportHeight;
+		presentationTransformApplied = true;
+		return true;
+	};
+	if (programs.front().pass.composeDisplayInput
+			&& !composeDisplayInput(programs.front().pass.useMipmaps))
+		return false;
+
 	const size_t currentSourceTarget = frame.frameCount % sourceHistoryDepth;
-	const bool composeDisplayInput = postprocess::shouldComposeDisplayInput(frame, wantsUnscaledInput);
-	const vk::Extent2D chainInputExtent = composeDisplayInput
-			? vk::Extent2D(static_cast<uint32_t>(frame.viewportWidth), static_cast<uint32_t>(frame.viewportHeight)) : extent;
-	const bool sourceNeedsMipmaps = programs.front().pass.useMipmaps;
-	if (composeDisplayInput || sourceNeedsMipmaps || sourceHistoryDepth > 1) {
+	const bool sourceNeedsMipmaps = programs.front().pass.useMipmaps && !inputHasMipmaps;
+	if (sourceNeedsMipmaps || sourceHistoryDepth > 1) {
 		if (sourceTargets[imageIndex].size() != sourceHistoryDepth)
 			sourceTargets[imageIndex].resize(sourceHistoryDepth);
 		Target& sourceTarget = sourceTargets[imageIndex][currentSourceTarget];
-		bool sourceWasAllocated = false;
+		bool sourceWasInitialized = false;
 		try {
-			sourceWasAllocated = !ensureTarget(sourceTarget, chainInputExtent,
+			const bool allocated = ensureTarget(sourceTarget, inputExtent,
 					vk::Format::eR8G8B8A8Unorm, sourceNeedsMipmaps);
+			sourceWasInitialized = sourceTarget.initialized && !allocated;
 		} catch (const std::exception& exception) {
 			postprocess::reportShaderChainStatus(activePath, exception.what());
 			WARN_LOG(RENDERER, "Post-processing source target allocation failed: %s", exception.what());
 			return false;
 		}
-		const vk::ImageMemoryBarrier targetBarrier(sourceWasAllocated ? vk::AccessFlagBits::eShaderRead : vk::AccessFlags(),
+		const vk::ImageMemoryBarrier targetBarrier(sourceWasInitialized ? vk::AccessFlagBits::eShaderRead : vk::AccessFlags(),
 				vk::AccessFlagBits::eColorAttachmentWrite,
-				sourceWasAllocated ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eUndefined,
+				sourceWasInitialized ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eUndefined,
 				vk::ImageLayout::eColorAttachmentOptimal, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
 				sourceTarget.image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-		commandBuffer.pipelineBarrier(sourceWasAllocated ? ShaderReadStages : vk::PipelineStageFlagBits::eTopOfPipe,
+		commandBuffer.pipelineBarrier(sourceWasInitialized ? ShaderReadStages : vk::PipelineStageFlagBits::eTopOfPipe,
 				vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, nullptr, nullptr, targetBarrier);
 		if (!sourceDescriptorSets[imageIndex]) {
 			sourceDescriptorSets[imageIndex] = std::move(context->GetDevice().allocateDescriptorSetsUnique(
 					vk::DescriptorSetAllocateInfo(context->GetDescriptorPool(), descriptorSetLayout.get())).front());
 		}
-		const vk::Sampler copySampler = composeDisplayInput && config::LinearInterpolation
-				? linearSampler.get() : nearestSampler.get();
-		const vk::DescriptorImageInfo imageInfo(copySampler, sourceView, vk::ImageLayout::eShaderReadOnlyOptimal);
+		const vk::DescriptorImageInfo imageInfo(nearestSampler.get(), inputView, vk::ImageLayout::eShaderReadOnlyOptimal);
 		context->GetDevice().updateDescriptorSets(vk::WriteDescriptorSet(sourceDescriptorSets[imageIndex].get(), 0, 0,
 				vk::DescriptorType::eCombinedImageSampler, imageInfo), nullptr);
 		const vk::ClearValue clearColor(vk::ClearColorValue(std::array<float, 4> { 0.f, 0.f, 0.f, 1.f }));
@@ -891,25 +1237,24 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 			const std::array<vk::ImageView, 1> sourceAttachments = { sourceTarget.renderView.get() };
 			sourceTarget.framebuffer = context->GetDevice().createFramebufferUnique(
 					vk::FramebufferCreateInfo({}, renderPass.get(), sourceAttachments,
-							chainInputExtent.width, chainInputExtent.height, 1));
+							inputExtent.width, inputExtent.height, 1));
 		}
 		commandBuffer.beginRenderPass(vk::RenderPassBeginInfo(renderPass.get(), sourceTarget.framebuffer.get(),
-				vk::Rect2D({}, chainInputExtent), clearColor), vk::SubpassContents::eInline);
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-				frame.rotationPending && composeDisplayInput ? copyRotatePipeline.get() : copyPipeline.get());
-		commandBuffer.setViewport(0, vk::Viewport(0.f, 0.f, static_cast<float>(chainInputExtent.width),
-				static_cast<float>(chainInputExtent.height), 0.f, 1.f));
-		commandBuffer.setScissor(0, vk::Rect2D({}, chainInputExtent));
+				vk::Rect2D({}, inputExtent), clearColor), vk::SubpassContents::eInline);
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, copyPipeline.get());
+		commandBuffer.setViewport(0, vk::Viewport(0.f, 0.f, static_cast<float>(inputExtent.width),
+				static_cast<float>(inputExtent.height), 0.f, 1.f));
+		commandBuffer.setScissor(0, vk::Rect2D({}, inputExtent));
 		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout.get(), 0, sourceDescriptorSets[imageIndex].get(), nullptr);
 		ShaderFrameUniforms uniforms {};
-		uniforms.sizes[0] = static_cast<float>(extent.width);
-		uniforms.sizes[1] = static_cast<float>(extent.height);
-		uniforms.sizes[2] = static_cast<float>(chainInputExtent.width);
-		uniforms.sizes[3] = static_cast<float>(chainInputExtent.height);
+		uniforms.sizes[0] = static_cast<float>(inputExtent.width);
+		uniforms.sizes[1] = static_cast<float>(inputExtent.height);
+		uniforms.sizes[2] = static_cast<float>(inputExtent.width);
+		uniforms.sizes[3] = static_cast<float>(inputExtent.height);
 		uniforms.frameCount = frame.frameCount;
 		uniforms.rotation = frame.rotationPending ? 1u : 0u;
-		uniforms.originalWidth = chainInputExtent.width;
-		uniforms.originalHeight = chainInputExtent.height;
+		uniforms.originalWidth = originalExtent.width;
+		uniforms.originalHeight = originalExtent.height;
 		commandBuffer.pushConstants(pipelineLayout.get(), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				0, sizeof(uniforms), &uniforms);
 		quadBuffer->Update();
@@ -917,28 +1262,21 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		quadBuffer->Draw(commandBuffer);
 		commandBuffer.endRenderPass();
 		if (sourceNeedsMipmaps)
-			generateMipmaps(commandBuffer, sourceTarget, sourceWasAllocated);
+			generateMipmaps(commandBuffer, sourceTarget, sourceWasInitialized);
 		sourceTarget.renderedFrame = frame.frameCount;
 		sourceTarget.initialized = true;
-		if (composeDisplayInput || sourceNeedsMipmaps) {
+		if (sourceNeedsMipmaps) {
 			inputView = sourceTarget.sampleView.get();
 			inputHasMipmaps = sourceNeedsMipmaps;
-		}
-		if (composeDisplayInput) {
-			originalView = inputView;
-			passFrame.sourceWidth = static_cast<int>(chainInputExtent.width);
-			passFrame.sourceHeight = static_cast<int>(chainInputExtent.height);
 		}
 	}
 	for (size_t index = 0; index < programs.size(); ++index) {
 		Program& program = programs[index];
-		int outputWidth;
-		int outputHeight;
-		std::string error;
-		if (!postprocess::resolveTargetSize(program.pass, passFrame, outputWidth, outputHeight, error)) {
-			postprocess::reportShaderChainStatus(activePath, error);
+		if (program.pass.composeDisplayInput && !composeDisplayInput(program.pass.useMipmaps))
 			return false;
-		}
+		const int outputWidth = static_cast<int>(program.targetWidth);
+		const int outputHeight = static_cast<int>(program.targetHeight);
+		std::string error;
 		const vk::Extent2D targetExtent(static_cast<uint32_t>(outputWidth), static_cast<uint32_t>(outputHeight));
 		auto& targetHistory = targets[imageIndex][index];
 		if (targetHistory.size() != program.historyDepth)
@@ -955,25 +1293,23 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 			WARN_LOG(RENDERER, "Post-processing target allocation failed: %s", exception.what());
 			return false;
 		}
-		std::vector<bool> targetWasInitialized;
-		targetWasInitialized.reserve(targetSet.outputs.size());
+		program.targetWasInitialized.clear();
 		for (const Target& target : targetSet.outputs)
-			targetWasInitialized.push_back(target.initialized);
-		std::vector<vk::ImageMemoryBarrier> targetBarriers;
-		targetBarriers.reserve(targetSet.outputs.size());
+			program.targetWasInitialized.push_back(target.initialized);
+		program.targetBarriers.clear();
 		bool hasInitializedTarget = false;
 		for (size_t outputIndex = 0; outputIndex < targetSet.outputs.size(); ++outputIndex) {
 			const Target& target = targetSet.outputs[outputIndex];
-			const bool initialized = targetWasInitialized[outputIndex];
+			const bool initialized = program.targetWasInitialized[outputIndex];
 			hasInitializedTarget = hasInitializedTarget || initialized;
-			targetBarriers.emplace_back(initialized ? vk::AccessFlagBits::eShaderRead : vk::AccessFlags(),
+			program.targetBarriers.emplace_back(initialized ? vk::AccessFlagBits::eShaderRead : vk::AccessFlags(),
 					vk::AccessFlagBits::eColorAttachmentWrite,
 					initialized ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eUndefined,
 					vk::ImageLayout::eColorAttachmentOptimal, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
 					target.image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
 		}
 		commandBuffer.pipelineBarrier(hasInitializedTarget ? ShaderReadStages : vk::PipelineStageFlagBits::eTopOfPipe,
-				vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, nullptr, nullptr, targetBarriers);
+				vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, nullptr, nullptr, program.targetBarriers);
 		if (!descriptorSets[imageIndex][index]) {
 			descriptorSets[imageIndex][index] = std::move(context->GetDevice().allocateDescriptorSetsUnique(
 					vk::DescriptorSetAllocateInfo(context->GetDescriptorPool(), descriptorSetLayout.get())).front());
@@ -981,14 +1317,12 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		const vk::Sampler sampler = program.pass.linearFilter
 				? (inputHasMipmaps ? mipLinearSampler.get() : linearSampler.get())
 				: (inputHasMipmaps ? mipNearestSampler.get() : nearestSampler.get());
-		std::vector<vk::DescriptorImageInfo> imageInfos;
-		std::vector<vk::WriteDescriptorSet> descriptorWrites;
-		imageInfos.reserve(program.bindings.size() + 1);
-		descriptorWrites.reserve(program.bindings.size() + 1);
+		program.imageInfos.clear();
+		program.descriptorWrites.clear();
 		auto bindImage = [&](uint32_t binding, vk::Sampler imageSampler, vk::ImageView view) {
-			imageInfos.emplace_back(imageSampler, view, vk::ImageLayout::eShaderReadOnlyOptimal);
-			descriptorWrites.emplace_back(descriptorSets[imageIndex][index].get(), binding, 0, 1,
-					vk::DescriptorType::eCombinedImageSampler, &imageInfos.back());
+			program.imageInfos.emplace_back(imageSampler, view, vk::ImageLayout::eShaderReadOnlyOptimal);
+			program.descriptorWrites.emplace_back(descriptorSets[imageIndex][index].get(), binding, 0, 1,
+					vk::DescriptorType::eCombinedImageSampler, &program.imageInfos.back());
 		};
 		bindImage(0, sampler, inputView);
 		for (const Binding& binding : program.bindings) {
@@ -1032,16 +1366,14 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 				break;
 			}
 			case postprocess::ShaderInputKind::LookupTexture: {
-				auto lookup = std::find_if(lookupTextures.begin(), lookupTextures.end(), [&](const LookupTexture& value) {
-					return value.config.name == binding.input.resourceName;
-				});
-				if (lookup == lookupTextures.end() || !lookup->texture || !lookup->sampler) {
+				if (binding.lookupIndex >= lookupTextures.size()
+						|| !lookupTextures[binding.lookupIndex].texture || !lookupTextures[binding.lookupIndex].sampler) {
 					error = "Vulkan lookup texture '" + binding.input.resourceName + "' is unavailable.";
 					postprocess::reportShaderChainStatus(activePath, error);
 					return false;
 				}
-				view = lookup->texture->GetImageView();
-				resourceSampler = lookup->sampler.get();
+				view = lookupTextures[binding.lookupIndex].texture->GetImageView();
+				resourceSampler = lookupTextures[binding.lookupIndex].sampler.get();
 				break;
 			}
 			}
@@ -1050,17 +1382,74 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 				postprocess::reportShaderChainStatus(activePath, error);
 				return false;
 			}
-			if (binding.input.kind != postprocess::ShaderInputKind::LookupTexture)
-				resourceSampler = program.pass.linearFilter
-						? (resourceHasMipmaps ? mipLinearSampler.get() : linearSampler.get())
-						: (resourceHasMipmaps ? mipNearestSampler.get() : nearestSampler.get());
+			if (binding.input.kind != postprocess::ShaderInputKind::LookupTexture) {
+				if (binding.sampler)
+					resourceSampler = binding.useMipmaps && resourceHasMipmaps
+							? binding.mipSampler.get() : binding.sampler.get();
+				else
+					resourceSampler = program.pass.linearFilter
+							? (resourceHasMipmaps ? mipLinearSampler.get() : linearSampler.get())
+							: (resourceHasMipmaps ? mipNearestSampler.get() : nearestSampler.get());
+			}
 			bindImage(binding.descriptorBinding, resourceSampler, view);
 		}
-		context->GetDevice().updateDescriptorSets(descriptorWrites, nullptr);
-		const vk::ClearValue clearColor(vk::ClearColorValue(std::array<float, 4> { 0.f, 0.f, 0.f, 1.f }));
-		const std::vector<vk::ClearValue> clearColors(targetSet.outputs.size(), clearColor);
+		ShaderParameterUniforms parameterUniforms {};
+		uint32_t parameterOffset = 0;
+		for (size_t parameterIndex = 0; parameterIndex < program.parameters.size(); ++parameterIndex) {
+			const postprocess::SlangParameter& parameter = program.parameters[parameterIndex];
+			const uint32_t components = parameterComponentCount(parameter.type);
+			std::copy_n(parameter.defaultValue.values.begin(), components,
+					parameterUniforms.parameters + parameterOffset);
+			const uint32_t configuredIndex = program.parameterIndices[parameterIndex];
+			if (configuredIndex < parameters.size())
+				std::copy_n(parameters[configuredIndex].values.begin(), components,
+						parameterUniforms.parameters + parameterOffset);
+			parameterOffset += components;
+		}
+		try {
+			if (program.parameterBuffers.size() <= imageIndex)
+				program.parameterBuffers.resize(imageIndex + 1);
+			if (!program.parameterBuffers[imageIndex])
+				program.parameterBuffers[imageIndex] = std::make_unique<BufferData>(
+						sizeof(ShaderParameterUniforms), vk::BufferUsageFlagBits::eUniformBuffer);
+			program.parameterBuffers[imageIndex]->upload(sizeof(parameterUniforms), &parameterUniforms);
+		} catch (const std::exception& exception) {
+			postprocess::reportShaderChainStatus(activePath, exception.what());
+			WARN_LOG(RENDERER, "Post-processing parameter-buffer allocation failed: %s", exception.what());
+			return false;
+		}
+		context->GetDevice().updateDescriptorSets(program.descriptorWrites, nullptr);
+		const vk::DescriptorBufferInfo parameterInfo(program.parameterBuffers[imageIndex]->buffer.get(),
+				0, sizeof(ShaderParameterUniforms));
+		context->GetDevice().updateDescriptorSets(vk::WriteDescriptorSet(descriptorSets[imageIndex][index].get(),
+				MaxShaderInputs, 0, vk::DescriptorType::eUniformBuffer, nullptr, parameterInfo), nullptr);
+		if (program.pass.blendEnabled) {
+			// ReShade blends against the current backbuffer. Populate the private
+			// target first, then load those pixels for the blended pass.
+			commandBuffer.beginRenderPass(vk::RenderPassBeginInfo(program.renderPass.get(), targetSet.framebuffer.get(),
+					vk::Rect2D({}, targetExtent), program.clearColors), vk::SubpassContents::eInline);
+			commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, program.blendCopyPipeline.get());
+			commandBuffer.setViewport(0, vk::Viewport(0.f, 0.f, static_cast<float>(outputWidth),
+					static_cast<float>(outputHeight), 0.f, 1.f));
+			commandBuffer.setScissor(0, vk::Rect2D({}, targetExtent));
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout.get(), 0,
+					descriptorSets[imageIndex][index].get(), nullptr);
+			quadBuffer->Update();
+			quadBuffer->Bind(commandBuffer);
+			quadBuffer->Draw(commandBuffer);
+			commandBuffer.endRenderPass();
+			program.blendBarriers.clear();
+			for (const Target& target : targetSet.outputs)
+				program.blendBarriers.emplace_back(vk::AccessFlagBits::eColorAttachmentWrite,
+						vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
+						vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eColorAttachmentOptimal,
+						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, target.image.get(),
+						vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+			commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eColorAttachmentOutput,
+					vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, nullptr, nullptr, program.blendBarriers);
+		}
 		commandBuffer.beginRenderPass(vk::RenderPassBeginInfo(program.renderPass.get(), targetSet.framebuffer.get(),
-				vk::Rect2D({}, targetExtent), clearColors), vk::SubpassContents::eInline);
+				vk::Rect2D({}, targetExtent), program.clearColors), vk::SubpassContents::eInline);
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, program.pipeline.get());
 		commandBuffer.setViewport(0, vk::Viewport(0.f, 0.f, static_cast<float>(outputWidth), static_cast<float>(outputHeight), 0.f, 1.f));
 		commandBuffer.setScissor(0, vk::Rect2D({}, targetExtent));
@@ -1072,19 +1461,8 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		uniforms.sizes[3] = static_cast<float>(outputHeight);
 		uniforms.frameCount = program.pass.frameCountModulo == 0 ? frame.frameCount : frame.frameCount % program.pass.frameCountModulo;
 		uniforms.rotation = frame.rotationPending ? 1u : 0u;
-		uniforms.originalWidth = chainInputExtent.width;
-		uniforms.originalHeight = chainInputExtent.height;
-		uint32_t parameterOffset = 0;
-		for (const postprocess::SlangParameter& parameter : program.parameters) {
-			const uint32_t components = parameterComponentCount(parameter.type);
-			std::copy_n(parameter.defaultValue.values.begin(), components, uniforms.parameters + parameterOffset);
-			const auto configured = std::find_if(parameters.begin(), parameters.end(), [&](const postprocess::ShaderParameter& value) {
-				return value.name == parameter.name;
-			});
-			if (configured != parameters.end())
-				std::copy_n(configured->values.begin(), components, uniforms.parameters + parameterOffset);
-			parameterOffset += components;
-		}
+		uniforms.originalWidth = program.duckStationGlsl ? static_cast<uint32_t>(frame.sourceWidth) : originalExtent.width;
+		uniforms.originalHeight = program.duckStationGlsl ? static_cast<uint32_t>(frame.sourceHeight) : originalExtent.height;
 		commandBuffer.pushConstants(pipelineLayout.get(), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				0, sizeof(uniforms), &uniforms);
 		quadBuffer->Update();
@@ -1094,26 +1472,28 @@ bool VulkanShaderChain::render(vk::Image sourceImage, vk::ImageView sourceView, 
 		for (size_t outputIndex = 0; outputIndex < targetSet.outputs.size(); ++outputIndex) {
 			Target& target = targetSet.outputs[outputIndex];
 			if (program.outputs[outputIndex].needsMipmaps)
-				generateMipmaps(commandBuffer, target, targetWasInitialized[outputIndex]);
+				generateMipmaps(commandBuffer, target, program.targetWasInitialized[outputIndex]);
 			target.initialized = true;
 		}
 		targetSet.renderedFrame = frame.frameCount;
 		targetSet.initialized = true;
 		inputView = targetSet.outputs[0].sampleView.get();
+		inputExtent = targetExtent;
 		inputHasMipmaps = program.outputs[0].needsMipmaps;
 		passFrame.sourceWidth = outputWidth;
 		passFrame.sourceHeight = outputHeight;
 	}
 	outputView = inputView;
-	presentationTransformApplied = composeDisplayInput;
 	return true;
 }
 
 void VulkanShaderChain::term()
 {
 	sourceTargets.clear();
+	displayTargets.clear();
 	targets.clear();
 	sourceDescriptorSets.clear();
+	displayDescriptorSets.clear();
 	descriptorSets.clear();
 	quadBuffer.reset();
 	programs.clear();
@@ -1131,7 +1511,6 @@ void VulkanShaderChain::term()
 	configuredPaths.clear();
 	configuredGeneration = 0;
 	parameterGeneration = 0;
-	wantsUnscaledInput = false;
 	activePath.clear();
 	sourceHistoryDepth = 1;
 	postprocess::reportShaderChainStatus({}, {});

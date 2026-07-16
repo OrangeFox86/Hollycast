@@ -60,6 +60,7 @@
 #include <cstring>
 #include <cfloat>
 #include <cctype>
+#include <future>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -4514,6 +4515,8 @@ struct ShaderBrowserEntry
 {
 	std::string path;
 	std::string displayPath;
+	std::string catalogKey;
+	std::string searchText;
 	postprocess::ShaderFormat format = postprocess::ShaderFormat::Unknown;
 };
 
@@ -4533,6 +4536,21 @@ static std::string g_shaderBrowserError;
 static std::string g_shaderCatalogWarning;
 static std::string g_shaderFilter;
 static bool g_shaderBrowserInitialized = false;
+static std::vector<size_t> g_shaderVisibleEntries;
+static std::string g_shaderAppliedFilter;
+static uint64_t g_shaderBrowserGeneration = 0;
+static uint64_t g_shaderVisibleGeneration = 0;
+
+struct ShaderScanResult
+{
+	std::string directory;
+	std::vector<ShaderBrowserEntry> entries;
+	std::string error;
+};
+
+static std::future<ShaderScanResult> g_shaderScanFuture;
+static bool g_shaderScanPending = false;
+static std::string g_shaderPendingDirectory;
 
 struct ShaderPreviewState
 {
@@ -4621,6 +4639,13 @@ static void loadShaderCatalog(const std::string& directory)
 	catch (const std::exception& exception) {
 		g_shaderCatalogWarning = exception.what();
 	}
+	for (ShaderBrowserEntry& entry : g_shaderBrowserEntries) {
+		entry.searchText = lowercaseAscii(entry.displayPath);
+		if (const auto metadata = g_shaderBrowserMetadata.find(entry.catalogKey);
+				metadata != g_shaderBrowserMetadata.end())
+			entry.searchText += '\n' + lowercaseAscii(metadata->second.name) + '\n'
+					+ lowercaseAscii(metadata->second.description) + '\n' + lowercaseAscii(metadata->second.author);
+	}
 }
 
 static std::string shaderDisplayPath(const std::string& root, const std::string& path)
@@ -4642,34 +4667,19 @@ static std::string shaderDisplayPath(const std::string& root, const std::string&
 	return normalizedPath;
 }
 
-static void refreshShaderBrowser()
+static ShaderScanResult scanShaderDirectory(std::string directory)
 {
 	constexpr size_t MaxDirectories = 4096;
 	constexpr size_t MaxFiles = 16384;
 	constexpr size_t MaxDepth = 64;
-	g_shaderBrowserEntries.clear();
-	g_shaderBrowserError.clear();
-	g_shaderCatalogWarning.clear();
-	g_shaderBrowserDirectory = configuredShaderDirectory();
-	g_shaderBrowserInitialized = true;
-
+	ShaderScanResult result;
+	result.directory = std::move(directory);
 	try {
-		if (config::PostProcessShaderDirectory.get().empty()
-				&& !hostfs::storage().exists(g_shaderBrowserDirectory)
-				&& !make_directory(g_shaderBrowserDirectory)) {
-			g_shaderBrowserError = T("The default Data/shaders folder could not be created.");
-			return;
-		}
-		if (!hostfs::storage().exists(g_shaderBrowserDirectory)) {
-			g_shaderBrowserError = T("The selected shader folder does not exist or is unavailable.");
-			return;
-		}
-
 		std::vector<std::pair<std::string, size_t>> pendingDirectories {
-			{ g_shaderBrowserDirectory, 0 }
+			{ result.directory, 0 }
 		};
 		std::unordered_set<std::string> visitedDirectories;
-		while (!pendingDirectories.empty() && g_shaderBrowserEntries.size() < MaxFiles
+		while (!pendingDirectories.empty() && result.entries.size() < MaxFiles
 				&& visitedDirectories.size() < MaxDirectories) {
 			auto [directory, depth] = std::move(pendingDirectories.back());
 			pendingDirectories.pop_back();
@@ -4684,23 +4694,84 @@ static void refreshShaderBrowser()
 				const postprocess::ShaderFormat format = postprocess::detectFormat(entry.path);
 				if (format == postprocess::ShaderFormat::Unknown)
 					continue;
-				g_shaderBrowserEntries.push_back({ entry.path,
-						shaderDisplayPath(g_shaderBrowserDirectory, entry.path), format });
-				if (g_shaderBrowserEntries.size() == MaxFiles)
+				const std::string displayPath = shaderDisplayPath(result.directory, entry.path);
+				result.entries.push_back({ entry.path, displayPath, shaderCatalogKey(displayPath),
+						lowercaseAscii(displayPath), format });
+				if (result.entries.size() == MaxFiles)
 					break;
 			}
 		}
 		if (!pendingDirectories.empty())
-			g_shaderBrowserError = T("The shader scan reached its safety limit. Choose a smaller shader folder.");
-		std::sort(g_shaderBrowserEntries.begin(), g_shaderBrowserEntries.end(), [](const ShaderBrowserEntry& left,
+			result.error = "The shader scan reached its safety limit. Choose a smaller shader folder.";
+		std::sort(result.entries.begin(), result.entries.end(), [](const ShaderBrowserEntry& left,
 				const ShaderBrowserEntry& right) {
-			return lowercaseAscii(left.displayPath) < lowercaseAscii(right.displayPath);
+			return left.searchText < right.searchText;
 		});
-		loadShaderCatalog(g_shaderBrowserDirectory);
 	}
 	catch (const std::exception& exception) {
-		g_shaderBrowserError = exception.what();
+		result.error = exception.what();
 	}
+	return result;
+}
+
+static void startShaderBrowserScan(const std::string& directory)
+{
+	g_shaderBrowserDirectory = directory;
+	g_shaderBrowserInitialized = true;
+	g_shaderBrowserEntries.clear();
+	g_shaderVisibleEntries.clear();
+	g_shaderBrowserError.clear();
+	g_shaderCatalogWarning.clear();
+	if (config::PostProcessShaderDirectory.get().empty()
+			&& !hostfs::storage().exists(directory) && !make_directory(directory)) {
+		g_shaderBrowserError = T("The default Data/shaders folder could not be created.");
+		return;
+	}
+	if (!hostfs::storage().exists(directory)) {
+		g_shaderBrowserError = T("The selected shader folder does not exist or is unavailable.");
+		return;
+	}
+	g_shaderScanFuture = std::async(std::launch::async, [directory] {
+		return scanShaderDirectory(directory);
+	});
+}
+
+static void refreshShaderBrowser()
+{
+	const std::string directory = configuredShaderDirectory();
+	if (g_shaderScanFuture.valid()) {
+		g_shaderScanPending = true;
+		g_shaderPendingDirectory = directory;
+		return;
+	}
+	startShaderBrowserScan(directory);
+}
+
+static void pollShaderBrowserScan()
+{
+	if (!g_shaderScanFuture.valid()
+			|| g_shaderScanFuture.wait_for(std::chrono::seconds::zero()) != std::future_status::ready)
+		return;
+	ShaderScanResult result;
+	try {
+		result = g_shaderScanFuture.get();
+	}
+	catch (const std::exception& exception) {
+		result.directory = g_shaderBrowserDirectory;
+		result.error = exception.what();
+	}
+	if (g_shaderScanPending) {
+		g_shaderScanPending = false;
+		startShaderBrowserScan(g_shaderPendingDirectory);
+		g_shaderPendingDirectory.clear();
+		return;
+	}
+	if (result.directory != g_shaderBrowserDirectory)
+		return;
+	g_shaderBrowserEntries = std::move(result.entries);
+	g_shaderBrowserError = std::move(result.error);
+	loadShaderCatalog(g_shaderBrowserDirectory);
+	++g_shaderBrowserGeneration;
 }
 
 static bool rebuildShaderPreview()
@@ -4776,7 +4847,9 @@ static bool setPreviewParameter(const std::string& name, const float *values, ui
 	if (values == nullptr || componentCount == 0 || componentCount > 16)
 		return false;
 	auto parameter = std::find_if(g_shaderPreview.chain.parameters.begin(), g_shaderPreview.chain.parameters.end(),
-			[&](const postprocess::ShaderParameter& candidate) { return candidate.name == name; });
+			[&](const postprocess::ShaderParameter& candidate) {
+				return postprocess::shaderParameterKey(candidate) == name;
+			});
 	if (parameter == g_shaderPreview.chain.parameters.end() || parameter->componentCount != componentCount)
 		return false;
 	for (uint32_t component = 0; component < componentCount; ++component) {
@@ -4811,9 +4884,9 @@ static void resetShaderParameters()
 	if (previewMatchesActiveShader()) {
 		for (const postprocess::ShaderParameter& parameter : g_shaderPreview.chain.parameters) {
 			if (parameter.componentCount == 1)
-				postprocess::setShaderChainParameter(parameter.name, parameter.values[0]);
+				postprocess::setShaderChainParameter(postprocess::shaderParameterKey(parameter), parameter.values[0]);
 			else
-				postprocess::setShaderChainParameterComponents(parameter.name,
+				postprocess::setShaderChainParameterComponents(postprocess::shaderParameterKey(parameter),
 						parameter.values.data(), parameter.componentCount);
 		}
 	}
@@ -4848,7 +4921,37 @@ static void renderShaderActivationStatus()
 
 static void renderShaderParameterControls()
 {
-	if (g_shaderPreview.chain.techniques.size() > 1) {
+	for (postprocess::ShaderTechniqueGroup& group : g_shaderPreview.chain.techniqueGroups) {
+		if (group.techniques.size() < 2)
+			continue;
+		const int selectedTechnique = group.selectedTechnique >= 0
+				&& group.selectedTechnique < static_cast<int>(group.techniques.size())
+				? group.selectedTechnique : 0;
+		ImGui::PushID(static_cast<int>(group.layerIndex));
+		bool changed = false;
+		if (ImGui::BeginCombo(group.label.c_str(), group.techniques[selectedTechnique].c_str())) {
+			for (size_t index = 0; index < group.techniques.size(); ++index) {
+				const bool selected = static_cast<int>(index) == selectedTechnique;
+				if (ImGui::Selectable(group.techniques[index].c_str(), selected) && !selected) {
+					group.selectedTechnique = static_cast<int>(index);
+					config::PostProcessShaderTechnique.get() =
+							postprocess::serializeShaderTechniqueSelections(g_shaderPreview.chain.techniqueGroups);
+					changed = true;
+				}
+				if (selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::PopID();
+		if (changed) {
+			rebuildShaderPreview();
+			requestShaderActivation();
+			SaveSettings();
+			break;
+		}
+	}
+	if (g_shaderPreview.chain.techniqueGroups.empty() && g_shaderPreview.chain.techniques.size() > 1) {
 		const int selectedTechnique = g_shaderPreview.chain.selectedTechnique >= 0
 				&& g_shaderPreview.chain.selectedTechnique < static_cast<int>(g_shaderPreview.chain.techniques.size())
 				? g_shaderPreview.chain.selectedTechnique : 0;
@@ -4877,7 +4980,9 @@ static void renderShaderParameterControls()
 	ImGui::Separator();
 
 	for (postprocess::ShaderParameter& parameter : g_shaderPreview.chain.parameters) {
-		ImGui::PushID(parameter.name.c_str());
+		ImGui::PushID(postprocess::shaderParameterKey(parameter).c_str());
+		if (!parameter.key.empty())
+			ImGui::TextDisabled(T("Layer %u"), parameter.layerIndex + 1);
 		bool changed = false;
 		bool saveAfterEdit = false;
 		if (parameter.componentCount <= 1) {
@@ -4937,7 +5042,7 @@ static void renderShaderParameterControls()
 			else
 				ImGui::TextDisabled("%s: %.3f", parameter.label.c_str(), parameter.value);
 			if (changed)
-				setPreviewParameter(parameter.name, &value, 1);
+				setPreviewParameter(postprocess::shaderParameterKey(parameter), &value, 1);
 		}
 		else {
 			ImGui::TextWrapped("%s", parameter.label.c_str());
@@ -4961,7 +5066,7 @@ static void renderShaderParameterControls()
 				ImGui::PopID();
 			}
 			if (changed)
-				setPreviewParameter(parameter.name, values, parameter.componentCount);
+				setPreviewParameter(postprocess::shaderParameterKey(parameter), values, parameter.componentCount);
 		}
 		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
 			ImGui::BeginTooltip();
@@ -4994,7 +5099,7 @@ static std::string selectedShaderLabel(const std::string& path)
 			[&](const ShaderBrowserEntry& value) { return value.path == path; });
 	if (entry == g_shaderBrowserEntries.end())
 		return path;
-	const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry->displayPath));
+	const auto metadata = g_shaderBrowserMetadata.find(entry->catalogKey);
 	return metadata != g_shaderBrowserMetadata.end() && !metadata->second.name.empty()
 			? metadata->second.name : entry->displayPath;
 }
@@ -5008,6 +5113,7 @@ void renderShaderTab()
 	const std::string directory = configuredShaderDirectory();
 	if (!g_shaderBrowserInitialized || directory != g_shaderBrowserDirectory)
 		refreshShaderBrowser();
+	pollShaderBrowserScan();
 
 	if (RenderCollapsingHeader("ShaderLibrarySection", ICON_FA_FOLDER_OPEN, T("Shader Library"), ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -5015,8 +5121,22 @@ void renderShaderTab()
 		ImGui::TextWrapped(T("Folder: %s"), directory.c_str());
 
 		const char *folderPopup = T("Select Shader Folder");
-		if (ImGui::Button(T("Change Folder")))
+		const auto folderSelected = [](bool cancelled, const std::string& selection) {
+			if (!cancelled && !selection.empty()) {
+				config::PostProcessShaderDirectory.get() = selection;
+				refreshShaderBrowser();
+			}
+			return true;
+		};
+		const bool changeFolder = ImGui::Button(T("Change Folder"));
+#ifdef __ANDROID__
+		if (changeFolder && select_storage_popup(true, false, folderPopup, folderSelected)
+				== StoragePopupResult::Unsupported)
 			ImGui::OpenPopup(folderPopup);
+#else
+		if (changeFolder)
+			ImGui::OpenPopup(folderPopup);
+#endif
 		ImGui::SameLine();
 		if (ImGui::Button(T("Refresh List")))
 			refreshShaderBrowser();
@@ -5027,13 +5147,7 @@ void renderShaderTab()
 				refreshShaderBrowser();
 			}
 		}
-		select_file_popup(folderPopup, [](bool cancelled, const std::string& selection) {
-			if (!cancelled && !selection.empty()) {
-				config::PostProcessShaderDirectory.get() = selection;
-				refreshShaderBrowser();
-			}
-			return true;
-		}, false);
+		select_file_popup(folderPopup, folderSelected, false);
 
 		std::vector<std::string> selectedPaths = postprocess::configuredShaderPaths();
 		ImGui::Text(T("Recognized: %u    Selected layers: %u / %u"),
@@ -5043,34 +5157,33 @@ void renderShaderTab()
 			ImGui::TextColored(ImVec4(1.f, .55f, .25f, 1.f), "%s", g_shaderBrowserError.c_str());
 		if (!g_shaderCatalogWarning.empty())
 			ImGui::TextColored(ImVec4(1.f, .75f, .25f, 1.f), "%s", g_shaderCatalogWarning.c_str());
+		if (g_shaderScanFuture.valid())
+			ImGui::TextDisabled("%s", T("Scanning shader folder..."));
 
 		ImGui::SetNextItemWidth(-1.f);
 		ImGui::InputTextWithHint("##ShaderFilter", T("Filter recognized shaders..."), &g_shaderFilter);
-		const std::string loweredFilter = lowercaseAscii(g_shaderFilter);
-		std::vector<size_t> visibleEntries;
-		visibleEntries.reserve(g_shaderBrowserEntries.size());
-		for (size_t index = 0; index < g_shaderBrowserEntries.size(); ++index) {
-			const ShaderBrowserEntry& entry = g_shaderBrowserEntries[index];
-			const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry.displayPath));
-			const bool metadataMatches = metadata != g_shaderBrowserMetadata.end()
-					&& (lowercaseAscii(metadata->second.name).find(loweredFilter) != std::string::npos
-							|| lowercaseAscii(metadata->second.description).find(loweredFilter) != std::string::npos
-							|| lowercaseAscii(metadata->second.author).find(loweredFilter) != std::string::npos);
-			if (loweredFilter.empty() || lowercaseAscii(entry.displayPath).find(loweredFilter) != std::string::npos
-					|| metadataMatches)
-				visibleEntries.push_back(index);
+		if (g_shaderAppliedFilter != g_shaderFilter || g_shaderVisibleGeneration != g_shaderBrowserGeneration) {
+			g_shaderAppliedFilter = g_shaderFilter;
+			g_shaderVisibleGeneration = g_shaderBrowserGeneration;
+			g_shaderVisibleEntries.clear();
+			g_shaderVisibleEntries.reserve(g_shaderBrowserEntries.size());
+			const std::string loweredFilter = lowercaseAscii(g_shaderFilter);
+			for (size_t index = 0; index < g_shaderBrowserEntries.size(); ++index)
+				if (loweredFilter.empty()
+						|| g_shaderBrowserEntries[index].searchText.find(loweredFilter) != std::string::npos)
+					g_shaderVisibleEntries.push_back(index);
 		}
 
 		ImGui::BeginChild("RecognizedShaderList", ImVec2(0.f, SettingsLayoutScaled(260.f)),
 				ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
-		if (visibleEntries.empty())
+		if (g_shaderVisibleEntries.empty())
 			ImGui::TextDisabled("%s", g_shaderBrowserEntries.empty()
 					? T("No recognized shaders were found in this folder.") : T("No shaders match the current filter."));
 		ImGuiListClipper clipper;
-		clipper.Begin(static_cast<int>(visibleEntries.size()));
+		clipper.Begin(static_cast<int>(g_shaderVisibleEntries.size()));
 		while (clipper.Step()) {
 			for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
-				const ShaderBrowserEntry& entry = g_shaderBrowserEntries[visibleEntries[row]];
+				const ShaderBrowserEntry& entry = g_shaderBrowserEntries[g_shaderVisibleEntries[row]];
 				ImGui::PushID(entry.path.c_str());
 				const auto selected = std::find(selectedPaths.begin(), selectedPaths.end(), entry.path);
 				bool enabled = selected != selectedPaths.end();
@@ -5087,7 +5200,7 @@ void renderShaderTab()
 				if (!canEnable)
 					ImGui::EndDisabled();
 				ImGui::SameLine();
-				const auto metadata = g_shaderBrowserMetadata.find(shaderCatalogKey(entry.displayPath));
+				const auto metadata = g_shaderBrowserMetadata.find(entry.catalogKey);
 				const bool hasDisplayName = metadata != g_shaderBrowserMetadata.end() && !metadata->second.name.empty();
 				ImGui::TextUnformatted(hasDisplayName ? metadata->second.name.c_str() : entry.displayPath.c_str());
 				ImGui::SameLine();

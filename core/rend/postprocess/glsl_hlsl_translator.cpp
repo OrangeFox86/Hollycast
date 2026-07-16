@@ -11,14 +11,16 @@
 #include "shader_chain.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <functional>
 #include <regex>
 #include <sstream>
 
 namespace postprocess {
 namespace {
 
-static_assert(MaxShaderParameterComponents == 24,
+static_assert(MaxShaderParameterComponents == 256,
 		"Update the HLSL parameter arrays when changing the shared limit.");
 
 constexpr char HlslPreamble[] = R"(
@@ -34,7 +36,7 @@ cbuffer ShaderFrame : register(b0)
 	float2 OriginalSize;
 	// HLSL scalar arrays consume one 16-byte register per element. A float4
 	// array keeps the CPU's contiguous 16-float upload layout backend-neutral.
-	float4 Parameters[6];
+	float4 Parameters[64];
 };
 
 float GlslMod(float x, float y) { return x - y * floor(x / y); }
@@ -56,6 +58,7 @@ float3x3 GlslMat3(float a0, float a1, float a2, float a3, float a4, float a5, fl
 {
 	return float3x3(a0, a1, a2, a3, a4, a5, a6, a7, a8);
 }
+float2x2 GlslMat2(float v) { return float2x2(v, 0, 0, v); }
 float3x3 GlslMat3(float v) { return float3x3(v, 0, 0, 0, v, 0, 0, 0, v); }
 // GLSL indexes matrices by column. The bridge stores those columns as HLSL
 // rows, so the mul argument order is intentionally reversed here.
@@ -65,7 +68,11 @@ float3 GlslMul(float3x3 m, float3 v) { return mul(v, m); }
 float3 GlslMul(float3 v, float3x3 m) { return mul(m, v); }
 float4 GlslMul(float4x4 m, float4 v) { return mul(v, m); }
 float4 GlslMul(float4 v, float4x4 m) { return mul(m, v); }
+float2x2 GlslMul(float2x2 a, float2x2 b) { return mul(b, a); }
+float3x3 GlslMul(float3x3 a, float3x3 b) { return mul(b, a); }
+float4x4 GlslMul(float4x4 a, float4x4 b) { return mul(b, a); }
 float3 GlslMul(float4x3 m, float4 v) { return mul(v, m); }
+float4 GlslMul(float3 v, float4x3 m) { return mul(m, v); }
 float2 GlslGreaterThan(float2 a, float2 b) { return (float2)(a > b); }
 float3 GlslGreaterThan(float3 a, float3 b) { return (float3)(a > b); }
 float4 GlslGreaterThan(float4 a, float4 b) { return (float4)(a > b); }
@@ -90,7 +97,7 @@ cbuffer ShaderFrame : register(b0)
 	int Rotation;
 	float2 OriginalSize;
 	// Keep this layout identical to ShaderFrameUniforms and the pixel stage.
-	float4 Parameters[6];
+	float4 Parameters[64];
 };
 
 float GlslMod(float x, float y) { return x - y * floor(x / y); }
@@ -112,6 +119,7 @@ float3x3 GlslMat3(float a0, float a1, float a2, float a3, float a4, float a5, fl
 {
 	return float3x3(a0, a1, a2, a3, a4, a5, a6, a7, a8);
 }
+float2x2 GlslMat2(float v) { return float2x2(v, 0, 0, v); }
 float3x3 GlslMat3(float v) { return float3x3(v, 0, 0, 0, v, 0, 0, 0, v); }
 float2 GlslMul(float2x2 m, float2 v) { return mul(v, m); }
 float2 GlslMul(float2 v, float2x2 m) { return mul(m, v); }
@@ -119,7 +127,11 @@ float3 GlslMul(float3x3 m, float3 v) { return mul(v, m); }
 float3 GlslMul(float3 v, float3x3 m) { return mul(m, v); }
 float4 GlslMul(float4x4 m, float4 v) { return mul(v, m); }
 float4 GlslMul(float4 v, float4x4 m) { return mul(m, v); }
+float2x2 GlslMul(float2x2 a, float2x2 b) { return mul(b, a); }
+float3x3 GlslMul(float3x3 a, float3x3 b) { return mul(b, a); }
+float4x4 GlslMul(float4x4 a, float4x4 b) { return mul(b, a); }
 float3 GlslMul(float4x3 m, float4 v) { return mul(v, m); }
+float4 GlslMul(float3 v, float4x3 m) { return mul(m, v); }
 float2 GlslGreaterThan(float2 a, float2 b) { return (float2)(a > b); }
 float3 GlslGreaterThan(float3 a, float3 b) { return (float3)(a > b); }
 float4 GlslGreaterThan(float4 a, float4 b) { return (float4)(a > b); }
@@ -188,6 +200,7 @@ void replaceAll(std::string& source, const std::regex& pattern, const std::strin
 
 std::vector<std::pair<size_t, size_t>> argumentRanges(const std::string& source, size_t begin, size_t end);
 bool findClosingParenthesis(const std::string& source, size_t open, size_t& close);
+bool findClosingBrace(const std::string& source, size_t open, size_t& close);
 
 std::string normalizeHlslVectorConstructors(const std::string& source)
 {
@@ -259,32 +272,147 @@ std::string stripPreprocessorLines(const std::string& source)
 	return result;
 }
 
+void normalizeGlslSquareMatrixAliases(std::string& source)
+{
+	// GLSL accepts both matN and matNxN. Canonicalize before constructor and
+	// multiplication analysis so HLSL never receives an untranslated alias.
+	replaceAll(source, std::regex(R"(\bmat2x2\b)"), "mat2");
+	replaceAll(source, std::regex(R"(\bmat3x3\b)"), "mat3");
+	replaceAll(source, std::regex(R"(\bmat4x4\b)"), "mat4");
+}
+
+void qualifyGlobalConstantsForHlsl(std::string& source)
+{
+	// HLSL treats an unqualified global const as an external constant. GLSL does
+	// not, so preserve GLSL's compile-time-constant semantics explicitly.
+	const std::string searchable = stripComments(source);
+	std::vector<size_t> positions;
+	int braceDepth = 0;
+	for (size_t index = 0; index < searchable.size(); ++index) {
+		if (searchable[index] == '{') {
+			++braceDepth;
+			continue;
+		}
+		if (searchable[index] == '}') {
+			braceDepth = std::max(0, braceDepth - 1);
+			continue;
+		}
+		if (braceDepth == 0 && searchable.compare(index, 5, "const") == 0
+				&& (index == 0 || (!std::isalnum(static_cast<unsigned char>(searchable[index - 1]))
+						&& searchable[index - 1] != '_'))
+				&& (index + 5 == searchable.size()
+						|| (!std::isalnum(static_cast<unsigned char>(searchable[index + 5]))
+								&& searchable[index + 5] != '_')))
+			positions.push_back(index);
+	}
+	for (auto position = positions.rbegin(); position != positions.rend(); ++position)
+		source.insert(*position, "static ");
+}
+
 void lowerGlslMatrixMultiplication(std::string& source)
 {
-	// The portable graph uses non-square matrices as indexed column packs, not
-	// multiplication operands. Excluding them also avoids rewriting unrelated
-	// vector locals which legitimately shadow those short-lived pack names.
-	static const std::regex declaration(R"(\bmat[234]\s+([A-Za-z_][A-Za-z0-9_]*))");
-	static const std::regex functionDeclaration(R"(\bmat[234]\s+([A-Za-z_][A-Za-z0-9_]*)\s*\()");
+	// mat4x3 is the column-pack form used by CRT and reverse-AA filters. It needs
+	// the same explicit GLSL-order multiply bridge as square matrices.
+	static const std::regex declaration(R"(\b(?:mat[234]|mat4x3)\s+([A-Za-z_][A-Za-z0-9_]*))");
+	static const std::regex functionDeclaration(R"(\b(?:mat[234]|mat4x3)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\()");
+	const std::string searchable = stripPreprocessorLines(stripComments(source));
 	std::vector<std::string> functions;
-	for (std::sregex_iterator it(source.begin(), source.end(), functionDeclaration), end; it != end; ++it)
+	for (std::sregex_iterator it(searchable.begin(), searchable.end(), functionDeclaration), end; it != end; ++it)
 		functions.push_back((*it)[1].str());
 
-	std::vector<std::string> matrices;
-	for (std::sregex_iterator it(source.begin(), source.end(), declaration), end; it != end; ++it) {
+	struct MatrixVariable {
+		std::string name;
+		size_t declaration;
+		size_t scopeBegin;
+		size_t scopeEnd;
+	};
+	std::vector<MatrixVariable> matrices;
+	std::vector<std::string> matrixNames;
+	for (std::sregex_iterator it(searchable.begin(), searchable.end(), declaration), end; it != end; ++it) {
 		const std::string name = (*it)[1].str();
-		if (std::find(functions.begin(), functions.end(), name) == functions.end()
-				&& std::find(matrices.begin(), matrices.end(), name) == matrices.end())
-			matrices.push_back(name);
+		if (std::find(functions.begin(), functions.end(), name) != functions.end())
+			continue;
+		const size_t declarationPosition = static_cast<size_t>(it->position());
+		std::vector<size_t> openBraces;
+		std::vector<size_t> openParentheses;
+		for (size_t index = 0; index < declarationPosition; ++index) {
+			if (searchable[index] == '{')
+				openBraces.push_back(index);
+			else if (searchable[index] == '}' && !openBraces.empty())
+				openBraces.pop_back();
+			else if (searchable[index] == '(')
+				openParentheses.push_back(index);
+			else if (searchable[index] == ')' && !openParentheses.empty())
+				openParentheses.pop_back();
+		}
+		size_t scopeBegin = openBraces.empty() ? 0 : openBraces.back() + 1;
+		size_t scopeEnd = searchable.size();
+		if (!openBraces.empty()) {
+			int depth = 1;
+			for (size_t index = openBraces.back() + 1; index < searchable.size(); ++index) {
+				if (searchable[index] == '{')
+					++depth;
+				else if (searchable[index] == '}' && --depth == 0) {
+					scopeEnd = index;
+					break;
+				}
+			}
+		}
+		else if (!openParentheses.empty()) {
+			size_t signatureEnd;
+			if (!findClosingParenthesis(searchable, openParentheses.back(), signatureEnd))
+				continue;
+			const size_t body = searchable.find_first_not_of(" \t\r\n", signatureEnd + 1);
+			if (body == std::string::npos || searchable[body] != '{'
+					|| !findClosingBrace(searchable, body, scopeEnd))
+				continue;
+			scopeBegin = body + 1;
+		}
+		matrices.push_back({ name, declarationPosition, scopeBegin, scopeEnd });
+		if (std::find(matrixNames.begin(), matrixNames.end(), name) == matrixNames.end())
+			matrixNames.push_back(name);
 	}
-	for (const std::string& matrix : matrices) {
-		replaceAll(source, std::regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\*=\\s*" + matrix + "\\b"),
-				"$1 = GlslMul($1, " + matrix + ")");
-		replaceAll(source, std::regex("\\b" + matrix + R"(\s*\*\s*([A-Za-z_][A-Za-z0-9_]*))"),
-				"GlslMul(" + matrix + ", $1)");
-		replaceAll(source, std::regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\*\\s*" + matrix + "\\b"),
-				"GlslMul($1, " + matrix + ")");
+
+	struct Replacement {
+		size_t position;
+		size_t length;
+		std::string text;
+	};
+	std::vector<Replacement> replacements;
+	auto appendReplacements = [&](const std::string& name, const std::regex& pattern,
+			const std::function<std::string(const std::smatch&)>& format) {
+		for (std::sregex_iterator it(searchable.begin(), searchable.end(), pattern), end; it != end; ++it) {
+			const size_t position = static_cast<size_t>(it->position());
+			const bool inScope = std::any_of(matrices.begin(), matrices.end(), [&](const MatrixVariable& matrix) {
+				return matrix.name == name && position >= matrix.declaration
+						&& position >= matrix.scopeBegin && position < matrix.scopeEnd;
+			});
+			if (inScope)
+				replacements.push_back({ position, static_cast<size_t>(it->length()), format(*it) });
+		}
+	};
+	for (const std::string& matrix : matrixNames) {
+		const std::string vectorExpression = R"((vec[234]\s*\([^()]*\)|[A-Za-z_][A-Za-z0-9_]*))";
+		appendReplacements(matrix,
+				std::regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\*=\\s*" + matrix + "\\b"),
+				[&](const std::smatch& match) {
+					return match[1].str() + " = GlslMul(" + match[1].str() + ", " + matrix + ")";
+				});
+		appendReplacements(matrix, std::regex("\\b" + matrix + R"(\s*\*\s*)" + vectorExpression),
+				[&](const std::smatch& match) { return "GlslMul(" + matrix + ", " + match[1].str() + ")"; });
+		appendReplacements(matrix, std::regex(vectorExpression + "\\s*\\*\\s*" + matrix + "\\b"),
+				[&](const std::smatch& match) { return "GlslMul(" + match[1].str() + ", " + matrix + ")"; });
 	}
+	std::sort(replacements.begin(), replacements.end(), [](const Replacement& left, const Replacement& right) {
+		return left.position > right.position;
+	});
+	replacements.erase(std::unique(replacements.begin(), replacements.end(),
+			[](const Replacement& left, const Replacement& right) {
+				return left.position == right.position && left.length == right.length;
+			}), replacements.end());
+	for (const Replacement& replacement : replacements)
+		source.replace(replacement.position, replacement.length, replacement.text);
+
 	for (const std::string& function : functions) {
 		// Function and constructor arguments in the portable subset are already
 		// expression-balanced before this pass; nested calls remain rejected by
@@ -366,7 +494,7 @@ bool lowerTextureCalls(std::string& source, std::string& error)
 
 bool lowerSquareMatrixConstructors(std::string& source, std::string& error)
 {
-	static const std::regex constructor(R"(\bmat([34])\s*\()");
+	static const std::regex constructor(R"(\bmat([234])\s*\()");
 	const std::string searchable = stripPreprocessorLines(stripComments(source));
 	struct Replacement {
 		size_t position;
@@ -395,7 +523,7 @@ bool lowerSquareMatrixConstructors(std::string& source, std::string& error)
 bool lowerArrayConstructors(std::string& source, std::string& error)
 {
 	static const std::regex constructor(
-			R"(\b(float|int|uint|bool|[iu]?vec[234])\s+[A-Za-z_][A-Za-z0-9_]*\s*\[\s*[1-9][0-9]*\s*\]\s*=\s*\1\s*\[\s*\]\s*\()");
+			R"(\b(float|int|uint|bool|[iu]?vec[234])\s+[A-Za-z_][A-Za-z0-9_]*\s*\[\s*[1-9][0-9]*\s*\]\s*=\s*\1\s*\[\s*(?:[1-9][0-9]*)?\s*\]\s*\()");
 	const std::string searchable = stripPreprocessorLines(stripComments(source));
 	struct Replacement {
 		size_t begin;
@@ -455,6 +583,12 @@ std::vector<Varying> extractVaryings(std::string& source, const char *direction)
 			cleaned += line + '\n';
 	}
 	source = std::move(cleaned);
+	// Vertex and pixel stages are translated independently. Sort by identifier so
+	// matching varyings receive the same TEXCOORD semantic even when the stages
+	// declare them in a different order.
+	std::sort(varyings.begin(), varyings.end(), [](const Varying& left, const Varying& right) {
+		return left.name < right.name;
+	});
 	return varyings;
 }
 
@@ -665,6 +799,60 @@ bool findClosingBrace(const std::string& source, size_t open, size_t& close)
 		}
 	}
 	return false;
+}
+
+void renameFrameUniformShadows(std::string& source)
+{
+	// GLSL permits locals to shadow interface globals. HLSL macro expansion can
+	// otherwise make an initializer such as `OutputSize = BufferWidth...` read
+	// the not-yet-initialized local instead of HollyCast's frame constant.
+	static const std::array<const char *, 5> names {
+		"SourceSize", "OutputSize", "OriginalSize", "FrameCount", "Rotation"
+	};
+	const std::string searchable = stripPreprocessorLines(stripComments(source));
+	struct Replacement {
+		size_t position;
+		size_t length;
+		std::string text;
+	};
+	std::vector<Replacement> replacements;
+	for (const char *name : names) {
+		const std::regex declaration("\\b(?:bool|int|uint|float|[biu]?vec[234]|mat(?:[234]|[234]x[234]))\\s+("
+				+ std::string(name) + ")\\b");
+		for (std::sregex_iterator it(searchable.begin(), searchable.end(), declaration), end; it != end; ++it) {
+			const size_t declarationPosition = static_cast<size_t>(it->position(1));
+			std::vector<size_t> openBraces;
+			for (size_t index = 0; index < declarationPosition; ++index) {
+				if (searchable[index] == '{')
+					openBraces.push_back(index);
+				else if (searchable[index] == '}' && !openBraces.empty())
+					openBraces.pop_back();
+			}
+			if (openBraces.empty())
+				continue;
+			size_t scopeEnd;
+			if (!findClosingBrace(searchable, openBraces.back(), scopeEnd))
+				continue;
+			const std::regex identifier("\\b" + std::string(name) + "\\b");
+			const auto begin = searchable.cbegin() + static_cast<std::ptrdiff_t>(declarationPosition);
+			const auto scope = searchable.cbegin() + static_cast<std::ptrdiff_t>(scopeEnd);
+			for (std::sregex_iterator occurrence(begin, scope, identifier), occurrenceEnd;
+					occurrence != occurrenceEnd; ++occurrence) {
+				const size_t position = declarationPosition + static_cast<size_t>(occurrence->position());
+				if (position == 0 || searchable[position - 1] != '.')
+					replacements.push_back({ position, std::char_traits<char>::length(name),
+							"FxLocal" + std::string(name) });
+			}
+		}
+	}
+	std::sort(replacements.begin(), replacements.end(), [](const auto& left, const auto& right) {
+		return left.position > right.position;
+	});
+	replacements.erase(std::unique(replacements.begin(), replacements.end(), [](const auto& left, const auto& right) {
+		return left.position == right.position;
+	}), replacements.end());
+	for (const auto& replacement : replacements)
+		source.replace(replacement.position, replacement.length, replacement.text);
 }
 
 void addDeterministicFunctionFallbacks(std::string& source)
@@ -914,7 +1102,8 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 	for (const SlangParameter& parameter : parameters) {
 		parameterOffset += parameterComponents(parameter.type);
 		if (parameterOffset > MaxShaderParameterComponents) {
-			error = "DX11 shader chains may use at most 24 parameter components per pass.";
+			error = "DX11 shader chains may use at most " + std::to_string(MaxShaderParameterComponents)
+					+ " parameter components per pass.";
 			return false;
 		}
 	}
@@ -936,6 +1125,7 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 
 	if (!lowerTextureCalls(source, error))
 		return false;
+	renameFrameUniformShadows(source);
 
 	size_t bodyStart;
 	size_t bodyEnd;
@@ -944,6 +1134,8 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 		return false;
 	}
 
+	normalizeGlslSquareMatrixAliases(source);
+	qualifyGlobalConstantsForHlsl(source);
 	lowerGlslMatrixMultiplication(source);
 	lowerGlslVectorEquality(source);
 	if (!lowerGlslRelationalConversions(source, error))
@@ -985,7 +1177,9 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 		error = "DX11 GLSL shader main() is malformed.";
 		return false;
 	}
-	std::string mainPreamble = "\n\tfloat2 vTexCoord = input.vTexCoord;\n";
+	// Keep the host coordinate at global scope so GLSL shaders remain free to
+	// shadow vTexCoord inside main(), as several DuckStation CRT shaders do.
+	std::string mainPreamble = "\n\tvTexCoord = input.vTexCoord;\n";
 	for (const Varying& varying : varyings)
 		mainPreamble += "\t" + varying.name + " = input." + varying.name + ";\n";
 	if (outputCount == 1)
@@ -1033,7 +1227,7 @@ bool translateGlslFragmentToHlsl(const std::string& glslSource, const std::vecto
 	for (size_t index = 0; index < varyings.size(); ++index)
 		inputPreamble.insert(pixelInputPosition + pixelInputMarker.size(), "\t" + hlslVaryingType(varyings[index].type)
 				+ " " + varyings[index].name + " : TEXCOORD" + std::to_string(index + 1) + ";\n");
-	std::string varyingGlobals;
+	std::string varyingGlobals = "static float2 vTexCoord;\n";
 	for (const Varying& varying : varyings)
 		varyingGlobals += "static " + hlslVaryingType(varying.type) + " " + varying.name + ";\n";
 	hlslSource = inputPreamble + outputDeclaration + parameterGlobals + varyingGlobals + source;
@@ -1064,6 +1258,8 @@ bool translateGlslVertexToHlsl(const std::string& glslSource, const std::vector<
 		error = "DX11 custom Slang vertex stages require exactly one void main() entry point.";
 		return false;
 	}
+	normalizeGlslSquareMatrixAliases(source);
+	qualifyGlobalConstantsForHlsl(source);
 	lowerGlslMatrixMultiplication(source);
 	lowerGlslVectorEquality(source);
 	if (!lowerGlslRelationalConversions(source, error))
@@ -1088,6 +1284,12 @@ bool translateGlslVertexToHlsl(const std::string& glslSource, const std::vector<
 	replaceAll(source, std::regex(R"(\bsampler2D\b)"), "Texture2D");
 	source = normalizeHlslVectorConstructors(source);
 	replaceAll(source, std::regex(R"(\b(mediump|highp|lowp)\b\s*)"), "");
+	// ReShade can share helper functions between its vertex and pixel entries.
+	// Keep GLSL built-in lowering identical here so those helpers remain valid HLSL.
+	replaceAll(source, std::regex(R"(\bfract\b)"), "frac");
+	replaceAll(source, std::regex(R"(\binversesqrt\b)"), "rsqrt");
+	replaceAll(source, std::regex(R"(\bmix\b)"), "lerp");
+	replaceAll(source, std::regex(R"(\bmod\b)"), "GlslMod");
 	if (!findMainBody(source, bodyStart, bodyEnd)) {
 		error = "DX11 custom Slang vertex stage is malformed.";
 		return false;
@@ -1115,7 +1317,8 @@ bool translateGlslVertexToHlsl(const std::string& glslSource, const std::vector<
 	for (const SlangParameter& parameter : parameters) {
 		parameterOffset += parameterComponents(parameter.type);
 		if (parameterOffset > MaxShaderParameterComponents) {
-			error = "DX11 shader chains may use at most 24 parameter components per pass.";
+			error = "DX11 shader chains may use at most " + std::to_string(MaxShaderParameterComponents)
+					+ " parameter components per pass.";
 			return false;
 		}
 		parameterGlobals += "static " + std::string(hlslParameterType(parameter.type)) + " " + parameter.name

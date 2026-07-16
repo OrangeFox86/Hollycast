@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+*/
 #include "glcache.h"
 #include "gles.h"
 #include "hw/pvr/pvr_mem.h"

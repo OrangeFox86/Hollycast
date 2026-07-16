@@ -15,11 +15,42 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <locale>
 #include <regex>
 #include <sstream>
 #include <string_view>
 
 namespace postprocess {
+
+bool parseShaderFloat(std::string_view text, float& value)
+{
+	std::istringstream stream { std::string(text) };
+	stream.imbue(std::locale::classic());
+	float parsed;
+	stream >> std::noskipws >> parsed;
+	if (!stream.eof() || stream.fail() || !std::isfinite(parsed))
+		return false;
+	value = parsed;
+	return true;
+}
+
+bool parseShaderUnsigned(std::string_view text, uint32_t& value)
+{
+	if (text.empty())
+		return false;
+	uint64_t parsed = 0;
+	for (const unsigned char character : text) {
+		if (!std::isdigit(character))
+			return false;
+		const uint32_t digit = character - '0';
+		if (parsed > (std::numeric_limits<uint32_t>::max() - digit) / 10u)
+			return false;
+		parsed = parsed * 10 + digit;
+	}
+	value = static_cast<uint32_t>(parsed);
+	return true;
+}
+
 namespace {
 
 constexpr size_t MaxShaderTextSize = 2 * 1024 * 1024;
@@ -168,9 +199,8 @@ bool parseScalar(const std::string& text, SlangParameterType type, float& value)
 		if (text == "false" || text == "0") { value = 0.f; return true; }
 		return false;
 	}
-	char *end = nullptr;
-	const float parsed = std::strtof(text.c_str(), &end);
-	if (end == text.c_str() || *end != '\0' || !std::isfinite(parsed))
+	float parsed;
+	if (!parseShaderFloat(text, parsed))
 		return false;
 	if (type == SlangParameterType::Int && std::floor(parsed) != parsed)
 		return false;
@@ -222,7 +252,7 @@ bool parseParameter(const std::string& pragma, SlangParameter& parameter, std::s
 			|| !parseParameterValue(tokens[index++], parameter.type, parameter.maximum)
 			|| !parseParameterValue(tokens[index++], parameter.type, parameter.step))
 		return fail(error, "Slang #pragma parameter has an invalid typed value.");
-	return true;
+	return validateSlangParameter(parameter, error);
 }
 
 bool parseResourceType(const std::string& text, SlangResourceType& type)
@@ -297,11 +327,10 @@ bool parseResource(const std::string& line, SlangResource& resource)
 	resource.name = match[3].str();
 	if (match[4].matched) {
 		const std::string countText = match[4].str();
-		char *end = nullptr;
-		const unsigned long count = std::strtoul(countText.c_str(), &end, 10);
-		if (end == nullptr || *end != '\0' || count > std::numeric_limits<uint32_t>::max())
+		uint32_t count;
+		if (!parseShaderUnsigned(countText, count))
 			return false;
-		resource.arrayCount = static_cast<uint32_t>(count);
+		resource.arrayCount = count;
 	}
 	else {
 		resource.arrayCount = 1;
@@ -309,17 +338,15 @@ bool parseResource(const std::string& line, SlangResource& resource)
 	if (match[1].matched) {
 		std::smatch bindingMatch;
 		const std::string layout = match[1].str();
-		try {
-			if (std::regex_search(layout, bindingMatch, std::regex(R"(\bset\s*=\s*([0-9]+))", std::regex::icase))) {
-				resource.bindingSet = static_cast<uint32_t>(std::stoul(bindingMatch[1].str()));
+		if (std::regex_search(layout, bindingMatch, std::regex(R"(\bset\s*=\s*([0-9]+))", std::regex::icase))) {
+			if (!parseShaderUnsigned(bindingMatch[1].str(), resource.bindingSet))
+				return false;
 				resource.hasExplicitBinding = true;
-			}
-			if (std::regex_search(layout, bindingMatch, std::regex(R"(\bbinding\s*=\s*([0-9]+))", std::regex::icase))) {
-				resource.binding = static_cast<uint32_t>(std::stoul(bindingMatch[1].str()));
+		}
+		if (std::regex_search(layout, bindingMatch, std::regex(R"(\bbinding\s*=\s*([0-9]+))", std::regex::icase))) {
+			if (!parseShaderUnsigned(bindingMatch[1].str(), resource.binding))
+				return false;
 				resource.hasExplicitBinding = true;
-			}
-		} catch (...) {
-			return false;
 		}
 	}
 	classifyResource(resource);
@@ -333,6 +360,38 @@ bool looksLikeResourceDeclaration(const std::string& line)
 }
 
 } // namespace
+
+bool validateSlangParameter(const SlangParameter& parameter, std::string& error)
+{
+	const uint32_t components = componentCount(parameter.type);
+	if (parameter.name.empty() || parameter.label.empty()
+			|| parameter.defaultValue.componentCount != components
+			|| parameter.minimum.componentCount != components
+			|| parameter.maximum.componentCount != components
+			|| parameter.step.componentCount != components)
+		return fail(error, "Shader parameter metadata has inconsistent typed component counts.");
+
+	for (uint32_t index = 0; index < components; ++index) {
+		const float defaultValue = parameter.defaultValue.values[index];
+		const float minimum = parameter.minimum.values[index];
+		const float maximum = parameter.maximum.values[index];
+		const float step = parameter.step.values[index];
+		if (!std::isfinite(defaultValue) || !std::isfinite(minimum) || !std::isfinite(maximum)
+				|| !std::isfinite(step) || minimum > maximum || defaultValue < minimum
+				|| defaultValue > maximum || step < 0.f)
+			return fail(error, "Shader parameter '" + parameter.name + "' has an invalid default, range, or step.");
+		if (parameter.type == SlangParameterType::Int
+				&& (std::floor(defaultValue) != defaultValue || std::floor(minimum) != minimum
+						|| std::floor(maximum) != maximum || std::floor(step) != step))
+			return fail(error, "Integer shader parameter '" + parameter.name + "' requires integral metadata.");
+		if (parameter.type == SlangParameterType::Bool
+				&& ((defaultValue != 0.f && defaultValue != 1.f) || (minimum != 0.f && minimum != 1.f)
+						|| (maximum != 0.f && maximum != 1.f) || (step != 0.f && step != 1.f)))
+			return fail(error, "Boolean shader parameter '" + parameter.name + "' requires Boolean metadata.");
+	}
+	error.clear();
+	return true;
+}
 
 bool parseSlangFrontend(const std::string& shaderText, SlangShaderIR& shader, std::string& error)
 {

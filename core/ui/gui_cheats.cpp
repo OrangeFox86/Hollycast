@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -31,6 +32,7 @@ static void addCheat()
 {
 	static char cheatName[64];
 	static char cheatCode[512];
+	static bool widescreen;
     centerNextWindow();
     ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(600.f, 400.f)));
     ImguiStyleVar _(ImGuiStyleVar_WindowBorderSize, 1);
@@ -54,10 +56,11 @@ static void addCheat()
 			if (ImGui::Button(okLbl))
 			{
 				try {
-					cheatManager.addGameSharkCheat(cheatName, cheatCode);
+					cheatManager.addGameSharkCheat(cheatName, cheatCode, widescreen);
 					ImGui::CloseCurrentPopup();
 					cheatName[0] = 0;
 					cheatCode[0] = 0;
+					widescreen = false;
 				} catch (const FlycastException& e) {
 					gui_error(e.what());
 				}
@@ -69,6 +72,7 @@ static void addCheat()
 		ImGui::BeginChild(ImGui::GetID("input"), ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiChildFlags_NavFlattened);
 		{
 			InputText(T("Name"), cheatName, sizeof(cheatName));
+			ImGui::Checkbox(T("Use 16:9 presentation"), &widescreen);
 			InputTextMultiline(T("Code"), cheatCode, sizeof(cheatCode), ImVec2(0, ImGui::GetTextLineHeight() * 16));
 		}
 		ImGui::EndChild();
@@ -143,6 +147,16 @@ void gui_cheats()
 				bool v = cheatManager.cheatEnabled(i);
 				if (ImGui::Checkbox(cheatManager.cheatDescription(i).c_str(), &v))
 					cheatManager.enableCheat(i, v);
+				ImGui::SameLine();
+				bool widescreen = cheatManager.cheatWidescreen(i);
+				if (ImGui::Checkbox("16:9", &widescreen))
+				{
+					try {
+						cheatManager.setCheatWidescreen(i, widescreen);
+					} catch (const FlycastException& e) {
+						gui_error(e.what());
+					}
+				}
 			}
     }
     scrollWhenDraggingOnVoid();

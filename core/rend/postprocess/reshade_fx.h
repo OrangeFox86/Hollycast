@@ -94,6 +94,7 @@ struct ReShadeEffect {
 	std::vector<ReShadeTexture> textures;
 	std::vector<ReShadeSampler> samplers;
 	std::vector<ReShadeStruct> structs;
+	std::vector<std::string> globals;
 	std::vector<ReShadeFunction> functions;
 	std::vector<ReShadeTechnique> techniques;
 	std::optional<size_t> selectedTechnique;
