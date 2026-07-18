@@ -84,7 +84,7 @@ jobs:
       # - name: Upload to S3
       #   run: |
       #     cp shell/android-studio/flycast/build/outputs/bundle/release/*.aab shell/android-studio/flycast/build/outputs/apk/release/
-      #     rclone copy shell/android-studio/flycast/build/outputs/apk/release scaleway:flycast-builds/android/${GITHUB_REF#refs/}-$GITHUB_SHA --exclude '*.json'
+      #     rclone copy shell/android-studio/flycast/build/outputs/apk/release scaleway:hollycast-builds/android/${GITHUB_REF#refs/}-$GITHUB_SHA --exclude '*.json'
       #   if: github.repository == 'OrangeFox86/Hollycast' && github.event_name == 'push'
 
       # - name: Setup Sentry CLI
@@ -94,7 +94,7 @@ jobs:
       #   with:
       #     url: https://sentry.io
       #     token: ${{ env.SENTRY_TOKEN }}
-      #     organization: flycast
+      #     organization: hollycast
       #     project: minidump
       #     version: 2.21.2
       #   if: ${{ env.SENTRY_TOKEN != '' }}

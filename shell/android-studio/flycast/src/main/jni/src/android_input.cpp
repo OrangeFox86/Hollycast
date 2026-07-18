@@ -39,43 +39,43 @@ jmethodID inputDeviceManager_rumble;
 //
 // VGamepad
 //
-extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_VGamepad_getVibrationPower(JNIEnv *env, jobject obj) {
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getVibrationPower(JNIEnv *env, jobject obj) {
 	return config::VirtualGamepadHapticFeedback ? (jint)config::VirtualGamepadVibration : 0;
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_VGamepad_getIdleTimeoutSeconds(JNIEnv *env, jobject obj) {
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getIdleTimeoutSeconds(JNIEnv *env, jobject obj) {
 	return std::max(0, (int)config::VirtualGamepadIdleTimeout);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_VGamepad_show(JNIEnv * env, jobject obj) {
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_show(JNIEnv * env, jobject obj) {
 	vgamepad::show();
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_VGamepad_hide(JNIEnv * env, jobject obj) {
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_hide(JNIEnv * env, jobject obj) {
 	vgamepad::hide();
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_VGamepad_hitTest(JNIEnv * env, jobject obj,
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_hitTest(JNIEnv * env, jobject obj,
 		jfloat x, jfloat y) {
 	return vgamepad::hitTest(x, y);
 }
 
-extern "C" JNIEXPORT jfloat JNICALL Java_com_flycast_emulator_emu_VGamepad_getControlWidth(JNIEnv * env, jobject obj,
+extern "C" JNIEXPORT jfloat JNICALL Java_com_hollycast_emulator_emu_VGamepad_getControlWidth(JNIEnv * env, jobject obj,
 		jint controlId) {
 	return vgamepad::getControlWidth(static_cast<vgamepad::ControlId>(controlId));
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_VGamepad_layoutHitTest(JNIEnv * env, jobject obj,
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_layoutHitTest(JNIEnv * env, jobject obj,
 		jfloat x, jfloat y) {
 	return vgamepad::layoutHitTest(x, y);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_VGamepad_scaleElement(JNIEnv * env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_scaleElement(JNIEnv * env, jobject obj,
 		jint elemId, jfloat scale) {
 	vgamepad::scaleElement(static_cast<vgamepad::Element>(elemId), scale);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_VGamepad_translateElement(JNIEnv * env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_translateElement(JNIEnv * env, jobject obj,
 		jint elemId, jfloat x, jfloat y) {
 	vgamepad::translateElement(static_cast<vgamepad::Element>(elemId), x, y);
 }
@@ -92,7 +92,7 @@ void setEditMode(bool editing) {
 //
 // InputDeviceManager
 //
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_isMicPluggedIn(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_isMicPluggedIn(JNIEnv *env, jobject obj)
 {
 	for (const auto& devices : config::MapleExpansionDevices)
 		if (static_cast<MapleDeviceType>(devices[0]) == MDT_Microphone
@@ -102,7 +102,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDevi
 	return false;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_init(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_init(JNIEnv *env, jobject obj)
 {
 	inputDeviceManager = env->NewGlobalRef(obj);
 	inputDeviceManager_rumble = env->GetMethodID(env->GetObjectClass(obj), "rumble", "(IFFI)Z");
@@ -112,7 +112,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceMa
 	});
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_joystickAdded(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickAdded(JNIEnv *env, jobject obj,
 		jint id, jstring name, jint maple_port, jstring junique_id, jintArray fullAxes, jintArray halfAxes, jboolean hasRumble)
 {
 	if (id == 0)
@@ -141,7 +141,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceMa
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_joystickRemoved(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickRemoved(JNIEnv *env, jobject obj,
 		jint id)
 {
 	if (id == AndroidVirtualGamepad::GAMEPAD_ID)
@@ -158,24 +158,24 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceMa
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_virtualReleaseAll(JNIEnv *env, jobject obj) {
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_virtualReleaseAll(JNIEnv *env, jobject obj) {
 	if (virtualGamepad)
 		virtualGamepad->releaseAll();
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_virtualJoystick(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_virtualJoystick(JNIEnv *env, jobject obj,
 		jfloat x, jfloat y) {
 	if (virtualGamepad)
 		virtualGamepad->joystickInput(x, y);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_virtualButtonInput(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_virtualButtonInput(JNIEnv *env, jobject obj,
 		jint controlId, jboolean pressed) {
 	if (virtualGamepad)
 		virtualGamepad->buttonInput(static_cast<vgamepad::ControlId>(controlId), pressed);
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_joystickButtonEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickButtonEvent(JNIEnv *env, jobject obj,
 		jint id, jint key, jboolean pressed)
 {
 	std::shared_ptr<AndroidGamepadDevice> device = AndroidGamepadDevice::GetAndroidGamepad(id);
@@ -185,7 +185,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDevi
 		return false;
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_keyboardEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_keyboardEvent(JNIEnv *env, jobject obj,
 		jint key, jboolean pressed)
 {
 	if (keyboard == nullptr) {
@@ -196,14 +196,14 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDevi
 	return true;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_keyboardText(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_keyboardText(JNIEnv *env, jobject obj,
 		jint c) {
 	gui_keyboard_input((u32)c);
 }
 
 static std::map<std::pair<jint, jint>, jint> previous_axis_values;
 
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_joystickAxisEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickAxisEvent(JNIEnv *env, jobject obj,
 		jint id, jint key, jint value)
 {
 	std::shared_ptr<AndroidGamepadDevice> device = AndroidGamepadDevice::GetAndroidGamepad(id);
@@ -221,7 +221,7 @@ static void createMouse()
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_mouseEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_mouseEvent(JNIEnv *env, jobject obj,
 		jint xpos, jint ypos, jint buttons)
 {
 	createMouse();
@@ -231,14 +231,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceMa
 	mouse->setButton(Mouse::MIDDLE_BUTTON, (buttons & 4) != 0);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_mouseScrollEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_mouseScrollEvent(JNIEnv *env, jobject obj,
 		jint scrollValue)
 {
 	createMouse();
 	mouse->setWheel(scrollValue);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_periph_InputDeviceManager_touchMouseEvent(JNIEnv *env, jobject obj,
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_touchMouseEvent(JNIEnv *env, jobject obj,
 		jint xpos, jint ypos, jint buttons)
 {
 	if (touchMouse == nullptr)

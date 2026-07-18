@@ -307,6 +307,23 @@ int remove(char const *name)
     return _wremove(wname.get());
 }
 
+int rename(char const *old_name, char const *new_name)
+{
+	wstackstring wold_name;
+	if (!wold_name.convert(old_name)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	wstackstring wnew_name;
+	if (!wnew_name.convert(new_name)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	return _wrename(wold_name.get(), wnew_name.get());
+}
+
 }
 #endif
 
@@ -596,13 +613,13 @@ void os_VideoRoutingPublishFrameTexture(GLuint texID, GLuint texTarget, float w,
 		char buf[32] = { 0 };
 		vsnprintf(buf, sizeof(buf), (boardID == 0 ? "Flycast - Video Content" : "Flycast - Video Content - %d"), std::va_list(&boardID));
 		spoutSender->SetSenderName(buf);
-	}	
+	}
 	spoutSender->SendTexture(texID, texTarget, w, h, true);
 }
 
 void os_VideoRoutingTermGL()
 {
-	if (spoutSender) 
+	if (spoutSender)
 	{
 		spoutSender->ReleaseSender();
 		spoutSender = nullptr;

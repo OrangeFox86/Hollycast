@@ -569,6 +569,7 @@ extern Option<int> VirtualGamepadFingerSize;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;
+extern std::array<std::array<Option<std::string, false>, 2>, 4> MapleVmuSlotFileNames;
 // When true, automatically change the peripheral setting to DreamLink when a DreamLink controller attaches
 extern std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect;
 extern Option<bool> PerGameVmu;

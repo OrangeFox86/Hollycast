@@ -186,13 +186,13 @@
             "type": "shell",
             "command": "rm -rf build*",
             "windows": {
-                "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"shell/android-studio/build/\", \"shell/android-studio/.gradle/\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path CMakeUserPresets.json -ErrorAction SilentlyContinue; exit 0"
+                "command": "Get-ChildItem -Path . -Filter 'build*' -Directory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \"shell/android-studio/build/\", \"shell/android-studio/.gradle/\", \"shell/android-studio/flycast/.cxx/\", \"shell/android-studio/flycast/build/\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path CMakeUserPresets.json -ErrorAction SilentlyContinue; exit 0"
             },
             "linux": {
-                "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json"
+                "command": "rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/  shell/android-studio/flycast/.cxx/ shell/android-studio/flycast/build/ CMakeUserPresets.json"
             },
             "osx": {
-                "command": "zsh -c 'setopt +o nomatch; rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/ CMakeUserPresets.json'"
+                "command": "zsh -c 'setopt +o nomatch; rm -rf build*/ shell/android-studio/build/ shell/android-studio/.gradle/  shell/android-studio/flycast/.cxx/ shell/android-studio/flycast/build/ CMakeUserPresets.json'"
             },
             "options": {
                 "cwd": "${workspaceFolder}"

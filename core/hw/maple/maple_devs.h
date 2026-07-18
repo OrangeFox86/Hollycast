@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+ */
 #pragma once
 #include "types.h"
 #include "maple_cfg.h"
@@ -361,6 +364,8 @@ struct RFIDReaderWriter : public BaseMIE
 //
 // Specific Devices
 //
+
+bool buildDefaultVmuImage(u8 *buffer, size_t bufferSize);
 
 struct maple_sega_controller: maple_base
 {

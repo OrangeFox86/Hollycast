@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+ */
 #include "maple_devs.h"
 #include "maple_cfg.h"
 #include "maple_helper.h"
@@ -348,6 +351,13 @@ u8 vmu_default[] = {
 		0x77,0x19,0x06,0xef,
 };
 
+bool buildDefaultVmuImage(u8 *buffer, size_t bufferSize)
+{
+	uLongf dec_sz = bufferSize;
+	return uncompress(buffer, &dec_sz, vmu_default, sizeof(vmu_default)) == Z_OK
+		&& dec_sz == bufferSize;
+}
+
 MapleDeviceType maple_sega_vmu::get_device_type()
 {
 	return MDT_SegaVMU;
@@ -417,11 +427,7 @@ void maple_sega_vmu::initializeVmu()
 {
 	INFO_LOG(MAPLE, "Initialising empty VMU %s...", logical_port);
 
-	uLongf dec_sz = sizeof(flash_data);
-	int rv = uncompress(flash_data, &dec_sz, vmu_default, sizeof(vmu_default));
-
-	verify(rv == Z_OK);
-	verify(dec_sz == sizeof(flash_data));
+	verify(buildDefaultVmuImage(flash_data, sizeof(flash_data)));
 
 	fullSave();
 }

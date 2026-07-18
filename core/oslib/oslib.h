@@ -1,3 +1,4 @@
+// Portions Copyright 2026 The Hollycast Authors
 #pragma once
 #include "types.h"
 #include <string>
@@ -80,6 +81,7 @@ u32 static inline bitscanrev(u32 v)
 
 namespace hostfs
 {
+	bool isConfiguredVmuFileNameValid(const std::string& name);
 	std::string getVmuPath(const std::string& port, bool save);
 #ifdef DREAMPOTATO_INTEGRATED_MODE
 	std::string getDreamPotatoPath();

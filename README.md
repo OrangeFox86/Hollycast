@@ -106,3 +106,13 @@ cd shell/android-studio
 # Run the following to build for debug.
 ./gradlew assembleDebug bundleDebug --parallel
 ```
+
+If the build gets stuck or encounters and error, run the following before trying again.
+
+```bash
+# Terminate all background Gradle Daemon processes started by gradle.
+./gradlew --stop
+
+# Remove all artifacts of previous build.
+./gradlew clean
+```

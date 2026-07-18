@@ -188,7 +188,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 				success = callback && callback(false, path);
 			}
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(TARGET_UWP)
 			if (!success)
 				MessageBeep(MB_ICONERROR);
 #endif
