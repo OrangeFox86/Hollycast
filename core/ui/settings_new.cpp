@@ -988,7 +988,7 @@ static void RenderGeneralTextInputSettingRow(const char* id, const char* icon, c
 }
 
 // Gamepad Settings Popup (ported from settings_controls.cpp)
-// Handles rumble, deadzone, saturation, and virtual gamepad settings
+// Handles physical gamepad rumble, deadzone, and saturation settings.
 static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 {
 	centerNextWindow();
@@ -1037,48 +1037,7 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 			return;
 		}
 		ImGui::NewLine();
-		if (gamepad->is_virtual_gamepad())
-		{
-			if (gamepad->is_rumble_enabled()) {
-				header(T("Haptic"));
-				OptionSlider(T("Power"), config::VirtualGamepadVibration, 0, 100, T("Haptic feedback power"), "%d%%");
-			}
-
-#if defined(__ANDROID__) || defined(TARGET_IPHONE)
-			vgamepad::ImguiVGamepadTexture tex;
-			ImGui::Image(tex.getId(), ScaledVec2(300.f, 150.f), ImVec2(0, 1), ImVec2(1, 0));
-#endif
-			const char *gamepadPngTitle = T("Select a PNG file");
-			if (ImGui::Button(T("Choose Image..."), ScaledVec2(150, 30)))
-#ifdef __ANDROID__
-			{
-				if (!hostfs::addStorage(false, false, gamepadPngTitle, [](bool cancelled, std::string path) {
-					if (!cancelled)
-						gui_runOnUiThread([path]() {
-							vgamepad::loadImage(path);
-						});
-				}, Tnop("image/png")))
-					ImGui::OpenPopup(gamepadPngTitle);
-			}
-#else
-			{
-				ImGui::OpenPopup(gamepadPngTitle);
-			}
-#endif
-			ImGui::SameLine();
-			if (ImGui::Button(T("Use Default"), ScaledVec2(150, 30)))
-				vgamepad::loadImage(Tnop(""));
-
-			select_file_popup(gamepadPngTitle, [](bool cancelled, std::string selection)
-				{
-					if (!cancelled)
-						gui_runOnUiThread([selection]() {
-							vgamepad::loadImage(selection);
-						});
-					return true;
-				}, true, Tnop("png"));
-		}
-		else if (gamepad->is_rumble_enabled())
+		if (gamepad->is_rumble_enabled())
 		{
 			header(T("Rumble"));
 			int power = gamepad->get_rumble_power();

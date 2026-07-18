@@ -207,7 +207,7 @@ Option<bool> VirtualGamepadEnabled("VirtualGamepadEnabled", true, "input");
 Option<bool> VirtualGamepadHapticFeedback("VirtualGamepadHapticFeedback", true, "input");
 Option<bool> VirtualGamepadVisualFeedback("VirtualGamepadVisualFeedback", true, "input");
 Option<int> VirtualGamepadVibration("VirtualGamepadVibration", 20, "input");
-Option<int> VirtualGamepadTransparency("VirtualGamepadTransparency", 0, "input");
+Option<int> VirtualGamepadTransparency("VirtualGamepadTransparency", 37, "input");
 Option<int> VirtualGamepadIdleTimeout("VirtualGamepadIdleTimeout", 10, "input");
 Option<int> VirtualGamepadFingerSize("VirtualGamepadFingerSize", 0, "input");
 

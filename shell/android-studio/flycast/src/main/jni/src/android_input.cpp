@@ -44,7 +44,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getVi
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getIdleTimeoutSeconds(JNIEnv *env, jobject obj) {
-	return std::max(0, (int)config::VirtualGamepadIdleTimeout);
+	return std::clamp(static_cast<int>(config::VirtualGamepadIdleTimeout), 0, vgamepad::MAX_IDLE_TIMEOUT_SECONDS);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_show(JNIEnv * env, jobject obj) {

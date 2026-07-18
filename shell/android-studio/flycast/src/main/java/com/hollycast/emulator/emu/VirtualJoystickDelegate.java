@@ -19,8 +19,8 @@
 */
 package com.hollycast.emulator.emu;
 
-import android.content.Context;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -32,30 +32,21 @@ import java.util.Map;
 
 public class VirtualJoystickDelegate implements TouchEventHandler
 {
-    private static final int CTLID_ANARING = 11;
-    private static final int CTLID_ANASTICK = 12;
+    private static final int CONTROL_ID_ANALOG_AREA = 11;
+    private static final int CONTROL_ID_ANALOG_STICK = 12;
+    private static final long MILLISECONDS_PER_SECOND = 1000L;
 
     private VibratorThread vibratorThread;
-    private Handler handler = new Handler();
-    private Runnable hideVGamepadRunnable = new Runnable() {
-        @Override
-        public void run() {
-            VGamepad.hide();
-        }
-    };
-    private Context context;
-    private View view;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable hideVGamepadRunnable = VGamepad::hide;
     private int joyPointerId = -1;
     private float joyBiasX, joyBiasY;
-    private Map<Integer, Integer> pidToControlId = new HashMap<>();
+    private final Map<Integer, Integer> pidToControlId = new HashMap<>();
     private int mouseButtons = 0;
-    private int[] mousePos = { -32768, -32768 };
+    private final int[] mousePos = { -32768, -32768 };
     private int mousePid = -1;
 
     public VirtualJoystickDelegate(View view) {
-        this.view = view;
-        this.context = view.getContext();
-
         vibratorThread = VibratorThread.getInstance();
     }
 
@@ -179,7 +170,7 @@ public class VirtualJoystickDelegate implements TouchEventHandler
                 if (control != -1)
                 {
                     int pid = event.getPointerId(actionIndex);
-                    if (control == CTLID_ANARING || control == CTLID_ANASTICK)
+                    if (control == CONTROL_ID_ANALOG_AREA || control == CONTROL_ID_ANALOG_STICK)
                     {
                          if (joyPointerId == -1)
                          {
@@ -214,7 +205,7 @@ public class VirtualJoystickDelegate implements TouchEventHandler
                         // Analog stick
                         float dx = p.x - joyBiasX;
                         float dy = p.y - joyBiasY;
-                        float sz = VGamepad.getControlWidth(CTLID_ANASTICK);
+                        float sz = VGamepad.getControlWidth(CONTROL_ID_ANALOG_STICK);
                         dx = Math.max(Math.min(1.f, dx / sz), -1.f);
                         dy = Math.max(Math.min(1.f, dy / sz), -1.f);
                         InputDeviceManager.getInstance().virtualJoystick(dx, dy);
@@ -231,7 +222,7 @@ public class VirtualJoystickDelegate implements TouchEventHandler
                         InputDeviceManager.getInstance().virtualButtonInput(oldControl, false);
                         pidToControlId.remove(pid);
                     }
-                    if (control != -1 && control != CTLID_ANARING && control != CTLID_ANASTICK)
+                    if (control != -1 && control != CONTROL_ID_ANALOG_AREA && control != CONTROL_ID_ANALOG_STICK)
                     {
                         // New button down
                         InputDeviceManager.getInstance().virtualButtonInput(control, true);
@@ -271,6 +262,6 @@ public class VirtualJoystickDelegate implements TouchEventHandler
         this.handler.removeCallbacks(hideVGamepadRunnable);
         int timeoutSeconds = VGamepad.getIdleTimeoutSeconds();
         if (timeoutSeconds > 0)
-            this.handler.postDelayed(hideVGamepadRunnable, timeoutSeconds * 1000L);
+            this.handler.postDelayed(hideVGamepadRunnable, timeoutSeconds * MILLISECONDS_PER_SECOND);
     }
 }

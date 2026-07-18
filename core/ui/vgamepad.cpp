@@ -32,7 +32,6 @@
 #include "oslib/i18n.h"
 #include "cfg/cfg.h"
 #include "cfg/option.h"
-#include "input/gamepad.h"
 #include "input/mouse.h"
 #include "hw/naomi/naomi_cart.h"
 #include "hw/naomi/card_reader.h"
@@ -41,7 +40,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iterator>
+#include <limits>
 
 namespace vgamepad
 {
@@ -50,10 +49,17 @@ static void loadLayout();
 static void drawCustomizePanel();
 static void handleCustomizeDrag(const ImVec2& panelMin, const ImVec2& panelMax);
 static void drawSelectedElement();
-static void drawTouchIndicator();
+static void drawTouchIndicator(const ImVec2& panelMin, const ImVec2& panelMax);
 static Element controlToElement(ControlId control);
 static float getControlHitPadding(ControlId control);
 static float getFingerHitPadding();
+
+constexpr float REFERENCE_WIDTH = 640.f;
+constexpr float REFERENCE_HEIGHT = 480.f;
+constexpr float MIN_ELEMENT_SCALE = 0.5f;
+constexpr float MAX_ELEMENT_SCALE = 1.8f;
+constexpr float MAX_HIT_PADDING = 24.f;
+constexpr int MAX_PERCENT = 100;
 
 struct Control
 {
@@ -78,6 +84,19 @@ static ImVec2 StickPos;	// analog stick position [-1, 1]
 static Element SelectedElement = Elem_DPad;
 static Element DraggedElement = Elem_None;
 static ImVec2 LastDragMousePos;
+
+struct EditSessionState
+{
+	bool enabled;
+	bool hapticFeedback;
+	bool visualFeedback;
+	int vibration;
+	int idleTimeout;
+	int fingerSize;
+	std::string imagePath;
+};
+static EditSessionState EditSession;
+
 constexpr char const *BTN_PATH = "picture/buttons.png";
 constexpr char const *BTN_PATH_ARCADE = "picture/buttons-arcade.png";
 constexpr char const *CFG_SECTION = "vgamepad";
@@ -266,16 +285,31 @@ ControlId hitTest(float x, float y)
 	if (!config::VirtualGamepadEnabled && !Editing)
 		return None;
 
+	ControlId closestControl = None;
+	float closestDistanceSquared = std::numeric_limits<float>::max();
 	for (const auto& control : Controls)
 	{
-		ControlId controlId = static_cast<ControlId>(&control - &Controls[0]);
+		const ControlId controlId = static_cast<ControlId>(&control - &Controls[0]);
 		const float padding = getControlHitPadding(controlId) + getFingerHitPadding();
-		if (!control.disabled
-				&& x >= control.pos.x - padding && x < control.pos.x + control.size.x + padding
-				&& y >= control.pos.y - padding && y < control.pos.y + control.size.y + padding)
-			return controlId;
+		if (control.disabled
+				|| x < control.pos.x - padding || x >= control.pos.x + control.size.x + padding
+				|| y < control.pos.y - padding || y >= control.pos.y + control.size.y + padding)
+			continue;
+
+		// Expanded hitboxes can overlap. Prefer the control whose original bounds are
+		// closest to the touch instead of whichever happens to appear first.
+		const float nearestX = std::clamp(x, control.pos.x, control.pos.x + control.size.x);
+		const float nearestY = std::clamp(y, control.pos.y, control.pos.y + control.size.y);
+		const float dx = x - nearestX;
+		const float dy = y - nearestY;
+		const float distanceSquared = dx * dx + dy * dy;
+		if (distanceSquared < closestDistanceSquared)
+		{
+			closestControl = controlId;
+			closestDistanceSquared = distanceSquared;
+		}
 	}
-	return None;
+	return closestControl;
 }
 
 static u32 buttonMap[_Count] {
@@ -359,8 +393,8 @@ static void drawButtonDim(ImDrawList *drawList, const Control& control, int stat
 		return;
 	if (!config::VirtualGamepadVisualFeedback)
 		state = 255;
-	float scale_h = settings.display.height / 480.f;
-	float offs_x = (settings.display.width - scale_h * 640.f) / 2.f;
+	float scale_h = settings.display.height / REFERENCE_HEIGHT;
+	float offs_x = (settings.display.width - scale_h * REFERENCE_WIDTH) / 2.f;
 	ImVec2 pos = control.pos * scale_h;
 	ImVec2 size = control.size * scale_h;
 	pos.x += offs_x;
@@ -369,7 +403,7 @@ static void drawButtonDim(ImDrawList *drawList, const Control& control, int stat
 		pos += StickPos * size;
 
 	float col = (0.5f - 0.25f * state / 255) * AlphaTrans;
-	float elementAlpha = (100.f - std::clamp(control.transparency, 0, 100)) / 100.f;
+	float elementAlpha = (MAX_PERCENT - std::clamp(control.transparency, 0, MAX_PERCENT)) / static_cast<float>(MAX_PERCENT);
 	float alpha = AlphaTrans * elementAlpha;
 	ImVec4 color(col, col, col, alpha);
 
@@ -443,7 +477,6 @@ void draw()
 	drawButton(drawList, Controls[InsertCard], kcode[0] & buttonMap[InsertCard]);
 
 	drawSelectedElement();
-	drawTouchIndicator();
 
 	AlphaTrans += ((float)Visible - AlphaTrans) / 2;
 }
@@ -470,9 +503,9 @@ struct LayoutElement
 	{
 		x = config::loadFloat(CFG_SECTION, name + "_x", x);
 		y = config::loadFloat(CFG_SECTION, name + "_y", y);
-		scale = std::clamp(config::loadFloat(CFG_SECTION, name + "_scale", scale), 0.5f, 1.8f);
-		transparency = std::clamp(config::loadInt(CFG_SECTION, name + "_transparency", transparency), 0, 100);
-		touchSize = std::clamp(config::loadInt(CFG_SECTION, name + "_touch_size", touchSize), 0, 100);
+		scale = std::clamp(config::loadFloat(CFG_SECTION, name + "_scale", scale), MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE);
+		transparency = std::clamp(config::loadInt(CFG_SECTION, name + "_transparency", transparency), 0, MAX_PERCENT);
+		touchSize = std::clamp(config::loadInt(CFG_SECTION, name + "_touch_size", touchSize), 0, MAX_PERCENT);
 	}
 	void save() const
 	{
@@ -490,10 +523,10 @@ struct LayoutElement
 
 	void applyUiScale()
 	{
-		const float dcw = 480.f * (float)settings.display.width / settings.display.height;
+		const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
 		const float uiscale = getUIScale();
 		w = dw / dcw * uiscale;
-		h = dh / 480.f * uiscale;
+		h = dh / REFERENCE_HEIGHT * uiscale;
 	}
 
 	void reset()
@@ -502,7 +535,7 @@ struct LayoutElement
 		scale = 1.f;
 		transparency = 0;
 		touchSize = 0;
-		const float dcw = 480.f * (float)settings.display.width / settings.display.height;
+		const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
 		const float uiscale = getUIScale();
 		if (dx == 0)
 			x = 0.5f - w / 2;
@@ -513,16 +546,16 @@ struct LayoutElement
 		if (dy == 0)
 			y = 0.5f - h / 2;
 		else if (dy > 0)
-			y = dy / 480.f * uiscale;
+			y = dy / REFERENCE_HEIGHT * uiscale;
 		else
-			y = 1.f - h + dy / 480.f * uiscale;
+			y = 1.f - h + dy / REFERENCE_HEIGHT * uiscale;
 	}
 
 	float touchPadding() const {
-		return 24.f * touchSize / 100.f;
+		return MAX_HIT_PADDING * touchSize / MAX_PERCENT;
 	}
 };
-static LayoutElement Layout[] {
+static LayoutElement Layout[Elem_Count] {
 	{ "dpad",     Tnop("D-pad"),        32.f, -24.f, 192.f, 192.f },
 	{ "buttons",  Tnop("Face Buttons"),-24.f, -24.f, 192.f, 192.f },
 	{ "start",    Tnop("Start"),         0.f, -24.f,  64.f,  64.f },
@@ -539,7 +572,7 @@ static LayoutElement Layout[] {
 
 static bool isValidElement(Element element)
 {
-	return element >= Elem_DPad && element < static_cast<Element>(std::size(Layout));
+	return element >= Elem_DPad && element < Elem_Count;
 }
 
 static const char *getElementLabel(Element element)
@@ -596,7 +629,7 @@ static float getControlHitPadding(ControlId control)
 
 static float getFingerHitPadding()
 {
-	return 24.f * std::clamp(static_cast<int>(config::VirtualGamepadFingerSize), 0, 100) / 100.f;
+	return MAX_HIT_PADDING * std::clamp(static_cast<int>(config::VirtualGamepadFingerSize), 0, MAX_PERCENT) / MAX_PERCENT;
 }
 
 static void applyControlSettings(ControlId control)
@@ -616,14 +649,14 @@ static void applyControlSettings(ControlId first, ControlId last)
 
 static void applyLayout()
 {
-	const float dcw = 480.f * (float)settings.display.width / settings.display.height;
-	const float dx = (dcw - 640.f) / 2;
+	const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
+	const float dx = (dcw - REFERENCE_WIDTH) / 2;
 	const float uiscale = getUIScale();
 	float x, y, scale;
 
 	// DPad
 	x = Layout[Elem_DPad].x * dcw - dx;
-	y = Layout[Elem_DPad].y * 480.f;
+	y = Layout[Elem_DPad].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_DPad].scale * uiscale;
 	Controls[Left].pos =   { x + 0.f * scale, y + 64.f * scale };
 	Controls[Up].pos =     { x + 64.f * scale, y + 0.f * scale };
@@ -643,7 +676,7 @@ static void applyLayout()
 
 	// Buttons
 	x = Layout[Elem_Buttons].x * dcw - dx;
-	y = Layout[Elem_Buttons].y * 480.f;
+	y = Layout[Elem_Buttons].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_Buttons].scale * uiscale;
 	Controls[X].pos =  { x + 0.f * scale, y + 64.f * scale };
 	Controls[Y].pos =  { x + 64.f * scale, y + 0.f * scale };
@@ -655,25 +688,25 @@ static void applyLayout()
 
 	// Start
 	scale = Layout[Elem_Start].scale * uiscale;
-	Controls[Start].pos =   { Layout[Elem_Start].x * dcw - dx, Layout[Elem_Start].y * 480.f };
+	Controls[Start].pos =   { Layout[Elem_Start].x * dcw - dx, Layout[Elem_Start].y * REFERENCE_HEIGHT };
 	Controls[Start].size =  { Layout[Elem_Start].dw * scale, Layout[Elem_Start].dh * scale };
 	applyControlSettings(Start);
 
 	// Left trigger
 	scale = Layout[Elem_LT].scale * uiscale;
-	Controls[LeftTrigger].pos = { Layout[Elem_LT].x * dcw - dx, Layout[Elem_LT].y * 480.f };
+	Controls[LeftTrigger].pos = { Layout[Elem_LT].x * dcw - dx, Layout[Elem_LT].y * REFERENCE_HEIGHT };
 	Controls[LeftTrigger].size = { Layout[Elem_LT].dw * scale, Layout[Elem_LT].dh * scale };
 	applyControlSettings(LeftTrigger);
 
 	// Right trigger
 	scale = Layout[Elem_RT].scale * uiscale;
-	Controls[RightTrigger].pos =  { Layout[Elem_RT].x * dcw - dx, Layout[Elem_RT].y * 480.f };
+	Controls[RightTrigger].pos =  { Layout[Elem_RT].x * dcw - dx, Layout[Elem_RT].y * REFERENCE_HEIGHT };
 	Controls[RightTrigger].size = { Layout[Elem_RT].dw * scale, Layout[Elem_RT].dh * scale };
 	applyControlSettings(RightTrigger);
 
 	// Analog
 	x = Layout[Elem_Analog].x * dcw - dx;
-	y = Layout[Elem_Analog].y * 480.f;
+	y = Layout[Elem_Analog].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_Analog].scale * uiscale;
 	Controls[AnalogArea].pos =   { x, y };
 	Controls[AnalogArea].size =  { Layout[Elem_Analog].dw * scale, Layout[Elem_Analog].dh * scale };
@@ -684,31 +717,31 @@ static void applyLayout()
 
 	// Fast forward
 	scale = Layout[Elem_FForward].scale * uiscale;
-	Controls[FastForward].pos =  { Layout[Elem_FForward].x * dcw - dx, Layout[Elem_FForward].y * 480.f };
+	Controls[FastForward].pos =  { Layout[Elem_FForward].x * dcw - dx, Layout[Elem_FForward].y * REFERENCE_HEIGHT };
 	Controls[FastForward].size = { Layout[Elem_FForward].dw * scale, Layout[Elem_FForward].dh * scale };
 	applyControlSettings(FastForward);
 
 	// ARCADE
 	// Button 4
 	scale = Layout[Elem_Btn4].scale * uiscale;
-	Controls[Btn4].pos =  { Layout[Elem_Btn4].x * dcw - dx, Layout[Elem_Btn4].y * 480.f };
+	Controls[Btn4].pos =  { Layout[Elem_Btn4].x * dcw - dx, Layout[Elem_Btn4].y * REFERENCE_HEIGHT };
 	Controls[Btn4].size = { Layout[Elem_Btn4].dw * scale, Layout[Elem_Btn4].dh * scale };
 	applyControlSettings(Btn4);
 	// Button 5
 	scale = Layout[Elem_Btn5].scale * uiscale;
-	Controls[Btn5].pos =  { Layout[Elem_Btn5].x * dcw - dx, Layout[Elem_Btn5].y * 480.f };
+	Controls[Btn5].pos =  { Layout[Elem_Btn5].x * dcw - dx, Layout[Elem_Btn5].y * REFERENCE_HEIGHT };
 	Controls[Btn5].size = { Layout[Elem_Btn5].dw * scale, Layout[Elem_Btn5].dh * scale };
 	applyControlSettings(Btn5);
 
 	// Service Mode
 	scale = Layout[Elem_ServiceMode].scale * uiscale;
-	Controls[ServiceMode].pos =  { Layout[Elem_ServiceMode].x * dcw - dx, Layout[Elem_ServiceMode].y * 480.f };
+	Controls[ServiceMode].pos =  { Layout[Elem_ServiceMode].x * dcw - dx, Layout[Elem_ServiceMode].y * REFERENCE_HEIGHT };
 	Controls[ServiceMode].size = { Layout[Elem_ServiceMode].dw * scale, Layout[Elem_ServiceMode].dh * scale };
 	applyControlSettings(ServiceMode);
 
 	// Insert Card
 	scale = Layout[Elem_InsertCard].scale * uiscale;
-	Controls[InsertCard].pos =  { Layout[Elem_InsertCard].x * dcw - dx, Layout[Elem_InsertCard].y * 480.f };
+	Controls[InsertCard].pos =  { Layout[Elem_InsertCard].x * dcw - dx, Layout[Elem_InsertCard].y * REFERENCE_HEIGHT };
 	Controls[InsertCard].size = { Layout[Elem_InsertCard].dw * scale, Layout[Elem_InsertCard].dh * scale };
 	applyControlSettings(InsertCard);
 }
@@ -729,8 +762,12 @@ static void loadLayout()
 
 static void saveLayout()
 {
+	// A completed edit can update every unit. Batch the writes so the config file
+	// is flushed once rather than once per property.
+	config::setAutoSave(false);
 	for (auto& element : Layout)
 		element.save();
+	config::setAutoSave(true);
 }
 
 static void resetLayout()
@@ -754,12 +791,12 @@ static bool getElementScreenBounds(Element element, ImVec2& min, ImVec2& max)
 		return false;
 
 	const LayoutElement& e = Layout[element];
-	const float dcw = 480.f * (float)settings.display.width / settings.display.height;
-	const float dx = (dcw - 640.f) / 2;
-	const float scaleH = settings.display.height / 480.f;
-	const float offsetX = (settings.display.width - scaleH * 640.f) / 2.f;
-	const ImVec2 dcMin(e.x * dcw - dx, e.y * 480.f);
-	const ImVec2 dcSize(e.w * e.scale * dcw, e.h * e.scale * 480.f);
+	const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
+	const float dx = (dcw - REFERENCE_WIDTH) / 2;
+	const float scaleH = settings.display.height / REFERENCE_HEIGHT;
+	const float offsetX = (settings.display.width - scaleH * REFERENCE_WIDTH) / 2.f;
+	const ImVec2 dcMin(e.x * dcw - dx, e.y * REFERENCE_HEIGHT);
+	const ImVec2 dcSize(e.w * e.scale * dcw, e.h * e.scale * REFERENCE_HEIGHT);
 	min = dcMin * scaleH;
 	min.x += offsetX;
 	max = (dcMin + dcSize) * scaleH;
@@ -773,8 +810,8 @@ static bool getControlScreenBounds(ControlId controlId, ImVec2& min, ImVec2& max
 		return false;
 
 	const Control& control = Controls[controlId];
-	const float scaleH = settings.display.height / 480.f;
-	const float offsetX = (settings.display.width - scaleH * 640.f) / 2.f;
+	const float scaleH = settings.display.height / REFERENCE_HEIGHT;
+	const float offsetX = (settings.display.width - scaleH * REFERENCE_WIDTH) / 2.f;
 	min = control.pos * scaleH;
 	min.x += offsetX;
 	max = (control.pos + control.size) * scaleH;
@@ -794,6 +831,11 @@ static bool elementContainsControl(Element element, ControlId controlId)
 	return controlToElement(controlId) == element;
 }
 
+static bool pointInRect(const ImVec2& point, const ImVec2& min, const ImVec2& max)
+{
+	return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
+}
+
 static void drawSelectedElement()
 {
 	if (!Editing || !isValidElement(SelectedElement))
@@ -806,7 +848,9 @@ static void drawSelectedElement()
 	const float pad = uiScaled(4.f);
 	min -= ImVec2(pad, pad);
 	max += ImVec2(pad, pad);
-	ImDrawList *drawList = ImGui::GetForegroundDrawList();
+	// Use the background list so the customization panel always covers controls
+	// and selection outlines that happen to sit underneath it.
+	ImDrawList *drawList = ImGui::GetBackgroundDrawList();
 	drawList->AddRect(min, max, IM_COL32(34, 161, 110, 230), uiScaled(8.f), 0, uiScaled(2.f));
 
 	if (Layout[SelectedElement].touchSize <= 0)
@@ -825,50 +869,62 @@ static void drawSelectedElement()
 	}
 }
 
-static void drawTouchIndicator()
+static void drawTouchIndicator(const ImVec2& panelMin, const ImVec2& panelMax)
 {
 	if (!Editing)
 		return;
 
 	ImGuiIO& io = ImGui::GetIO();
-	if (!io.MouseDown[ImGuiMouseButton_Left])
+	if (!io.MouseDown[ImGuiMouseButton_Left] || pointInRect(io.MousePos, panelMin, panelMax))
 		return;
 
 	// Android routes the active setup-screen touch through ImGui's primary pointer.
 	ImDrawList *drawList = ImGui::GetForegroundDrawList();
 	const ImVec2 pos = io.MousePos;
-	const float radius = uiScaled(6.f) + getFingerHitPadding() * settings.display.height / 480.f;
+	const float radius = uiScaled(6.f) + getFingerHitPadding() * settings.display.height / REFERENCE_HEIGHT;
 	drawList->AddCircleFilled(pos, uiScaled(4.f), IM_COL32(255, 255, 255, 245), 24);
 	drawList->AddCircle(pos, radius, IM_COL32(255, 202, 67, 245), 32, uiScaled(2.f));
 }
 
-static int getSelectedScalePercent()
+static int getElementScalePercent(Element element)
 {
-	return isValidElement(SelectedElement) ? std::lround(Layout[SelectedElement].scale * 100.f) : 100;
+	return isValidElement(element) ? std::lround(Layout[element].scale * MAX_PERCENT) : MAX_PERCENT;
 }
 
-static void setSelectedScalePercent(int scalePercent)
+static void setElementScale(Element element, float scale)
 {
-	if (!isValidElement(SelectedElement))
+	if (!isValidElement(element) || !std::isfinite(scale))
 		return;
-	Layout[SelectedElement].scale = std::clamp(scalePercent / 100.f, 0.5f, 1.8f);
+
+	LayoutElement& selected = Layout[element];
+	const float clampedScale = std::clamp(scale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE);
+	if (clampedScale == selected.scale)
+		return;
+
+	// Keep the visual center fixed when scaling from either the Java gesture or
+	// the ImGui slider, including when the requested value hits a clamp limit.
+	selected.x += selected.w * (selected.scale - clampedScale) / 2.f;
+	selected.y += selected.h * (selected.scale - clampedScale) / 2.f;
+	selected.scale = clampedScale;
 	applyLayout();
 }
 
-static void drawCustomizeSlider(const char *label, int& value, int min, int max, const char *format = "%d%%")
+static bool drawCustomizeSlider(const char *id, const char *label, int& value, int min, int max,
+		const char *format = "%d%%")
 {
 	ImGui::TextUnformatted(label);
 	ImGui::SameLine(uiScaled(150.f));
 	ImGui::SetNextItemWidth(uiScaled(220.f));
-	ImGui::SliderInt(("##" + std::string(label)).c_str(), &value, min, max, format);
+	ImguiID _(id);
+	return ImGui::SliderInt("##Value", &value, min, max, format);
 }
 
-static bool drawCustomizeCheckbox(const char *label, bool value)
+static bool drawCustomizeCheckbox(const char *id, const char *label, bool& value)
 {
 	ImGui::TextUnformatted(label);
 	ImGui::SameLine(uiScaled(220.f));
-	ImGui::Checkbox(("##" + std::string(label)).c_str(), &value);
-	return value;
+	ImguiID _(id);
+	return ImGui::Checkbox("##Value", &value);
 }
 
 static void drawCustomizePanel()
@@ -890,7 +946,7 @@ static void drawCustomizePanel()
 	ImGui::SetNextItemWidth(uiScaled(220.f));
 	if (ImGui::BeginCombo("##SelectedVirtualGamepadUnit", getElementLabel(SelectedElement)))
 	{
-		for (int i = Elem_DPad; i < static_cast<int>(std::size(Layout)); i++)
+		for (int i = Elem_DPad; i < Elem_Count; i++)
 		{
 			const Element element = static_cast<Element>(i);
 			const bool selected = element == SelectedElement;
@@ -906,36 +962,48 @@ static void drawCustomizePanel()
 	bool enabled = config::VirtualGamepadEnabled;
 	bool visualFeedback = config::VirtualGamepadVisualFeedback;
 	bool hapticFeedback = config::VirtualGamepadHapticFeedback;
-	enabled = drawCustomizeCheckbox(i18n::T("Show virtual gamepad"), enabled);
-	visualFeedback = drawCustomizeCheckbox(i18n::T("Visual feedback"), visualFeedback);
-	hapticFeedback = drawCustomizeCheckbox(i18n::T("Vibration"), hapticFeedback);
-	config::VirtualGamepadEnabled = enabled;
-	config::VirtualGamepadVisualFeedback = visualFeedback;
-	config::VirtualGamepadHapticFeedback = hapticFeedback;
+	if (drawCustomizeCheckbox("Enabled", i18n::T("Show virtual gamepad"), enabled))
+		config::VirtualGamepadEnabled = enabled;
+	if (drawCustomizeCheckbox("VisualFeedback", i18n::T("Visual feedback"), visualFeedback))
+		config::VirtualGamepadVisualFeedback = visualFeedback;
+	if (drawCustomizeCheckbox("HapticFeedback", i18n::T("Vibration"), hapticFeedback))
+		config::VirtualGamepadHapticFeedback = hapticFeedback;
 
-	int vibration = config::VirtualGamepadVibration;
-	drawCustomizeSlider(i18n::T("Vibration Power"), vibration, 0, 100);
-	config::VirtualGamepadVibration = vibration;
+	int vibration = std::clamp(static_cast<int>(config::VirtualGamepadVibration), 0, MAX_PERCENT);
+	if (drawCustomizeSlider("VibrationPower", i18n::T("Vibration Power"), vibration, 0, MAX_PERCENT)
+			|| vibration != static_cast<int>(config::VirtualGamepadVibration))
+		config::VirtualGamepadVibration = vibration;
 
-	int timeout = config::VirtualGamepadIdleTimeout;
-	drawCustomizeSlider(i18n::T("Idle Timeout"), timeout, 0, 30, timeout == 0 ? "No timeout" : "%d sec");
-	config::VirtualGamepadIdleTimeout = timeout;
+	int timeout = std::clamp(static_cast<int>(config::VirtualGamepadIdleTimeout), 0, MAX_IDLE_TIMEOUT_SECONDS);
+	if (drawCustomizeSlider("IdleTimeout", i18n::T("Idle Timeout (s)"), timeout, 0,
+			MAX_IDLE_TIMEOUT_SECONDS, "%d") || timeout != static_cast<int>(config::VirtualGamepadIdleTimeout))
+		config::VirtualGamepadIdleTimeout = timeout;
 
-	int fingerSize = config::VirtualGamepadFingerSize;
-	drawCustomizeSlider(i18n::T("Finger Size"), fingerSize, 0, 100);
-	config::VirtualGamepadFingerSize = fingerSize;
+	int fingerSize = std::clamp(static_cast<int>(config::VirtualGamepadFingerSize), 0, MAX_PERCENT);
+	if (drawCustomizeSlider("FingerSize", i18n::T("Finger Size"), fingerSize, 0, MAX_PERCENT)
+			|| fingerSize != static_cast<int>(config::VirtualGamepadFingerSize))
+		config::VirtualGamepadFingerSize = fingerSize;
 
 	ImGui::Separator();
 	LayoutElement& selected = Layout[SelectedElement];
 	int unitTransparency = selected.transparency;
 	int touchSize = selected.touchSize;
-	int scale = getSelectedScalePercent();
-	drawCustomizeSlider(i18n::T("Unit Transparency"), unitTransparency, 0, 100);
-	drawCustomizeSlider(i18n::T("Touch Size"), touchSize, 0, 100);
-	drawCustomizeSlider(i18n::T("Scaling"), scale, 50, 180);
-	selected.transparency = std::clamp(unitTransparency, 0, 100);
-	selected.touchSize = std::clamp(touchSize, 0, 100);
-	setSelectedScalePercent(scale);
+	int scale = getElementScalePercent(SelectedElement);
+	bool elementSettingsChanged = drawCustomizeSlider("UnitTransparency", i18n::T("Unit Transparency"),
+			unitTransparency, 0, MAX_PERCENT);
+	elementSettingsChanged |= drawCustomizeSlider("TouchSize", i18n::T("Touch Size"), touchSize, 0, MAX_PERCENT);
+	elementSettingsChanged |= drawCustomizeSlider("Scale", i18n::T("Scaling"), scale,
+			static_cast<int>(MIN_ELEMENT_SCALE * MAX_PERCENT), static_cast<int>(MAX_ELEMENT_SCALE * MAX_PERCENT));
+	if (elementSettingsChanged)
+	{
+		selected.transparency = std::clamp(unitTransparency, 0, MAX_PERCENT);
+		selected.touchSize = std::clamp(touchSize, 0, MAX_PERCENT);
+		const float requestedScale = scale / static_cast<float>(MAX_PERCENT);
+		if (requestedScale != selected.scale)
+			setElementScale(SelectedElement, requestedScale);
+		else
+			applyLayout();
+	}
 
 	if (ImGui::Button(i18n::T("Reset Unit"), ScaledVec2(130, 32)))
 		resetElement(SelectedElement);
@@ -991,14 +1059,17 @@ static void drawCustomizePanel()
 	ImGui::End();
 
 	handleCustomizeDrag(panelMin, panelMax);
+	drawTouchIndicator(panelMin, panelMax);
 }
 
 static void handleCustomizeDrag(const ImVec2& panelMin, const ImVec2& panelMax)
 {
 	ImGuiIO& io = ImGui::GetIO();
+	if (io.DisplaySize.x <= 0.f || io.DisplaySize.y <= 0.f)
+		return;
+
 	const ImVec2 mouse = io.MousePos;
-	const bool mouseInPanel = mouse.x >= panelMin.x && mouse.x <= panelMax.x
-			&& mouse.y >= panelMin.y && mouse.y <= panelMax.y;
+	const bool mouseInPanel = pointInRect(mouse, panelMin, panelMax);
 
 	if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !mouseInPanel)
 	{
@@ -1030,7 +1101,7 @@ Element layoutHitTest(float x, float y)
 
 void translateElement(Element element, float dx, float dy)
 {
-	if (!isValidElement(element))
+	if (!isValidElement(element) || !std::isfinite(dx) || !std::isfinite(dy))
 		return;
 	LayoutElement& e = Layout[element];
 	e.x += dx;
@@ -1040,14 +1111,9 @@ void translateElement(Element element, float dx, float dy)
 
 void scaleElement(Element element, float factor)
 {
-	if (!isValidElement(element))
+	if (!isValidElement(element) || !std::isfinite(factor) || factor <= 0.f)
 		return;
-	LayoutElement& e = Layout[element];
-	float dx = e.w * e.scale * (factor - 1.f) / 2.f;
-	float dy = e.h * e.scale * (factor - 1.f) / 2.f;
-	e.scale = std::clamp(e.scale * factor, 0.5f, 1.8f);
-	// keep centered
-	translateElement(element, -dx, -dy);
+	setElementScale(element, Layout[element].scale * factor);
 }
 
 void loadImage(const std::string& path)
@@ -1322,12 +1388,20 @@ void startGame()
 	}
 }
 
-void resetEditing() {
-	resetLayout();
-}
-
 void startEditing()
 {
+	if (!Editing)
+	{
+		EditSession = {
+			static_cast<bool>(config::VirtualGamepadEnabled),
+			static_cast<bool>(config::VirtualGamepadHapticFeedback),
+			static_cast<bool>(config::VirtualGamepadVisualFeedback),
+			static_cast<int>(config::VirtualGamepadVibration),
+			static_cast<int>(config::VirtualGamepadIdleTimeout),
+			static_cast<int>(config::VirtualGamepadFingerSize),
+			config::loadStr(CFG_SECTION, getButtonsCfgName(), ""),
+		};
+	}
 	enableAllControls();
 	show();
 	Editing = true;
@@ -1344,7 +1418,17 @@ static void stopEditing(bool canceled)
 	Editing = false;
 	DraggedElement = Elem_None;
 	if (canceled)
+	{
+		config::VirtualGamepadEnabled = EditSession.enabled;
+		config::VirtualGamepadHapticFeedback = EditSession.hapticFeedback;
+		config::VirtualGamepadVisualFeedback = EditSession.visualFeedback;
+		config::VirtualGamepadVibration = EditSession.vibration;
+		config::VirtualGamepadIdleTimeout = EditSession.idleTimeout;
+		config::VirtualGamepadFingerSize = EditSession.fingerSize;
+		if (config::loadStr(CFG_SECTION, getButtonsCfgName(), "") != EditSession.imagePath)
+			loadImage(EditSession.imagePath);
 		loadLayout();
+	}
 	else
 		saveLayout();
 }

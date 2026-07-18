@@ -69,7 +69,10 @@ enum Element
 	Elem_Btn5,
 	Elem_ServiceMode,
 	Elem_InsertCard,
+	Elem_Count,
 };
+
+constexpr int MAX_IDLE_TIMEOUT_SECONDS = 30;
 
 class ImguiVGamepadTexture : public ImguiTexture
 {
@@ -85,7 +88,6 @@ void draw();
 void startEditing();
 void pauseEditing();
 void setEditMode(bool editing);
-void resetEditing();
 void displayCommands();
 void loadImage(const std::string& path);
 void startGame();
