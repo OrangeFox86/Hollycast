@@ -52,7 +52,10 @@ sudo apt-get -y install libwayland-dev libdecor-0-dev libaudio-dev libjack-dev l
 ### Build Prerequisites for macOS
 
 1. Install Xcode application from app store
-2. Accept licensing for Xcode and do first run initialization
+2. Accept licensing for Xcode and do first launch initialization
+```bash
+sudo xcodebuild -runFirstLaunch
+```
 3. Execute:
 ```bash
 xcodebuild -downloadComponent MetalToolchain
