@@ -48,6 +48,7 @@
 #include "boxart/boxart.h"
 #include "IconsFontAwesome6.h"
 #include "mainui.h"
+#include "oslib/oslib.h"
 #include "oslib/storage.h"
 #include "stdclass.h"
 #include "achievements/achievements.h"
@@ -55,6 +56,7 @@
 #include <cmath>
 #include <cstring>
 #include <cfloat>
+#include <memory>
 #ifdef __ANDROID__
 #if HOST_CPU == CPU_ARM64 && USE_VULKAN
 #include "rend/vulkan/adreno.h"
@@ -4876,6 +4878,659 @@ void renderAudioTab()
 	}
 }
 
+static std::string vmuSlotLabel(int bus, int slot)
+{
+	std::string label;
+	label.push_back(static_cast<char>('A' + bus));
+	label.push_back(static_cast<char>('1' + slot));
+	return label;
+}
+
+static std::string defaultVmuFileNameForSlot(int bus, int slot)
+{
+	return "vmu_save_" + vmuSlotLabel(bus, slot) + ".bin";
+}
+
+static bool isSharedVmuSlotActive(int bus, int slot)
+{
+	if (config::MapleMainDevices[bus] == MDT_None)
+		return false;
+	return config::MapleExpansionDevices[bus][slot] == MDT_SegaVMU;
+}
+
+static std::string normalizeVmuFileName(std::string name)
+{
+	if (name.find('.') == std::string::npos)
+		return name + ".bin";
+
+	std::string lower = name;
+	string_tolower(lower);
+	const bool hasVmuExtension = lower.size() >= 4
+		&& (lower.compare(lower.size() - 4, 4, ".bin") == 0
+			|| lower.compare(lower.size() - 4, 4, ".vmu") == 0);
+	if (!hasVmuExtension)
+		name += ".bin";
+	return name;
+}
+
+static bool isLikelyPerGameA1VmuFileName(const std::string& fileName)
+{
+	static constexpr std::string_view suffix = "_vmu_save_A1.bin";
+	return fileName.size() >= suffix.size()
+		&& fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix.data()) == 0;
+}
+
+static void setConfiguredVmuSlotFileName(int bus, int slot, const std::string& fileName)
+{
+	config::MapleVmuSlotFileNames[bus][slot].get() =
+		fileName == defaultVmuFileNameForSlot(bus, slot) ? "" : fileName;
+}
+
+static bool isManualVmuSlotEditable(int bus, int slot, bool perGameEnabled)
+{
+	return isSharedVmuSlotActive(bus, slot) && !(perGameEnabled && bus == 0 && slot == 0);
+}
+
+static std::string currentSlotVmuFileName(int bus, int slot)
+{
+	const std::string configuredName = config::MapleVmuSlotFileNames[bus][slot].get();
+	if (hostfs::isConfiguredVmuFileNameValid(configuredName))
+		return configuredName;
+	return defaultVmuFileNameForSlot(bus, slot);
+}
+
+static void applyVmuSlotSelection(int bus, int slot, const std::string& fileName)
+{
+	// Slot selection stores only the file name; getVmuPath resolves the active VMU folder.
+	setConfiguredVmuSlotFileName(bus, slot, fileName);
+	g_mapleDevicesChangedInSettings = true;
+}
+
+static std::string getVmuCardManagerFolder()
+{
+	const std::string customVmuPath = config::VMUPath.get();
+	return customVmuPath.empty() ? get_writable_data_path("") : customVmuPath;
+}
+
+static bool getVmuCardManagerFilePath(const std::string& fileName, std::string& fullPath, std::string& error)
+{
+	if (!hostfs::isConfiguredVmuFileNameValid(fileName))
+	{
+		error = T("Invalid file name.");
+		return false;
+	}
+
+	try {
+		const std::string customVmuPath = config::VMUPath.get();
+		fullPath = customVmuPath.empty()
+			? get_writable_data_path(fileName)
+			: hostfs::storage().getSubPath(customVmuPath, fileName);
+	} catch (const hostfs::StorageException&) {
+		error = T("Invalid VMU folder.");
+		return false;
+	}
+	return true;
+}
+
+static std::string makeVmuCopyFileName(const std::string& fileName)
+{
+	std::string base = fileName;
+	std::string extension = ".bin";
+	const size_t dot = fileName.find_last_of('.');
+	if (dot != std::string::npos)
+	{
+		base = fileName.substr(0, dot);
+		extension = fileName.substr(dot);
+	}
+
+	for (int i = 1; i < 1000; i++)
+	{
+		std::string candidate = base + (i == 1 ? "_copy" : "_copy" + std::to_string(i)) + extension;
+		std::string path;
+		std::string error;
+		if (!getVmuCardManagerFilePath(candidate, path, error) || !hostfs::storage().exists(path))
+			return candidate;
+	}
+
+	return base + "_copy" + extension;
+}
+
+static bool createBlankVmuFile(const std::string& fileName, std::string& error)
+{
+	std::string fullPath;
+	if (!getVmuCardManagerFilePath(fileName, fullPath, error))
+		return false;
+
+	if (hostfs::storage().exists(fullPath))
+	{
+		error = T("A file with that name already exists.");
+		return false;
+	}
+
+	FILE *f = nowide::fopen(fullPath.c_str(), "wb");
+	if (f == nullptr)
+	{
+		error = T("Failed to create file.");
+		return false;
+	}
+
+	std::array<u8, 128_KB> vmuImage {};
+	if (!buildDefaultVmuImage(vmuImage.data(), vmuImage.size()))
+	{
+		std::fclose(f);
+		nowide::remove(fullPath.c_str());
+		error = T("Failed to build default VMU image.");
+		return false;
+	}
+	if (std::fwrite(vmuImage.data(), 1, vmuImage.size(), f) != vmuImage.size())
+	{
+		std::fclose(f);
+		nowide::remove(fullPath.c_str());
+		error = T("Failed to write VMU image.");
+		return false;
+	}
+	std::fclose(f);
+	return true;
+}
+
+static bool copyVmuCardFile(const std::string& sourceName, const std::string& copyName, std::string& error)
+{
+	std::string sourcePath;
+	if (!getVmuCardManagerFilePath(sourceName, sourcePath, error))
+		return false;
+
+	std::string copyPath;
+	if (!getVmuCardManagerFilePath(copyName, copyPath, error))
+		return false;
+
+	if (hostfs::storage().exists(copyPath))
+	{
+		error = T("A file with that name already exists.");
+		return false;
+	}
+
+	{
+		std::unique_ptr<FILE, decltype(&fclose)> source(nowide::fopen(sourcePath.c_str(), "rb"), &fclose);
+		if (source == nullptr)
+		{
+			error = T("Failed to open source VMU.");
+			return false;
+		}
+
+		std::unique_ptr<FILE, decltype(&fclose)> copy(nowide::fopen(copyPath.c_str(), "wb"), &fclose);
+		if (copy == nullptr)
+		{
+			error = T("Failed to create copy.");
+			return false;
+		}
+
+		std::array<u8, 16 * 1024> buffer {};
+		while (true)
+		{
+			const size_t bytesRead = std::fread(buffer.data(), 1, buffer.size(), source.get());
+			if (bytesRead > 0 && std::fwrite(buffer.data(), 1, bytesRead, copy.get()) != bytesRead)
+			{
+				error = T("Failed to write VMU copy.");
+				break;
+			}
+			if (bytesRead < buffer.size())
+			{
+				if (std::ferror(source.get()))
+					error = T("Failed to read source VMU.");
+				break;
+			}
+		}
+	}
+
+	if (!error.empty())
+	{
+		nowide::remove(copyPath.c_str());
+		return false;
+	}
+	return true;
+}
+
+static bool isVmuCardFile(const hostfs::FileInfo& info)
+{
+	if (info.isDirectory)
+		return false;
+
+	size_t fileSize = info.size;
+	if (fileSize == 0)
+	{
+		try {
+			fileSize = hostfs::storage().getFileInfo(info.path).size;
+		} catch (const hostfs::StorageException&) {
+			return false;
+		}
+	}
+	return fileSize == 128_KB && hostfs::isConfiguredVmuFileNameValid(info.name);
+}
+
+static void listVmuCardFiles(std::vector<hostfs::FileInfo>& out)
+{
+	out.clear();
+	try {
+		const std::string dataDir = getVmuCardManagerFolder();
+		for (const auto& entry : hostfs::storage().listContent(dataDir)) {
+			if (isVmuCardFile(entry))
+				out.push_back(entry);
+		}
+	} catch (const hostfs::StorageException&) {
+	}
+
+	std::sort(out.begin(), out.end(), [](const hostfs::FileInfo& a, const hostfs::FileInfo& b) {
+		return a.name < b.name;
+	});
+}
+
+static void findAssignedVmuSlot(const std::string& fileName, bool perGameEnabled, int& sourceBus, int& sourceSlot);
+
+static bool renameVmuCardFile(const std::string& oldName, const std::string& newName, bool perGameEnabled,
+		std::string& error)
+{
+	std::string oldPath;
+	if (!getVmuCardManagerFilePath(oldName, oldPath, error))
+		return false;
+
+	std::string newPath;
+	if (!getVmuCardManagerFilePath(newName, newPath, error))
+		return false;
+	if (hostfs::storage().exists(newPath))
+	{
+		error = T("A file with that name already exists.");
+		return false;
+	}
+
+	int sourceBus = -1;
+	int sourceSlot = -1;
+	findAssignedVmuSlot(oldName, perGameEnabled, sourceBus, sourceSlot);
+
+	int targetBus = -1;
+	int targetSlot = -1;
+	findAssignedVmuSlot(newName, perGameEnabled, targetBus, targetSlot);
+
+	if (nowide::rename(oldPath.c_str(), newPath.c_str()) != 0)
+	{
+		error = T("Rename failed.");
+		return false;
+	}
+
+	// Keep rename consistent with Insert: one active VMU slot owns one file name.
+	if (sourceBus >= 0)
+	{
+		if (targetBus >= 0 && (targetBus != sourceBus || targetSlot != sourceSlot))
+			applyVmuSlotSelection(targetBus, targetSlot, oldName);
+		applyVmuSlotSelection(sourceBus, sourceSlot, newName);
+	}
+	return true;
+}
+
+static void findAssignedVmuSlot(const std::string& fileName, bool perGameEnabled, int& sourceBus, int& sourceSlot)
+{
+	sourceBus = -1;
+	sourceSlot = -1;
+	for (int bus = 0; bus < MAPLE_PORTS; bus++)
+	{
+		for (int slot = 0; slot < 2; slot++)
+		{
+			if (isManualVmuSlotEditable(bus, slot, perGameEnabled)
+					&& currentSlotVmuFileName(bus, slot) == fileName)
+			{
+				sourceBus = bus;
+				sourceSlot = slot;
+				return;
+			}
+		}
+	}
+}
+
+static void selectVmuCardAndRefresh(const std::string& fileName, std::string& selectedVmuName, bool& refreshVmuList)
+{
+	selectedVmuName = fileName;
+	refreshVmuList = true;
+}
+
+static void renderVmuCardManager()
+{
+	static std::string selectedVmuName;
+	static std::string createVmuName = "new_vmu.bin";
+	static std::string copyVmuName;
+	static std::string renameVmuName;
+	static std::string vmuOpError;
+	static std::vector<hostfs::FileInfo> cachedVmuFiles;
+	static bool refreshVmuList = true;
+
+	const bool perGameEnabled = static_cast<bool>(config::PerGameVmu);
+
+	ImGui::TextDisabled("%s", config::VMUPath.get().empty() ? T("Memory Cards (Data Folder)") : T("Memory Cards (VMU Folder)"));
+	if (perGameEnabled)
+		ImGui::TextDisabled("%s", T("Per Game VMU manages A1 automatically; other shared slots remain editable."));
+
+	if (refreshVmuList)
+	{
+		listVmuCardFiles(cachedVmuFiles);
+		refreshVmuList = false;
+	}
+
+	int selectedIndex = -1;
+	for (int i = 0; i < static_cast<int>(cachedVmuFiles.size()); i++)
+	{
+		if (cachedVmuFiles[i].name == selectedVmuName)
+		{
+			selectedIndex = i;
+			break;
+		}
+	}
+	const bool hasSelection = selectedIndex >= 0 && selectedIndex < static_cast<int>(cachedVmuFiles.size());
+	const std::string selectedName = hasSelection ? cachedVmuFiles[selectedIndex].name : "";
+
+	int selectedBus = -1;
+	int selectedSlot = -1;
+	if (hasSelection)
+		findAssignedVmuSlot(selectedName, perGameEnabled, selectedBus, selectedSlot);
+
+	const bool selectedLooksPerGameA1 = perGameEnabled && hasSelection && isLikelyPerGameA1VmuFileName(selectedName);
+	const bool selectedIsAssigned = selectedBus >= 0;
+	const bool selectedIsSlotDefault = selectedIsAssigned
+		&& selectedName == defaultVmuFileNameForSlot(selectedBus, selectedSlot);
+	const bool canEjectSelection = selectedIsAssigned && !selectedIsSlotDefault;
+
+	if (ImGui::Button(T("Refresh")))
+	{
+		vmuOpError.clear();
+		refreshVmuList = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button(T("Create New Card")))
+	{
+		vmuOpError.clear();
+		ImGui::OpenPopup(T("Create VMU Card"));
+	}
+	ImGui::SameLine();
+	{
+		DisabledScope renameDisabled(!hasSelection);
+		if (ImGui::Button(T("Rename")))
+		{
+			vmuOpError.clear();
+			renameVmuName = selectedName;
+			ImGui::OpenPopup(T("Rename VMU Card"));
+		}
+	}
+	ImGui::SameLine();
+	{
+		DisabledScope copyDisabled(!hasSelection);
+		if (ImGui::Button(T("Copy")))
+		{
+			vmuOpError.clear();
+			copyVmuName = makeVmuCopyFileName(selectedName);
+			ImGui::OpenPopup(T("Copy VMU Card"));
+		}
+	}
+	ImGui::SameLine();
+	{
+		DisabledScope insertDisabled(!hasSelection || selectedLooksPerGameA1);
+		if (ImGui::Button(T("Insert")))
+		{
+			vmuOpError.clear();
+			ImGui::OpenPopup(T("Insert VMU Card"));
+		}
+	}
+	if (selectedLooksPerGameA1 && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("%s", T("Copy this Per Game A1 VMU before inserting it into another slot."));
+	ImGui::SameLine();
+	{
+		DisabledScope ejectDisabled(!canEjectSelection);
+		if (ImGui::Button(T("Eject")))
+		{
+			vmuOpError.clear();
+			applyVmuSlotSelection(selectedBus, selectedSlot, defaultVmuFileNameForSlot(selectedBus, selectedSlot));
+			refreshVmuList = true;
+		}
+	}
+
+	auto slotLabelsForFile = [&](const std::string& fileName) {
+		std::string labels;
+		for (int bus = 0; bus < MAPLE_PORTS; bus++)
+		{
+			for (int slot = 0; slot < 2; slot++)
+			{
+				if (!isManualVmuSlotEditable(bus, slot, perGameEnabled)
+						|| currentSlotVmuFileName(bus, slot) != fileName) {
+					continue;
+				}
+				if (!labels.empty())
+					labels += ", ";
+				labels += vmuSlotLabel(bus, slot);
+			}
+		}
+		return labels;
+	};
+
+	const float listHeight = uiScaled(220.0f);
+	ImGui::BeginChild("VmuCardManager", ImVec2(0.0f, listHeight), true);
+	if (ImGui::BeginTable("VmuCardTable", 2,
+			ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings))
+	{
+		ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn(T("Slot"), ImGuiTableColumnFlags_WidthFixed, uiScaled(90.0f));
+		ImGui::TableHeadersRow();
+
+		for (int i = 0; i < static_cast<int>(cachedVmuFiles.size()); i++)
+		{
+			const hostfs::FileInfo& info = cachedVmuFiles[i];
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+
+			const bool isSelected = i == selectedIndex;
+			if (ImGui::Selectable(info.name.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns))
+				selectedVmuName = info.name;
+
+			ImGui::TableSetColumnIndex(1);
+			const std::string labels = slotLabelsForFile(info.name);
+			ImGui::TextUnformatted(labels.empty() ? "-" : labels.c_str());
+		}
+		ImGui::EndTable();
+	}
+	ImGui::EndChild();
+
+	if (ImGui::BeginPopupModal(T("Create VMU Card"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::InputText(T("File name"), &createVmuName);
+		if (!vmuOpError.empty())
+			ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "%s", vmuOpError.c_str());
+
+		if (ImGui::Button(T("Create")))
+		{
+			const std::string name = normalizeVmuFileName(createVmuName);
+			std::string err;
+			if (createBlankVmuFile(name, err))
+			{
+				selectVmuCardAndRefresh(name, selectedVmuName, refreshVmuList);
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				vmuOpError = err;
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel")))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopupModal(T("Copy VMU Card"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::InputText(T("New file name"), &copyVmuName);
+		if (!vmuOpError.empty())
+			ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "%s", vmuOpError.c_str());
+
+		if (ImGui::Button(T("Copy")))
+		{
+			if (!hasSelection)
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				const std::string newName = normalizeVmuFileName(copyVmuName);
+				if (!hostfs::isConfiguredVmuFileNameValid(newName))
+				{
+					vmuOpError = T("Invalid file name.");
+				}
+				else
+				{
+					std::string err;
+					if (copyVmuCardFile(selectedName, newName, err))
+					{
+						selectVmuCardAndRefresh(newName, selectedVmuName, refreshVmuList);
+						ImGui::CloseCurrentPopup();
+					}
+					else
+					{
+						vmuOpError = err;
+					}
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel")))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopupModal(T("Rename VMU Card"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		const bool showPerGameRenameWarning = perGameEnabled
+			&& hasSelection
+			&& isLikelyPerGameA1VmuFileName(selectedName);
+		if (showPerGameRenameWarning)
+		{
+			ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+			ImGui::TextColored(warningColor, "%s %s", ICON_FA_TRIANGLE_EXCLAMATION, T("Per Game VMU Rename Warning"));
+			ImGui::TextWrapped("%s", T(
+				"This looks like an auto-named Per Game VMU for A1.\n"
+				"Renaming it can stop Hollycast from auto-loading it while Per Game VMUs is enabled.\n"
+				"To restore automatic pickup later, rename it back to its original file name."));
+			ImGui::Separator();
+		}
+		ImGui::InputText(T("New name"), &renameVmuName);
+		if (!vmuOpError.empty())
+			ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "%s", vmuOpError.c_str());
+
+		if (ImGui::Button(T("Apply")))
+		{
+			if (!hasSelection)
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				const std::string oldName = cachedVmuFiles[selectedIndex].name;
+				const std::string newName = normalizeVmuFileName(renameVmuName);
+				if (newName == oldName)
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				else if (!hostfs::isConfiguredVmuFileNameValid(newName))
+				{
+					vmuOpError = T("Invalid file name.");
+				}
+				else
+				{
+					std::string err;
+					if (renameVmuCardFile(oldName, newName, perGameEnabled, err))
+					{
+						selectVmuCardAndRefresh(newName, selectedVmuName, refreshVmuList);
+						ImGui::CloseCurrentPopup();
+					}
+					else
+					{
+						vmuOpError = err;
+					}
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(T("Cancel")))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopupModal(T("Insert VMU Card"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		if (!hasSelection)
+		{
+			ImGui::TextUnformatted(T("No VMU selected."));
+		}
+		else
+		{
+			const std::string sourceName = cachedVmuFiles[selectedIndex].name;
+			ImGui::Text(T("Insert \"%s\" into:"), sourceName.c_str());
+			if (!vmuOpError.empty())
+				ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "%s", vmuOpError.c_str());
+
+			if (perGameEnabled && isLikelyPerGameA1VmuFileName(sourceName))
+			{
+				ImGui::TextWrapped("%s", T(
+					"This looks like an auto-named Per Game VMU for A1.\n"
+					"Copy it first, then insert the copy into another slot."));
+			}
+			else
+			{
+				bool anySlot = false;
+				for (int bus = 0; bus < MAPLE_PORTS; bus++)
+				{
+					for (int slot = 0; slot < 2; slot++)
+					{
+						if (!isSharedVmuSlotActive(bus, slot))
+							continue;
+
+						const std::string label = vmuSlotLabel(bus, slot);
+						if (perGameEnabled && bus == 0 && slot == 0)
+						{
+							const std::string lockedLabel = label + " (" + T("Per Game VMU") + ")";
+							DisabledScope disabled(true);
+							ImGui::Selectable(lockedLabel.c_str());
+							continue;
+						}
+
+						anySlot = true;
+						if (ImGui::Selectable(label.c_str()))
+						{
+							int sourceBus = -1;
+							int sourceSlot = -1;
+							findAssignedVmuSlot(sourceName, perGameEnabled, sourceBus, sourceSlot);
+
+							if (sourceBus == bus && sourceSlot == slot)
+							{
+								ImGui::CloseCurrentPopup();
+								continue;
+							}
+
+							// Keep one active VMU slot per file so two emulated cards never write the same save.
+							const std::string targetName = currentSlotVmuFileName(bus, slot);
+							if (sourceBus >= 0)
+								applyVmuSlotSelection(sourceBus, sourceSlot, targetName);
+							applyVmuSlotSelection(bus, slot, sourceName);
+							refreshVmuList = true;
+							ImGui::CloseCurrentPopup();
+						}
+					}
+				}
+				if (!anySlot)
+					ImGui::TextDisabled("%s", T("No active shared VMU slots are available."));
+			}
+		}
+
+		ImGui::Spacing();
+		if (ImGui::Button(T("Close")))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+	}
+}
+
 void renderControlsTab()
 {
 	uiLanguageHandler.init();
@@ -5479,6 +6134,8 @@ void renderControlsTab()
 				"When enabled, each game has its own VMU on port 1 of controller A.\n"
 				"Useful to prevent save-file conflicts between games."
 			));
+
+		renderVmuCardManager();
 
 #ifdef USE_DREAMLINK_DEVICES
 		RenderGeneralToggleSettingRow(

@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
+#include <memory>
 
 static SDL_Window* window = NULL;
 static u32 windowFlags;
@@ -1039,7 +1040,7 @@ void sdl_window_create()
 			die("error initializing SDL Video subsystem");
 		}
 #if defined(__APPLE__) && defined(USE_VULKAN)
-		SDL_Vulkan_LoadLibrary("libvulkan.dylib");
+		SDL_Vulkan_LoadLibrary("@executable_path/../Frameworks/libMoltenVK.dylib");
 #endif
 	}
 	sdlDeInit.initialized = true;

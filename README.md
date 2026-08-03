@@ -52,7 +52,10 @@ sudo apt-get -y install libwayland-dev libdecor-0-dev libaudio-dev libjack-dev l
 ### Build Prerequisites for macOS
 
 1. Install Xcode application from app store
-2. Accept licensing for Xcode and do first run initialization
+2. Accept licensing for Xcode and do first launch initialization
+```bash
+sudo xcodebuild -runFirstLaunch
+```
 3. Execute:
 ```bash
 xcodebuild -downloadComponent MetalToolchain
@@ -105,4 +108,14 @@ cd shell/android-studio
 
 # Run the following to build for debug.
 ./gradlew assembleDebug bundleDebug --parallel
+```
+
+If the build gets stuck or encounters and error, run the following before trying again.
+
+```bash
+# Terminate all background Gradle Daemon processes started by gradle.
+./gradlew --stop
+
+# Remove all artifacts of previous build.
+./gradlew clean
 ```

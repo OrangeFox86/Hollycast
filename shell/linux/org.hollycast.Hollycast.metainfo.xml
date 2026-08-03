@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Portions Copyright 2026 The Hollycast Authors -->
+<component type="desktop-application">
+  <id>org.hollycast.Hollycast</id>
+  <name>Hollycast</name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0</project_license>
+  <summary>Sega Dreamcast, Naomi and Atomiswave emulator</summary>
+  <description>
+    <p>Hollycast is a multi-platform Sega Dreamcast, Naomi and Atomiswave emulator derived from reicast.</p>
+  </description>
+  <content_rating type="oars-1.1" />
+  <launchable type="desktop-id">Hollycast.desktop</launchable>
+  <provides>
+    <binary>Hollycast</binary>
+  </provides>
+  <screenshots>
+    <screenshot type="default"><image>https://raw.githubusercontent.com/OrangeFox86/HollyCast/dev/shell/imgs/screenshot1.png</image></screenshot>
+    <screenshot><image>https://raw.githubusercontent.com/OrangeFox86/HollyCast/dev/shell/imgs/screenshot2.png</image></screenshot>
+    <screenshot><image>https://raw.githubusercontent.com/OrangeFox86/HollyCast/dev/shell/imgs/screenshot3.png</image></screenshot>
+    <screenshot><image>https://raw.githubusercontent.com/OrangeFox86/HollyCast/dev/shell/imgs/screenshot4.png</image></screenshot>
+  </screenshots>
+  <categories>
+    <category>Game</category>
+    <category>Emulator</category>
+  </categories>
+  <url type="homepage">https://github.com/OrangeFox86/HollyCast#readme</url>
+  <url type="bugtracker">https://github.com/OrangeFox86/HollyCast/issues</url>
+  <developer_name>The Hollycast Authors</developer_name>
+  <releases>
+    <release date="2021-04-08" version="nightly" />
+  </releases>
+</component>

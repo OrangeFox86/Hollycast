@@ -20,7 +20,7 @@
 #include "archive/ZipArchive.h"
 #include <cstring>
 #include <cmrc/cmrc.hpp>
-CMRC_DECLARE(flycast);
+CMRC_DECLARE(Hollycast);
 
 namespace resource
 {
@@ -28,7 +28,7 @@ namespace resource
 std::unique_ptr<u8[]> load(const std::string& path, size_t& size)
 {
 	try {
-		cmrc::embedded_filesystem fs = cmrc::flycast::get_filesystem();
+		cmrc::embedded_filesystem fs = cmrc::Hollycast::get_filesystem();
 		std::string zipName = path + ".zip";
 		if (fs.exists(zipName))
 		{
@@ -68,7 +68,7 @@ std::vector<std::string> listDirectory(const std::string& path)
 {
 	std::vector<std::string> v;
 	try {
-		cmrc::embedded_filesystem fs = cmrc::flycast::get_filesystem();
+		cmrc::embedded_filesystem fs = cmrc::Hollycast::get_filesystem();
 		for (auto entry : fs.iterate_directory(path))
 			v.push_back(entry.filename());
 	} catch (const std::system_error& e) {

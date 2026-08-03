@@ -43,7 +43,8 @@
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_XCODE_GENERATE_SCHEME": "YES",
-                "USE_BREAKPAD": "NO"
+                "USE_BREAKPAD": "NO",
+                "MOLTENVK_DYLIB": "/usr/local/lib/libMoltenVK.dylib"
             },
             "generator": "Xcode"
         },

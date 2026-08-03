@@ -39,7 +39,7 @@ namespace jni
 	thread_local JVMAttacher jvm_attacher;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_screenCharacteristics(JNIEnv *env, jobject obj, jfloat screenDpi, jfloat refreshRate)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_screenCharacteristics(JNIEnv *env, jobject obj, jfloat screenDpi, jfloat refreshRate)
 {
 	settings.display.dpi = screenDpi;
 	settings.display.refreshRate = std::max(std::round(refreshRate), 60.f);
@@ -106,7 +106,7 @@ static google_breakpad::ExceptionHandler *exceptionHandler;
 
 #endif
 
-extern "C" JNIEXPORT jstring JNICALL Java_com_flycast_emulator_emu_JNIdc_initEnvironment(JNIEnv *env, jobject obj, jobject emulator, jstring filesDirectory, jstring homeDirectory, jstring jlocale)
+extern "C" JNIEXPORT jstring JNICALL Java_com_hollycast_emulator_emu_JNIdc_initEnvironment(JNIEnv *env, jobject obj, jobject emulator, jstring filesDirectory, jstring homeDirectory, jstring jlocale)
 {
     bool first_init = false;
 
@@ -188,7 +188,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_flycast_emulator_emu_JNIdc_initEnv
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_setExternalStorageDirectories(JNIEnv *env, jobject obj, jobjectArray jpathList)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_setExternalStorageDirectories(JNIEnv *env, jobject obj, jobjectArray jpathList)
 {
 	jni::ObjectArray<jni::String> pathList(jpathList, false);
     std::string paths;
@@ -224,7 +224,7 @@ static bool stopEmu()
 	return true;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_setGameUri(JNIEnv *env, jobject obj, jstring jfileName)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_setGameUri(JNIEnv *env, jobject obj, jstring jfileName)
 {
     std::string fileName = jni::String(jfileName, false).to_string();
 	if (!fileName.empty())
@@ -253,7 +253,7 @@ jmethodID audioInitMid;
 jmethodID audioTermMid;
 static jobject g_audioBackend;
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_setupMic(JNIEnv *env,jobject obj,jobject sip)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_setupMic(JNIEnv *env,jobject obj,jobject sip)
 {
     sipemu = env->NewGlobalRef(sip);
     getmicdata = env->GetMethodID(env->GetObjectClass(sipemu),"getData","(I)[B");
@@ -269,7 +269,7 @@ static void *savestateThreadFunc(void *)
 
 static cThread savestateThread(savestateThreadFunc, nullptr, "Flycast-save");
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_pause(JNIEnv *env,jobject obj)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_pause(JNIEnv *env,jobject obj)
 {
 	if (config::GGPOEnable)
 	{
@@ -286,7 +286,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_pause(JNIE
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_resume(JNIEnv *env,jobject obj)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_resume(JNIEnv *env,jobject obj)
 {
     if (game_started)
     {
@@ -298,7 +298,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_resume(JNI
 
 void input_term();
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_stop(JNIEnv *env,jobject obj)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_stop(JNIEnv *env,jobject obj)
 {
 	stopEmu();
 	savestateThread.WaitToEnd();
@@ -329,7 +329,7 @@ static void *render_thread_func(void *)
 
 static cThread render_thread(render_thread_func, nullptr, "Flycast-rend");
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_rendinitNative(JNIEnv * env, jobject obj, jobject surface, jint width, jint height)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_rendinitNative(JNIEnv * env, jobject obj, jobject surface, jint width, jint height)
 {
 	if (render_thread.thread.joinable())
 	{
@@ -353,27 +353,27 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_rendinitNa
 	}
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_guiOpenSettings(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiOpenSettings(JNIEnv *env, jobject obj)
 {
     gui_open_settings();
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_emu_JNIdc_guiIsOpen(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiIsOpen(JNIEnv *env, jobject obj)
 {
     return gui_is_open();
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_emu_JNIdc_guiIsContentBrowser(JNIEnv *env,jobject obj)
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiIsContentBrowser(JNIEnv *env,jobject obj)
 {
     return gui_is_content_browser();
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_guiSetInsets(JNIEnv *env, jobject obj, jint left, jint right, jint top, jint bottom)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiSetInsets(JNIEnv *env, jobject obj, jint left, jint right, jint top, jint bottom)
 {
 	gui_set_insets(left, right, top, bottom);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
 {
     if (g_jvm == NULL)
         env->GetJavaVM(&g_jvm);
@@ -455,7 +455,7 @@ public:
 };
 static AndroidAudioBackend androidAudioBackend;
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_AudioBackend_setInstance(JNIEnv *env, jobject obj, jobject instance)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_AudioBackend_setInstance(JNIEnv *env, jobject obj, jobject instance)
 {
     if (g_audioBackend != nullptr)
         env->DeleteGlobalRef(g_audioBackend);
@@ -491,7 +491,7 @@ void SaveAndroidSettings()
     jni::env()->CallVoidMethod(g_emulator, saveAndroidSettingsMid, (jstring)homeDirectory);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_BaseGLActivity_register(JNIEnv *env, jobject obj, jobject activity)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_BaseGLActivity_register(JNIEnv *env, jobject obj, jobject activity)
 {
     if (g_activity != nullptr) {
         env->DeleteGlobalRef(g_activity);
@@ -557,7 +557,7 @@ void dc_exit()
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_flycast_emulator_RetroAchievementsHostOverrideReceiver_nativeSetHostOverride(JNIEnv* env, jclass, jstring jhost)
+Java_com_hollycast_emulator_RetroAchievementsHostOverrideReceiver_nativeSetHostOverride(JNIEnv* env, jclass, jstring jhost)
 {
 	const char* host = jhost ? env->GetStringUTFChars(jhost, nullptr) : nullptr;
 	achievements::setHostOverride(host ? std::string(host) : std::string());

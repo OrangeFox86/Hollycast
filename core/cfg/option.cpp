@@ -239,6 +239,19 @@ std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices{{
 	{{Option<int>("device4.1.net", 0, "input"),
 	Option<int>("device4.2.net", 0, "input")}},
 }};
+std::array<std::array<Option<std::string, false>, 2>, 4> MapleVmuSlotFileNames{{
+	{{Option<std::string, false>("device1.1.vmu", "", "input"),
+	Option<std::string, false>("device1.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device2.1.vmu", "", "input"),
+	Option<std::string, false>("device2.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device3.1.vmu", "", "input"),
+	Option<std::string, false>("device3.2.vmu", "", "input")}},
+
+	{{Option<std::string, false>("device4.1.vmu", "", "input"),
+	Option<std::string, false>("device4.2.vmu", "", "input")}},
+}};
 std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect{{
 	{{Option<bool>("device1.1.dreamlink", true, "input"),
 	Option<bool>("device1.2.dreamlink", true, "input")}},

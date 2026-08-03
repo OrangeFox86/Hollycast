@@ -9,7 +9,7 @@ fun gitVersionName(): String {
 }
 
 android {
-    namespace = "com.flycast.emulator"
+    namespace = "com.hollycast.emulator"
     ndkVersion = "29.0.14206865"
     compileSdk {
         version = release(36) {

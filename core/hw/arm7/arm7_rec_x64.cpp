@@ -45,11 +45,11 @@ static UnwindInfo unwinder;
 class Arm7Compiler;
 
 #ifdef _WIN32
-static const std::array<Xbyak::Reg32, 8> alloc_regs {
+static constexpr std::array<Xbyak::Reg32, 8> alloc_regs {
 		ebx, ebp, edi, esi, r12d, r13d, r14d, r15d
 };
 #else
-static const std::array<Xbyak::Reg32, 6> alloc_regs {
+static constexpr std::array<Xbyak::Reg32, 6> alloc_regs {
 		ebx, ebp, r12d, r13d, r14d, r15d
 };
 #endif
@@ -780,6 +780,7 @@ class Arm7Compiler : public Xbyak::CodeGenerator
 			mov(call_regs[0], op.arg[0].getImmediate());
 		else
 			mov(call_regs[0], regalloc->map(op.arg[0].getReg().armreg));
+		mov(call_regs[1], op.psrMask);
 		if (op.spsr)
 			call(recompiler::MSR_do<1>);
 		else

@@ -26,6 +26,8 @@
 #include "cfg/option.h"
 #include "network/output.h"
 #include "hw/naomi/printer.h"
+#include "hw/naomi/card_reader.h"
+#include "hw/sh4/sh4_sched.h"
 #include "input/haptic.h"
 
 #include <algorithm>
@@ -1022,6 +1024,69 @@ public:
 	}
 };
 
+class jvs_837_13844_wccf : public jvs_837_13844
+{
+public:
+	jvs_837_13844_wccf(u8 node_id, MIEImpl *parent, int first_player = 0)
+		: jvs_837_13844(node_id, parent, first_player)
+	{}
+
+	void write_digital_out(int count, const u8 *data) override
+	{
+		jvs_837_13844::write_digital_out(count, data);
+		if (count >= 3)
+		{
+			if (data[2] & 0x80) {
+				// solenoid is on
+				solenoidOn = true;
+				solenoidWait = 0;
+			}
+			else
+			{
+				// solenoid is off
+				if (solenoidOn)
+				{
+					// wait 30 frames before ejecting the card
+					if (++solenoidWait >= 30) {
+						card_reader::ejectCard();
+						solenoidOn = false;
+					}
+				}
+			}
+			if (data[0] & 1)
+			{
+				// Player card dispenser
+				if (cardDispenser == 0)
+					NOTICE_LOG(JVS, "WCCF player card dispensed");
+				cardDispenser = sh4_sched_now64();
+			}
+		}
+	}
+
+	void read_digital_in(const u32 *buttons, u32 *v) override
+	{
+		jvs_837_13844::read_digital_in(buttons, v);
+		v[1] |= NAOMI_RIGHT_KEY | NAOMI_BTN1_KEY; // card dispenser sensor off, standby on
+		if (cardDispenser != 0)
+		{
+			// idle: wait for owed cards > 0 && standby=on
+			// payout: assert card vendor payout
+			// payoutwait: wait for !sensor on, decrement owed cards
+			// recvwait: wait for !sensor off -> idle
+			u64 now = sh4_sched_now64();
+			if (now - cardDispenser > 1000_sh4ms)
+				cardDispenser = 0;
+			else
+				v[1] &= ~(NAOMI_RIGHT_KEY | NAOMI_BTN1_KEY); // card dispenser sensor on, standby off
+		}
+	}
+
+private:
+	bool solenoidOn = false;
+	int solenoidWait = 0;
+	u64 cardDispenser = 0;
+};
+
 // Ninja assault
 class jvs_namco_jyu : public jvs_io_board
 {
@@ -1309,8 +1374,11 @@ u32 BaseMIE::RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out)
 	u32 resp = dma(cmd);
 	if (resp != MDRE_UnknownCmd)
 	{
-		const u32 reci = (buffer_in[0] >> 8) & 0xFF;
+		u32 reci = (buffer_in[0] >> 8) & 0xFF;
 		const u32 sender = (buffer_in[0] >> 16) & 0xFF;
+		if (reci & 0x20)
+			reci |= getExtDeviceMap();
+
 		buffer_out[0] = (resp << 0 ) | (sender << 8) | (reci << 16) | ((out_len / 4) << 24);
 		return out_len + 4;
 	}
@@ -1383,7 +1451,7 @@ u32 BaseMIE::RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out)
 
 	case MDC_JVSGetId:
 		{
-			DEBUG_LOG(JVS, "bus[%d] JVS Get Id", bus_id);
+			LOGJVS("bus[%d] JVS Get Id", bus_id);
 			static const char ID[56] = "315-6149    COPYRIGHT SEGA ENTERPRISES CO,LTD.  1998";
 			reply(MDRS_JVSGetIdReply, 7);
 			wptr(ID, 28);
@@ -1395,7 +1463,7 @@ u32 BaseMIE::RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out)
 		break;
 
 	default:
-		INFO_LOG(MAPLE, "BaseMIE: Unknown Maple command %x", cmd);
+		INFO_LOG(MAPLE, "bus[%d] BaseMIE: Unknown Maple command %x", bus_id, cmd);
 		reply(MDRE_UnknownCmd);
 		break;;
 	}
@@ -1597,6 +1665,10 @@ MIEImpl::MIEImpl()
 		else if (gameId == "SAMBA DE AMIGO")
 		{
 			io_boards.push_back(std::make_unique<jvs_837_13844_samba>(1, this));
+		}
+		else if (gameId.substr(0, 4) == "WCCF" && config::MultiboardSlaves <= 1)
+		{
+			io_boards.push_back(std::make_unique<jvs_837_13844_wccf>(1, this));
 		}
 		else
 		{
@@ -2638,7 +2710,7 @@ u32 RFIDReaderWriterImpl::dma(u32 cmd)
 		return (MapleDeviceRV)0xfe;
 
 	case 0xA1:	// read card data
-		DEBUG_LOG(JVS, "RFID card read (data? %d)", d4Seen);
+		LOGJVS("RFID card read (data? %d)", d4Seen);
 		w32(getStatus());
 		if (!d4Seen)
 			// serial0 and serial1 only
@@ -2667,7 +2739,7 @@ u32 RFIDReaderWriterImpl::dma(u32 cmd)
 			u32 offset = r8() * 4;
 			size_t size = r8() * 4;
 			skip(2);
-			DEBUG_LOG(JVS, "RFID card write: offset 0x%x len %d", offset, (int)size);
+			LOGJVS("RFID card write: offset 0x%x len %d", offset, (int)size);
 			rptr(cardData + offset, std::min(size, sizeof(cardData) - offset));
 			saveCard();
 			return (MapleDeviceRV)0xfe;
@@ -2694,7 +2766,7 @@ u32 RFIDReaderWriterImpl::dma(u32 cmd)
 				counter = 0;
 				break;
 			}
-			DEBUG_LOG(JVS, "RFID decrement %d", counter);
+			LOGJVS("RFID decrement %d", counter);
 			cardData[19 - counter]--;
 			saveCard();
 			w32(getStatus());
@@ -2877,4 +2949,533 @@ const u8 *getRfidCardData(int playerNum)
 		return std::static_pointer_cast<RFIDReaderWriterImpl>(mapleDev)->getCardData();
 	else
 		return nullptr;
+}
+
+#define WCCFLOG(...) INFO_LOG(MAPLE, __VA_ARGS__)
+
+struct WccfCameraImpl : public WccfCamera
+{
+	MapleDeviceType get_device_type() override {
+		return MDT_WccfCamera;
+	}
+
+	u32 dma(u32 command) override;
+	void serialize(Serializer& ser) const override;
+	void deserialize(Deserializer& deser) override;
+	u8 getExtDeviceMap() const override { return 0x1f; }
+
+	MapleDeviceRV sendDeviceStatus(bool full, u8 dstAP);
+	MapleDeviceRV setConditionBoot(u8 dstAP, const u8 mode);
+	MapleDeviceRV setConditionA002(u8 dstAP, const u8 mode);
+	MapleDeviceRV setConditionA010(u8 dstAP, const u8 mode);
+	MapleDeviceRV setConditionA014(u8 dstAP, const u8 mode);
+
+	int overlay = 0;
+	char mode = 0;
+	u8 status = '1';
+	int mode0dataSize = 16;
+};
+
+std::shared_ptr<maple_device> WccfCamera::Create() {
+	return std::make_shared<WccfCameraImpl>();
+}
+
+MapleDeviceRV WccfCameraImpl::sendDeviceStatus(bool full, u8 dstAP)
+{
+	if (dstAP & 0x1f)
+		w32(0);
+	else
+		w32(MFID_0_Input);
+	w32(0);
+	w32(0);
+	w32(0);
+	w8(0xff);
+	w8(0);
+	if (dstAP & 0x1f)
+		wstr("Card Ban Reader LMDevice 1.00", 30);
+	else
+		wstr("Card Ban Reader Device 1.00", 30);
+	wstr("Produced By or Under License From SEGA ENTERPRISES,LTD.", 60);
+	w16(0);
+	w16(0);
+
+	if (full)
+	{
+		if (dstAP & 0x1f)
+		{
+			if (overlay == 0)
+			{
+				wstr("Version 1.211,2005/11/21,315-6341-B        ,", 44);
+				w32(0);
+				// total 160 bytes
+			}
+			else
+			{
+				// overlay A002, A010
+				w32(3);
+				w32(0);
+				memset(dma_buffer_out, 0, 512);
+				*dma_count_out += 512;
+				// total 632 bytes
+			}
+		}
+		else
+		{
+			wstr("Version 1.000,2002/04/29,315-6341-A        ,", 44);
+			if (overlay == 0)
+			{
+				w32(mode);
+				if (mode == 'J') {
+					for (int i = 0; i < 70; i++)
+						w32(0);
+					// total 440 bytes
+				}
+				else if (mode == 'P') {
+					for (int i = 0; i < 5; i++)
+						w32(0);
+					// total 180 bytes
+				}
+			}
+			else if (overlay == 0xa002)
+			{
+				w32(mode);
+				switch (mode)
+				{
+				case 0x5c:
+					memset(dma_buffer_out, 0, 292);
+					*dma_count_out += 292;
+					// total 448 bytes
+					break;
+				case 'J':
+				case 'K':
+					memset(dma_buffer_out, 0, 284);
+					*dma_count_out += 284;
+					// total 440 bytes
+					break;
+				default:
+					w32(0);
+					// total 160 bytes
+					break;
+				}
+			}
+			else
+			{
+				// overlay A010
+				w8(mode);
+				switch (mode)
+				{
+				case 'C':
+				case 'D':
+					memset(dma_buffer_out, 0, 283);
+					*dma_count_out += 283;
+					// total 440 bytes
+					break;
+				case 'F':
+					memset(dma_buffer_out, 0, 227);
+					*dma_count_out += 227;
+					// total 384 bytes
+					break;
+				case 'G':
+					memset(dma_buffer_out, 0, 267);
+					*dma_count_out += 267;
+					// total 424 bytes
+					break;
+				case 'H':
+					memset(dma_buffer_out, 0, 259);
+					*dma_count_out += 259;
+					// total 416 bytes
+					break;
+				case 'J':
+					memset(dma_buffer_out, 0, 283);
+					*dma_count_out += 283;
+					// total 440 bytes
+					break;
+				case 7:
+					memset(dma_buffer_out, 0, 19);
+					*dma_count_out += 19;
+					// total 176 bytes
+					break;
+				default:
+					{
+						w8(mode0dataSize);
+						w8(0);
+						w8(0);
+						w16(1);
+						w16(3);
+						w16(53);
+						w16(401);
+						w16(601);
+						w16(2);
+						w16(551);
+						w16(400);
+						for (int i = 0; i < mode0dataSize; i++)
+						{
+							if (i < 11)
+							{
+								// pitch
+								w16((i % 4) * 120 + 100);	// y
+								w16((i / 4) * 120 + 120);	// x
+							}
+							else
+							{
+								// bench
+								w16((i - 11) * 80 + 100);
+								w16(0);
+							}
+							w16(0); // not used? set by the game to max(abs(deltaX), abs(deltaY))
+							// test cards
+							//w16(i);
+							// real cards
+							// card ranges:
+							// 24-130, 201-509, 550-581, 582-595*, 600-887, 888-939*, 940-971, 972-1019*, 1020-1023*
+							// 1100-1323, 1324-1355*, 1356-1367*, 1368*, 1401-1736, 1737-1778*, 1779-1788*
+							// (* indicates the index also has bit 14 set)
+							w16(i + 1401);	// * are special cards? 888 | 0x4000
+											// 1401-1736 -> PlayerTable[1156-...]
+						}
+						break;
+					}
+				}
+			}
+		}
+		return MDRS_DeviceStatusAll;
+	} else {
+		return MDRS_DeviceStatus;
+	}
+}
+
+MapleDeviceRV WccfCameraImpl::setConditionBoot(u8 dstAP, const u8 mode)
+{
+	if (dstAP & 0x1f)
+		return MDRE_UnknownCmd;
+	switch (mode)
+	{
+	case 0:
+		// set version 0, reset
+		this->mode = 0;
+		status = '1'; // self test successful
+		break;
+	case 'P': // cam pos?
+		// set version P, reset
+		this->mode = 'P';
+		status = '2';
+		break;
+	case '0': // select flash section
+		// Copy the selected FLASH area to RAM and execute it.
+		switch (r8())
+		{
+		case 0:
+		default:
+			WCCFLOG("Switching to overlay A010 (card reader)");
+			overlay = 0xa010;
+			status = 2; // 5 -> 2
+			this->mode = 0;
+			break;
+		case 1:
+			overlay = 0xa002;
+			status = '3';
+			this->mode = 0;
+			WCCFLOG("Switching to overlay A002 (firmware update)");
+			break;
+		case 2:
+			overlay = 0xa014;
+			this->mode = 0;
+			status = 0x82; // 0x85 -> 0x82
+			WCCFLOG("Switching to overlay A014 (settings)");
+			break;
+		}
+		break;
+	default:
+		return MDRE_UnknownCmd;
+	}
+	return MDRS_DeviceReply;
+}
+
+MapleDeviceRV WccfCameraImpl::setConditionA002(u8 dstAP, const u8 mode)
+{
+    if (dstAP & 0x1f)
+    {
+    	if (mode == 0x3c)
+    	{
+    		if (status == '3' || status == 0x3b || status == 0x3c)
+    		{
+    			/*
+    			u8 count = r8();
+    			r16();
+    			u32 p2 = r32(); // address
+    			u32 p3 = r32(); // u32[count]
+    			WCCFLOG("A002[%x] mode 3c params: %x %x %x...", dstAP, count, p2, p3);
+    			*/
+    		}
+    		return MDRS_DeviceReply;
+    	}
+    	// also mode 1 and 7 on Ext dev 1 only
+    	ERROR_LOG(NAOMI, "Mode %x [%c] (ext) not handled", mode, mode);
+    }
+    else
+    {
+    	switch (mode)
+    	{
+    	case '8':
+    		if (status == '3')
+    		{
+    			u32 p1 = r8(); // count
+    			p1 += r8() << 8;
+    			p1 += r8() << 16;
+    			u32 p2 = r32();	// address
+    			u32 p3 = r32(); // value
+    			WCCFLOG("A002 mode 8 params: %x %x %x", p1, p2, p3);
+    			status = '8'; // then switches to '3' after data xfer from main device
+    			status = '3';
+    		}
+    		break;
+    	case 0x3f:
+    		if (status == '3')
+    		{
+    			u32 p1 = r8();
+    			WCCFLOG("A002 mode 3F param: %x", p1);
+    			switch (p1)
+    			{
+    			case 1:
+    			case 2:
+    			case 3:
+    			case 4:
+    			case 5:
+    			case 6:
+    			default:
+    				break;
+    			}
+				status = 0x3f;
+    		}
+    		break;
+    	default:
+    		ERROR_LOG(NAOMI, "Mode %x [%c] not handled", mode, mode);
+    		return MDRE_UnknownCmd;
+    	}
+    	return MDRS_DeviceReply;
+    }
+	return MDRE_UnknownCmd;
+}
+
+MapleDeviceRV WccfCameraImpl::setConditionA010(u8 dstAP, const u8 mode)
+{
+	if ((dstAP & 0x1f) == 1)
+	{
+		// Ext device 1
+		switch (mode)
+		{
+		case 0xc:
+			// TODO additional condition: DAT_8c024ed5 = 1
+			if (this->mode == 8)
+				this->mode = 3;
+			break;
+		case 0xd:
+			// TODO additional condition: DAT_8c024ed5 = 1 (set by setCond 10 or 11 on main)
+			// FIXME freeze
+			if (this->mode == 3 && false) {
+				this->mode = 8;
+				status = 12;
+			}
+			break;
+		case 1:
+			// reset imgBlock# and more...
+			break;
+		default:
+			return MDRE_UnknownCmd;
+		}
+	}
+	else
+	{
+		// Main device
+		switch (mode)
+		{
+		case 0:
+//			mode0dataSize = r8();
+//			this->mode = 0;
+			//status = 2;
+//			status = '1'; // TODO after successful self tests?
+			break;
+		case 3:
+			// if status==2 &&  DAT_8c024ed2 != 1 && DAT_8c024ed5 != 1 then DAT_8c024ed5 = 1
+			break;
+		case 4:
+			this->mode = 0;
+			if (status != 2)
+				status = 2; // 5 -> 2
+				// sets SPC -> execute special code after int handler?
+				//	init stack ptr, DAT_8c024ed2=0, DAT_8c024ed3=0, mode=0, DAT_8c024ed5=0, DAT_8c024ed6=1, status=5
+				//  status 5 -> 2
+			break;
+		case 7:
+			if (status == 2) // && DAT_8c024ed2 != 1
+				this->mode = 7;
+			break;
+		case 8:
+			if (status == 2) // && DAT_8c024ed2 != 1 && DAT_8c024ed5 != 1
+				//  FUN_8c011b6e(1)
+				this->mode = 8;
+			break;
+		case 10: // detect cards
+			if (status == 2) // && DAT_8c024ed2 != 1 && DAT_8c024ed5 != 1
+			{
+				this->mode = 3;
+				// we need to alternate GetCond with status 11 and 12
+				status = 11; // -> 10 -> 11 -> 12
+				// DAT_8c024ed5 = 1
+			}
+			break;
+		case 11:
+			if (status == 2) // && DAT_8c024ed2 != 1 && DAT_8c024ed5 != 1
+				this->mode = 11;
+			break;
+		case 12:
+			if (mode == 8) // && DAT_8c024ed5 == 1
+				this->mode = 3;
+			break;
+		case 13:
+			if (mode == 3) // && DAT_8c024ed5 == 1
+				this->mode = 8;
+			break;
+		case 'C':
+			if (status == 2) // && FUN_8c011b6e() != 1
+				this->mode = 'C';
+			break;
+		case 'D':
+			if (status == 2) // && DAT_8c024ed2 != 1
+				this->mode = 'D';
+			break;
+		case 'E':
+			//if (status == 0x82 || status == 2) // && DAT_8c024ed2 != 1
+			//	FUN_8c01a538(&DAT_8c024ad6);
+			break;
+		case 'F':
+			if (status == 2) // && DAT_8c024ed2 != 1
+				this->mode = 'F';
+			break;
+		case 'G':
+			if (status == 2) // && DAT_8c024ed2 != 1
+				this->mode = 'G';
+			break;
+		case 'H':
+			if (status == 2) // && FUN_8c011b6e() != 1
+				this->mode = 'H';
+			break;
+		case 'J':
+			{
+				//u8 b = r8(); // TODO 0, 1, 2, 3 or else...
+				this->mode = 'J';
+				break;
+			}
+		case 'L':
+			if (status == 2)
+				status = 'L';
+			break;
+		case 'M':
+			if (status == 2)
+				status = 'L';
+			break;
+		case 'N':
+			if (status == 2)
+				status = 'L';
+			break;
+		case 0x81:
+			if (status == 2) // && FUN_8c011b6e() != 1
+				this->mode = 0x81;
+			break;
+		default:
+			ERROR_LOG(NAOMI, "Mode %x [%c] not handled", mode, mode != 0 ? mode : ' ');
+			return MDRE_UnknownCmd;
+		}
+	}
+	return MDRS_DeviceReply;
+}
+
+MapleDeviceRV WccfCameraImpl::setConditionA014(u8 dstAP, const u8 mode)
+{
+	if (dstAP & 0x1f)
+	{
+		// TODO
+		ERROR_LOG(NAOMI, "Mode %x [%c] (ext) not handled", mode, mode);
+	}
+	else
+	{
+		switch (mode)
+		{
+		case 'F':
+			if (status == 0x82) { // && FUN_8c011d30() != 1
+				this->mode = 'F';
+				status = 0x84; // -> 0x83 -> 0x84
+			}
+			else {
+				WCCFLOG("mode F requested but status is %x", status);
+			}
+			break;
+		default:
+    		ERROR_LOG(NAOMI, "Mode %x [%c] not handled", mode, mode);
+			return MDRE_UnknownCmd;
+		}
+		return MDRS_DeviceReply;
+	}
+	return MDRE_UnknownCmd;
+}
+
+u32 WccfCameraImpl::dma(u32 command)
+{
+	const u32 reci = dma_buffer_in[-3];
+	switch (command)
+	{
+	case MDC_DeviceRequest:
+	case MDC_AllStatusReq:
+		WCCFLOG("[%d] Cam %s. reci %x", bus_id, command == MDC_DeviceRequest ? "DeviceRequest" :  "AllStatusReq", reci);
+		return sendDeviceStatus(command == MDC_AllStatusReq, reci);
+
+	case MDCF_GetCondition:
+		//WCCFLOG("[%d] Cam GetCondition. sz %d reci %x", bus_id, dma_count_in, reci);
+		w32(MFID_0_Input);
+		w8(status);
+		w8(0);
+		w16(0);
+		w32(0);
+		if (mode == 3 && (status == 11 || status == 12))
+			// alternate between status 11 and 12
+			status ^= 7;
+		return MDRS_DataTransfer;
+
+	case MDCF_SetCondition:
+	{
+		r32(); // function
+		u8 newMode = r8();
+		if (newMode != 0x3c || (reci & 0x1f) == 0)
+			WCCFLOG("[%d] Cam SetCondition: sz %d reci %x mode %02x", bus_id, dma_count_in, reci, newMode);
+		switch (overlay)
+		{
+		case 0xa002: return setConditionA002(reci, newMode);
+		case 0xa010: return setConditionA010(reci, newMode);
+		case 0xa014: return setConditionA014(reci, newMode);
+		default:     return setConditionBoot(reci, newMode);
+		}
+	}
+
+	default:
+		return WccfCamera::dma(command);
+	}
+
+}
+
+void WccfCameraImpl::serialize(Serializer& ser) const
+{
+	WccfCamera::serialize(ser);
+	ser << overlay;
+	ser << mode;
+	ser << status;
+	ser << mode0dataSize;
+}
+
+void WccfCameraImpl::deserialize(Deserializer& deser)
+{
+	WccfCamera::deserialize(deser);
+	deser >> overlay;
+	deser >> mode;
+	deser >> status;
+	deser >> mode0dataSize;
 }

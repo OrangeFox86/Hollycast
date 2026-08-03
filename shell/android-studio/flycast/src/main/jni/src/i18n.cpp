@@ -35,7 +35,7 @@ static jmethodID getCurrentLocaleID;
 
 void initJni(JNIEnv *env)
 {
-	jni::Class localClazz(env->FindClass("com/flycast/emulator/emu/LocaleUtils"));
+	jni::Class localClazz(env->FindClass("com/hollycast/emulator/emu/LocaleUtils"));
 	clazz = localClazz.globalRef<jni::Class>();
 	formatShortDateTimeID = env->GetStaticMethodID(clazz, "formatShortDateTime", "(J)Ljava/lang/String;");
 	getCurrentLocaleID = env->GetStaticMethodID(clazz, "getCurrentLocale", "()Ljava/lang/String;");

@@ -105,8 +105,8 @@ mkdir -p "$OUTDIR/usr/bin" "$OUTDIR/usr/lib" "$OUTDIR/usr/lib/pulseaudio" "$OUTD
 # fi
 # "$OUTDIR/usr/optional/checkrt" --copy-libraries
 
-cp -a "$ARTDIR/flycast" "$OUTDIR/usr/bin"
-patchelf --set-rpath '$ORIGIN/../lib' "$OUTDIR/usr/bin/flycast"
+cp -a "$ARTDIR/Hollycast" "$OUTDIR/usr/bin"
+patchelf --set-rpath '$ORIGIN/../lib' "$OUTDIR/usr/bin/Hollycast"
 
 echo "Copying system shared libraries"
 for lib in "${SHLIBS[@]}"; do
@@ -134,7 +134,7 @@ for so in $(find "$OUTDIR/usr/lib" -maxdepth 1); do
 	fi
 done
 
-cp -a "$SRCDIR/shell/linux/flycast.desktop" "$SRCDIR/shell/linux/flycast.png" "$OUTDIR"
+cp -a "$SRCDIR/shell/linux/Hollycast.desktop" "$SRCDIR/shell/linux/Hollycast.png" "$OUTDIR"
 
 echo "Creating AppRun..."
 cat > "$OUTDIR/AppRun" << EOF
@@ -150,7 +150,7 @@ if [ -n "\$extra_libs" ]; then
 		export LD_PRELOAD="\$APPDIR/usr/optional/exec.so:\${LD_PRELOAD}"
 	fi
 fi
-exec "\$APPDIR/usr/bin/flycast" "\$@"
+exec "\$APPDIR/usr/bin/Hollycast" "\$@"
 EOF
 chmod +x "$OUTDIR/AppRun"
 
