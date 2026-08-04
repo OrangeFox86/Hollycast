@@ -561,7 +561,6 @@ extern Option<bool> OmxAudioHdmi;
 extern Option<int> MouseSensitivity;
 extern Option<bool> VirtualGamepadEnabled;
 extern Option<bool> VirtualGamepadHapticFeedback;
-extern Option<bool> VirtualGamepadVisualFeedback;
 extern Option<int> VirtualGamepadVibration;
 extern Option<int> VirtualGamepadTransparency;
 extern Option<int> VirtualGamepadIdleTimeout;

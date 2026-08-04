@@ -1,3 +1,4 @@
+# Portions Copyright 2026 The Hollycast Authors
 cmrc_add_resource_library(Hollycast-resources ALIAS Hollycast::res NAMESPACE Hollycast)
 
 cmrc_add_resources(Hollycast-resources
@@ -43,7 +44,17 @@ if(NOT LIBRETRO)
         cmrc_add_resources(Hollycast-resources
                 WHENCE resources
                 resources/picture/buttons.png
-                resources/picture/buttons-arcade.png)
+                resources/picture/buttons-arcade.png
+                resources/picture/blkclrDC.png
+                resources/picture/drkgreywhtsolidDC.png
+                resources/picture/briteneonDC.png
+                resources/picture/greywhitesolidDC.png
+                resources/picture/NeondimDC.png
+                resources/picture/blkgryARC.png
+                resources/picture/blkcolorARC.png
+                resources/picture/whitelineARC.png
+                resources/picture/neonARC.png
+                resources/picture/grywhitesldARC.png)
     endif()
 endif()
 

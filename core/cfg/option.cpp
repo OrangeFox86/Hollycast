@@ -205,7 +205,6 @@ Option<bool> OmxAudioHdmi("audio_hdmi", true, "omx");
 Option<int> MouseSensitivity("MouseSensitivity", 100, "input");
 Option<bool> VirtualGamepadEnabled("VirtualGamepadEnabled", true, "input");
 Option<bool> VirtualGamepadHapticFeedback("VirtualGamepadHapticFeedback", true, "input");
-Option<bool> VirtualGamepadVisualFeedback("VirtualGamepadVisualFeedback", true, "input");
 Option<int> VirtualGamepadVibration("VirtualGamepadVibration", 20, "input");
 Option<int> VirtualGamepadTransparency("VirtualGamepadTransparency", 37, "input");
 Option<int> VirtualGamepadIdleTimeout("VirtualGamepadIdleTimeout", 10, "input");
