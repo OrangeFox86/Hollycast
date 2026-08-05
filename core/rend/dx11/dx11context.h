@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -25,6 +26,7 @@
 #include <windows.h>
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
+#include <array>
 #include "windows/comptr.h"
 #include "windows/dynlink.h"
 #include "dx11_overlay.h"
@@ -38,6 +40,8 @@ public:
 
 	void EndImGuiFrame();
 	void Present();
+	void BeginGpuTiming();
+	void EndGpuTiming();
 	const ComPtr<ID3D11Device>& getDevice() const { return pDevice; }
 	const ComPtr<ID3D11DeviceContext>& getDeviceContext() const { return pDeviceContext; }
 	ComPtr<ID3D11RenderTargetView>& getRenderTarget() { return renderTargetView; }
@@ -87,6 +91,8 @@ private:
 	void term();
 	void handleDeviceLost();
 	bool checkTextureSupport();
+	bool initGpuTiming();
+	void pollGpuTiming();
 
 	ComPtr<ID3D11Device> pDevice;
 	ComPtr<ID3D11DeviceContext> pDeviceContext;
@@ -110,8 +116,40 @@ private:
 	pD3DCompile d3dcompiler = nullptr;
 	int gameSwapInterval = 1;
 
+	struct GpuTimingQuery
+	{
+		ComPtr<ID3D11Query> disjoint;
+		ComPtr<ID3D11Query> start;
+		ComPtr<ID3D11Query> end;
+	};
+	static constexpr std::size_t GpuTimingQueryCount = 4;
+	std::array<GpuTimingQuery, GpuTimingQueryCount> gpuTimingQueries {};
+	std::size_t gpuTimingReadIndex = 0;
+	std::size_t gpuTimingWriteIndex = 0;
+	std::size_t gpuTimingWaitingCount = 0;
+	bool gpuTimingActive = false;
+	bool gpuTimingAvailable = false;
+
 	static constexpr UINT VENDOR_INTEL = 0x8086;
 	static constexpr UINT VENDOR_ATI = 0x1002;
 	static constexpr UINT VENDOR_AMD = 0x1022;
+};
+
+// Both standard and per-pixel DX11 renderers need exception-safe query closure.
+class DX11GpuTimingScope
+{
+public:
+	explicit DX11GpuTimingScope(DX11Context *context) : context(context)
+	{
+		context->BeginGpuTiming();
+	}
+
+	~DX11GpuTimingScope()
+	{
+		context->EndGpuTiming();
+	}
+
+private:
+	DX11Context *context;
 };
 #endif

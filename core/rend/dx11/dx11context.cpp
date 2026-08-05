@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -26,6 +27,7 @@
 #include "emulator.h"
 #include "dx11_driver.h"
 #include "imgui_impl_dx11.h"
+#include "ui/performance_overlay.h"
 #include <dxgi1_6.h>
 #ifdef TARGET_UWP
 #include <windows.h>
@@ -199,6 +201,7 @@ bool DX11Context::init(bool keepCurrentWindow)
 	}
 
 	imguiDriver = std::unique_ptr<ImGuiDriver>(new DX11Driver(pDevice, pDeviceContext));
+	initGpuTiming();
 	resize();
 	shaders.init(pDevice, &D3DCompile);
 	overlay.init(pDevice, pDeviceContext, &shaders, &samplers);
@@ -212,6 +215,13 @@ void DX11Context::term()
 {
 	NOTICE_LOG(RENDERER, "DX11 Context terminating");
 	overlay.term();
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingQueries = {};
+	performance_overlay::setGpuTimingSupported(false);
 	samplers.term();
 	shaders.term();
 	imguiDriver.reset();
@@ -226,6 +236,104 @@ void DX11Context::term()
 	pDeviceContext.reset();
 	pDevice.reset();
 	d3dcompiler = nullptr;
+}
+
+bool DX11Context::initGpuTiming()
+{
+	gpuTimingQueries = {};
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	if (!pDevice)
+		return false;
+
+	for (GpuTimingQuery& query : gpuTimingQueries)
+	{
+		D3D11_QUERY_DESC desc {};
+		desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+		if (FAILED(pDevice->CreateQuery(&desc, &query.disjoint.get())))
+			return false;
+		desc.Query = D3D11_QUERY_TIMESTAMP;
+		if (FAILED(pDevice->CreateQuery(&desc, &query.start.get())) || FAILED(pDevice->CreateQuery(&desc, &query.end.get())))
+			return false;
+	}
+	gpuTimingAvailable = true;
+	return true;
+}
+
+void DX11Context::pollGpuTiming()
+{
+	if (!gpuTimingAvailable || !pDeviceContext)
+		return;
+
+	while (gpuTimingWaitingCount != 0)
+	{
+		GpuTimingQuery& query = gpuTimingQueries[gpuTimingReadIndex];
+		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint {};
+		const HRESULT disjointResult = pDeviceContext->GetData(query.disjoint, &disjoint, sizeof(disjoint), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+		if (disjointResult == S_FALSE)
+			break;
+		if (FAILED(disjointResult))
+		{
+			gpuTimingAvailable = false;
+			performance_overlay::setGpuTimingSupported(false);
+			return;
+		}
+
+		UINT64 start = 0;
+		UINT64 end = 0;
+		const HRESULT startResult = pDeviceContext->GetData(query.start, &start, sizeof(start), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+		const HRESULT endResult = pDeviceContext->GetData(query.end, &end, sizeof(end), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+		if (startResult == S_FALSE || endResult == S_FALSE)
+			break;
+		if (FAILED(startResult) || FAILED(endResult))
+		{
+			gpuTimingAvailable = false;
+			performance_overlay::setGpuTimingSupported(false);
+			return;
+		}
+
+		if (!disjoint.Disjoint && end >= start && disjoint.Frequency != 0)
+		{
+			const double nanoseconds = static_cast<double>(end - start) * 1000000000.0 / static_cast<double>(disjoint.Frequency);
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+		}
+		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
+		--gpuTimingWaitingCount;
+	}
+}
+
+void DX11Context::BeginGpuTiming()
+{
+	if (!performance_overlay::isGpuTimingRequested())
+		return;
+	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
+	if (!gpuTimingAvailable || !pDeviceContext)
+		return;
+
+	pollGpuTiming();
+	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
+		return;
+
+	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	pDeviceContext->Begin(query.disjoint);
+	pDeviceContext->End(query.start);
+	gpuTimingActive = true;
+}
+
+void DX11Context::EndGpuTiming()
+{
+	if (!gpuTimingActive || !pDeviceContext)
+		return;
+
+	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	pDeviceContext->End(query.end);
+	pDeviceContext->End(query.disjoint);
+	gpuTimingWriteIndex = (gpuTimingWriteIndex + 1) % GpuTimingQueryCount;
+	++gpuTimingWaitingCount;
+	gpuTimingActive = false;
 }
 
 void DX11Context::Present()

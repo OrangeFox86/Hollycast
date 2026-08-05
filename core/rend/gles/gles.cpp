@@ -1,3 +1,5 @@
+// Portions Copyright 2026 The Hollycast Authors
+
 #include "glcache.h"
 #include "gles.h"
 #include "quad.h"
@@ -12,6 +14,9 @@
 #include "emulator.h"
 #include "naomi2.h"
 #include "oslib/i18n.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 
 #ifdef TEST_AUTOMATION
 #include "cfg/cfg.h"
@@ -965,6 +970,7 @@ bool OpenGLRenderer::Init()
 	glcache.EnableCache();
 
 	gl_create_resources();
+	initGpuTiming();
 
 #if 0
 	glEnable(GL_DEBUG_OUTPUT);
@@ -1313,6 +1319,7 @@ void OpenGLRenderer::initVideoRoutingFrameBuffer()
 
 void OpenGLRenderer::Term()
 {
+	termGpuTiming();
 	TexCache.Clear();
 	gles_term();
 }
@@ -1320,8 +1327,10 @@ void OpenGLRenderer::Term()
 bool OpenGLRenderer::Render()
 {
 	saveCurrentFramebuffer();
+	beginGpuTiming();
 	renderFrame(gl.rendContext->framebufferWidth, gl.rendContext->framebufferHeight);
 	if (gl.rendContext->isRTT) {
+		endGpuTiming();
 		restoreCurrentFramebuffer();
 		return false;
 	}
@@ -1333,9 +1342,126 @@ bool OpenGLRenderer::Render()
 		drawOSD();
 		renderVideoRouting();
 	}
+	endGpuTiming();
 	restoreCurrentFramebuffer();
 
 	return true;
+}
+
+void OpenGLRenderer::initGpuTiming()
+{
+#ifndef LIBRETRO
+	gpuTimingAvailable = gl.is_gles ? GLAD_GL_EXT_disjoint_timer_query : GLAD_GL_ARB_timer_query;
+	if (!gpuTimingAvailable)
+		return;
+	if (gl.is_gles)
+		glGenQueriesEXT(static_cast<GLsizei>(gpuTimingQueries.size()), gpuTimingQueries.data());
+	else
+		glGenQueries(static_cast<GLsizei>(gpuTimingQueries.size()), gpuTimingQueries.data());
+	for (const GLuint query : gpuTimingQueries)
+	{
+		if (query == 0)
+		{
+			termGpuTiming();
+			return;
+		}
+	}
+#endif
+}
+
+void OpenGLRenderer::termGpuTiming()
+{
+#ifndef LIBRETRO
+	if (gpuTimingQueries[0] != 0)
+	{
+		if (gl.is_gles)
+			glDeleteQueriesEXT(static_cast<GLsizei>(gpuTimingQueries.size()), gpuTimingQueries.data());
+		else
+			glDeleteQueries(static_cast<GLsizei>(gpuTimingQueries.size()), gpuTimingQueries.data());
+	}
+	performance_overlay::setGpuTimingSupported(false);
+#endif
+	gpuTimingQueries = {};
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingAvailable = false;
+	gpuTimingActive = false;
+}
+
+void OpenGLRenderer::pollGpuTiming()
+{
+#ifndef LIBRETRO
+	if (!gpuTimingAvailable)
+		return;
+
+	while (gpuTimingWaitingCount != 0)
+	{
+		const GLuint query = gpuTimingQueries[gpuTimingReadIndex];
+		GLuint ready = GL_FALSE;
+		if (gl.is_gles)
+			glGetQueryObjectuivEXT(query, GL_QUERY_RESULT_AVAILABLE_EXT, &ready);
+		else
+			glGetQueryObjectuiv(query, GL_QUERY_RESULT_AVAILABLE, &ready);
+		if (ready == GL_FALSE)
+			break;
+
+		bool valid = true;
+		if (gl.is_gles)
+		{
+			GLint disjoint = GL_FALSE;
+			glGetIntegerv(GL_GPU_DISJOINT_EXT, &disjoint);
+			valid = disjoint == GL_FALSE;
+		}
+		if (valid)
+		{
+			GLuint64 nanoseconds = 0;
+			if (gl.is_gles)
+				glGetQueryObjectui64vEXT(query, GL_QUERY_RESULT_EXT, &nanoseconds);
+			else
+				glGetQueryObjectui64v(query, GL_QUERY_RESULT, &nanoseconds);
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+		}
+		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
+		--gpuTimingWaitingCount;
+	}
+#endif
+}
+
+void OpenGLRenderer::beginGpuTiming()
+{
+#ifndef LIBRETRO
+	if (!performance_overlay::isGpuTimingRequested())
+		return;
+	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
+	if (!gpuTimingAvailable)
+		return;
+
+	pollGpuTiming();
+	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
+		return;
+	const GLuint query = gpuTimingQueries[gpuTimingWriteIndex];
+	if (gl.is_gles)
+		glBeginQueryEXT(GL_TIME_ELAPSED_EXT, query);
+	else
+		glBeginQuery(GL_TIME_ELAPSED, query);
+	gpuTimingActive = true;
+#endif
+}
+
+void OpenGLRenderer::endGpuTiming()
+{
+#ifndef LIBRETRO
+	if (!gpuTimingActive)
+		return;
+	if (gl.is_gles)
+		glEndQueryEXT(GL_TIME_ELAPSED_EXT);
+	else
+		glEndQuery(GL_TIME_ELAPSED);
+	gpuTimingWriteIndex = (gpuTimingWriteIndex + 1) % GpuTimingQueryCount;
+	++gpuTimingWaitingCount;
+	gpuTimingActive = false;
+#endif
 }
 
 void OpenGLRenderer::renderVideoRouting()

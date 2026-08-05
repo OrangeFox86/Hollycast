@@ -2,6 +2,7 @@
     Created on: Nov 29, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,6 +24,7 @@
 #ifdef USE_VULKAN
 #include "vulkan.h"
 
+#include <array>
 #include <stdexcept>
 
 class InvalidVulkanContext : public std::runtime_error {
@@ -107,6 +109,8 @@ public:
 	void NewFrame();
 	void BeginRenderPass();
 	void EndFrame(vk::CommandBuffer cmdBuffer = vk::CommandBuffer());
+	void BeginGpuTiming(vk::CommandBuffer commandBuffer);
+	void EndGpuTiming(vk::CommandBuffer commandBuffer);
 	void Present() noexcept;
 	void PresentFrame(vk::Image image, vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio) noexcept;
 	void PresentLastFrame();
@@ -206,6 +210,7 @@ private:
 	void InitImgui();
 	void DoSwapAutomation();
 	void DrawFrame(vk::ImageView imageView, const vk::Extent2D& extent, float aspectRatio);
+	void pollGpuTiming();
 	vk::SurfaceKHR GetSurface() const { return *surface; }
 
 	bool HasSurfaceDimensionChanged() const;
@@ -266,6 +271,16 @@ private:
 	u32 currentSemaphore = 0;
 
 	vk::UniquePipelineCache pipelineCache;
+
+	static constexpr std::size_t GpuTimingQueryCount = 4;
+	vk::UniqueQueryPool gpuTimingQueryPool;
+	std::array<int, GpuTimingQueryCount> gpuTimingFenceIndices { -1, -1, -1, -1 };
+	std::size_t gpuTimingReadIndex = 0;
+	std::size_t gpuTimingWriteIndex = 0;
+	std::size_t gpuTimingWaitingCount = 0;
+	bool gpuTimingAvailable = false;
+	bool gpuTimingActive = false;
+	double gpuTimestampPeriod = 0.0;
 
 	std::unique_ptr<QuadPipeline> quadPipelineWithAlpha;
 	std::unique_ptr<QuadPipeline> quadPipeline;

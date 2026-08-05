@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -26,6 +27,7 @@
 #include "emulator.h"
 #include "dx9_driver.h"
 #include "imgui_impl_dx9.h"
+#include "ui/performance_overlay.h"
 
 void DXContext::Create(void *window, void *display) {
 	new DXContext(window, display);
@@ -91,6 +93,7 @@ bool DXContext::init(bool keepCurrentWindow)
 	}
 	imguiDriver = std::unique_ptr<ImGuiDriver>(new DX9Driver(pDevice));
 	overlay.init(pDevice);
+	initGpuTiming();
 
 	D3DADAPTER_IDENTIFIER9 id;
 	pD3D->GetAdapterIdentifier(D3DADAPTER_DEFAULT, 0, &id);
@@ -106,11 +109,130 @@ bool DXContext::init(bool keepCurrentWindow)
 void DXContext::term()
 {
 	NOTICE_LOG(RENDERER, "DX9 Context terminating");
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingQueries = {};
+	performance_overlay::setGpuTimingSupported(false);
 	overlay.term();
 	imguiDriver.reset();
 	pDevice.reset();
 	pD3D.reset();
 	deviceReady = false;
+}
+
+bool DXContext::initGpuTiming()
+{
+	gpuTimingQueries = {};
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	if (!pDevice)
+		return false;
+
+	for (GpuTimingQuery& query : gpuTimingQueries)
+	{
+		if (FAILED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMPDISJOINT, &query.disjoint.get()))
+				|| FAILED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMPFREQ, &query.frequency.get()))
+				|| FAILED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMP, &query.start.get()))
+				|| FAILED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMP, &query.end.get())))
+		{
+			gpuTimingQueries = {};
+			return false;
+		}
+	}
+	gpuTimingAvailable = true;
+	return true;
+}
+
+void DXContext::pollGpuTiming()
+{
+	if (!gpuTimingAvailable)
+		return;
+
+	while (gpuTimingWaitingCount != 0)
+	{
+		GpuTimingQuery& query = gpuTimingQueries[gpuTimingReadIndex];
+		BOOL disjoint = TRUE;
+		const HRESULT disjointResult = query.disjoint->GetData(&disjoint, sizeof(disjoint), 0);
+		if (disjointResult == S_FALSE)
+			break;
+		if (FAILED(disjointResult))
+		{
+			gpuTimingAvailable = false;
+			performance_overlay::setGpuTimingSupported(false);
+			return;
+		}
+
+		UINT64 start = 0;
+		UINT64 end = 0;
+		UINT64 frequency = 0;
+		const HRESULT startResult = query.start->GetData(&start, sizeof(start), 0);
+		const HRESULT endResult = query.end->GetData(&end, sizeof(end), 0);
+		const HRESULT frequencyResult = query.frequency->GetData(&frequency, sizeof(frequency), 0);
+		if (startResult == S_FALSE || endResult == S_FALSE || frequencyResult == S_FALSE)
+			break;
+		if (FAILED(startResult) || FAILED(endResult) || FAILED(frequencyResult))
+		{
+			gpuTimingAvailable = false;
+			performance_overlay::setGpuTimingSupported(false);
+			return;
+		}
+
+		if (!disjoint && end >= start && frequency != 0)
+		{
+			const double nanoseconds = static_cast<double>(end - start) * 1000000000.0 / static_cast<double>(frequency);
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+		}
+		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
+		--gpuTimingWaitingCount;
+	}
+}
+
+void DXContext::BeginGpuTiming()
+{
+	if (!performance_overlay::isGpuTimingRequested())
+		return;
+	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
+	if (!gpuTimingAvailable || !pDevice)
+		return;
+
+	pollGpuTiming();
+	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
+		return;
+
+	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	if (FAILED(query.disjoint->Issue(D3DISSUE_BEGIN)) || FAILED(query.start->Issue(D3DISSUE_END)))
+	{
+		gpuTimingAvailable = false;
+		performance_overlay::setGpuTimingSupported(false);
+		return;
+	}
+	gpuTimingActive = true;
+}
+
+void DXContext::EndGpuTiming()
+{
+	if (!gpuTimingActive || !pDevice)
+		return;
+
+	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	if (FAILED(query.end->Issue(D3DISSUE_END)) || FAILED(query.frequency->Issue(D3DISSUE_END))
+			|| FAILED(query.disjoint->Issue(D3DISSUE_END)))
+	{
+		gpuTimingAvailable = false;
+		performance_overlay::setGpuTimingSupported(false);
+	}
+	else
+	{
+		gpuTimingWriteIndex = (gpuTimingWriteIndex + 1) % GpuTimingQueryCount;
+		++gpuTimingWaitingCount;
+	}
+	gpuTimingActive = false;
 }
 
 void DXContext::Present()

@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -639,6 +640,9 @@ struct DX11OITRenderer : public DX11Renderer
 
 	bool Render() override
 	{
+#ifndef LIBRETRO
+		DX11GpuTimingScope gpuTiming(DX11Context::Instance());
+#endif
 		resetContextState();
 		bool is_rtt = rendContext->isRTT;
 

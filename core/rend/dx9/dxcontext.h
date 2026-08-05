@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -35,6 +36,8 @@ public:
 	~DXContext();
 	void EndImGuiFrame();
 	void Present();
+	void BeginGpuTiming();
+	void EndGpuTiming();
 	void resize() override;
 
 	const ComPtr<IDirect3D9>& getD3D() const {
@@ -67,6 +70,8 @@ private:
 	bool init(bool keepCurrentWindow = false);
 	void term();
 	void resetDevice();
+	bool initGpuTiming();
+	void pollGpuTiming();
 
 	WinLibLoader d3d9Library{ "D3D9.DLL" };
 	ComPtr<IDirect3D9> pD3D;
@@ -80,5 +85,37 @@ private:
 	std::string driverVersion;
 	bool amd = false;
 	bool deviceReady = false;
+
+	struct GpuTimingQuery
+	{
+		ComPtr<IDirect3DQuery9> disjoint;
+		ComPtr<IDirect3DQuery9> frequency;
+		ComPtr<IDirect3DQuery9> start;
+		ComPtr<IDirect3DQuery9> end;
+	};
+	static constexpr std::size_t GpuTimingQueryCount = 4;
+	std::array<GpuTimingQuery, GpuTimingQueryCount> gpuTimingQueries {};
+	std::size_t gpuTimingReadIndex = 0;
+	std::size_t gpuTimingWriteIndex = 0;
+	std::size_t gpuTimingWaitingCount = 0;
+	bool gpuTimingActive = false;
+	bool gpuTimingAvailable = false;
+};
+
+class DX9GpuTimingScope
+{
+public:
+	explicit DX9GpuTimingScope(DXContext *context) : context(context)
+	{
+		context->BeginGpuTiming();
+	}
+
+	~DX9GpuTimingScope()
+	{
+		context->EndGpuTiming();
+	}
+
+private:
+	DXContext *context;
 };
 #endif

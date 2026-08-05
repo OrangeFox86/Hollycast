@@ -1,6 +1,7 @@
 /*
 	Copyright 2021 flyinghead
 	Portions Copyright 2026 The Hollycast Authors
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -960,6 +961,7 @@ bool D3DRenderer::Render()
 {
 	if (!DXContext::Instance()->isReady())
 		return false;
+	DX9GpuTimingScope gpuTiming(DXContext::Instance());
 
 	bool is_rtt = rendContext->isRTT;
 

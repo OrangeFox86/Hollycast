@@ -588,6 +588,17 @@ bool VulkanContext::InitDevice()
 	    presentQueue = device->getQueue(presentQueueIndex, 0);
 	    swappyvk::setQueueFamilyIndex(googleTimingSupported, device.get(), presentQueue, presentQueueIndex);
 
+		gpuTimingAvailable = queueFamilyProperties[graphicsQueueIndex].timestampValidBits != 0
+			&& physicalDeviceProperties.limits.timestampPeriod > 0.f;
+		gpuTimestampPeriod = gpuTimingAvailable ? physicalDeviceProperties.limits.timestampPeriod : 0.0;
+		if (gpuTimingAvailable)
+		{
+			vk::QueryPoolCreateInfo queryPoolInfo {};
+			queryPoolInfo.queryType = vk::QueryType::eTimestamp;
+			queryPoolInfo.queryCount = static_cast<u32>(GpuTimingQueryCount * 2);
+			gpuTimingQueryPool = device->createQueryPoolUnique(queryPoolInfo);
+		}
+
 	    // Descriptor pool
         std::array<vk::DescriptorPoolSize, 11> pool_sizes =
         {
@@ -698,6 +709,14 @@ void VulkanContext::CreateSwapChain()
 				WARN_LOG(RENDERER, "VulkanContext::CreateSwapChain: waitForFences failed %d", (int)res);
 		}
 		inFlightObjects.clear();
+		// A resize waits for the graphics queue, but a PVR command buffer may have
+		// started a timestamp pair whose matching present command is discarded.
+		// Drop that incomplete sample before reusing query slots.
+		gpuTimingFenceIndices.fill(-1);
+		gpuTimingReadIndex = 0;
+		gpuTimingWriteIndex = 0;
+		gpuTimingWaitingCount = 0;
+		gpuTimingActive = false;
 		overlay->Term();
 		framebuffers.clear();
 		drawFences.clear();
@@ -1005,6 +1024,7 @@ void VulkanContext::NewFrame()
 		WARN_LOG(RENDERER, "vk:SystemError: %s", e.what());
 		throw FlycastException("Vulkan system error");
 	}
+	pollGpuTiming();
 	device->resetCommandPool(*commandPools[currentImage], vk::CommandPoolResetFlagBits::eReleaseResources);
 	inFlightObjects[currentImage].clear();
 	vk::CommandBuffer commandBuffer = *commandBuffers[currentImage];
@@ -1029,6 +1049,7 @@ void VulkanContext::EndFrame(vk::CommandBuffer overlayCmdBuffer)
 		return;
 	vk::CommandBuffer commandBuffer = *commandBuffers[currentImage];
 	commandBuffer.endRenderPass();
+	EndGpuTiming(commandBuffer);
 	commandBuffer.end();
 	vk::PipelineStageFlags wait_stage(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 	std::vector<vk::CommandBuffer> allCmdBuffers;
@@ -1041,6 +1062,70 @@ void VulkanContext::EndFrame(vk::CommandBuffer overlayCmdBuffer)
 	assert(rendering);
 	rendering = false;
 	renderDone = true;
+}
+
+void VulkanContext::pollGpuTiming()
+{
+#ifndef LIBRETRO
+	if (!gpuTimingAvailable || !gpuTimingQueryPool)
+		return;
+
+	while (gpuTimingWaitingCount != 0)
+	{
+		const int fenceIndex = gpuTimingFenceIndices[gpuTimingReadIndex];
+		if (fenceIndex < 0 || device->getFenceStatus(*drawFences[fenceIndex]) != vk::Result::eSuccess)
+			break;
+
+		std::array<std::uint64_t, 2> timestamps {};
+		const vk::Result result = device->getQueryPoolResults(*gpuTimingQueryPool,
+			static_cast<std::uint32_t>(gpuTimingReadIndex * 2), 2, sizeof(timestamps), timestamps.data(), sizeof(std::uint64_t),
+			vk::QueryResultFlagBits::e64);
+		if (result == vk::Result::eSuccess && timestamps[1] >= timestamps[0])
+		{
+			const double nanoseconds = static_cast<double>(timestamps[1] - timestamps[0]) * gpuTimestampPeriod;
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+		}
+		else if (result != vk::Result::eNotReady)
+		{
+			gpuTimingAvailable = false;
+			performance_overlay::setGpuTimingSupported(false);
+		}
+		gpuTimingFenceIndices[gpuTimingReadIndex] = -1;
+		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
+		--gpuTimingWaitingCount;
+	}
+#endif
+}
+
+void VulkanContext::BeginGpuTiming(vk::CommandBuffer commandBuffer)
+{
+#ifndef LIBRETRO
+	if (!performance_overlay::isGpuTimingRequested())
+		return;
+	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
+	if (!gpuTimingAvailable || !gpuTimingQueryPool || gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
+		return;
+
+	const std::uint32_t firstQuery = static_cast<std::uint32_t>(gpuTimingWriteIndex * 2);
+	commandBuffer.resetQueryPool(*gpuTimingQueryPool, firstQuery, 2);
+	commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, *gpuTimingQueryPool, firstQuery);
+	gpuTimingActive = true;
+#endif
+}
+
+void VulkanContext::EndGpuTiming(vk::CommandBuffer commandBuffer)
+{
+#ifndef LIBRETRO
+	if (!gpuTimingActive || !gpuTimingQueryPool)
+		return;
+
+	const std::uint32_t firstQuery = static_cast<std::uint32_t>(gpuTimingWriteIndex * 2);
+	commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *gpuTimingQueryPool, firstQuery + 1);
+	gpuTimingFenceIndices[gpuTimingWriteIndex] = static_cast<int>(currentImage);
+	gpuTimingWriteIndex = (gpuTimingWriteIndex + 1) % GpuTimingQueryCount;
+	++gpuTimingWaitingCount;
+	gpuTimingActive = false;
+#endif
 }
 
 void VulkanContext::Present() noexcept
@@ -1259,6 +1344,12 @@ void VulkanContext::term()
 		}
 	}
 	overlay.reset();
+	gpuTimingQueryPool.reset();
+	gpuTimingFenceIndices.fill(-1);
+	gpuTimingWaitingCount = 0;
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	performance_overlay::setGpuTimingSupported(false);
 	ShaderCompiler::Term();
 	swapChain.reset();
 	imageViews.clear();

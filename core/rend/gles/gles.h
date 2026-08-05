@@ -1,4 +1,6 @@
 #pragma once
+// Portions Copyright 2026 The Hollycast Authors
+
 #include "hw/pvr/ta_structs.h"
 #include "hw/pvr/ta_ctx.h"
 #include "hw/pvr/elan_struct.h"
@@ -11,6 +13,7 @@
 #include "ui/imgui_driver.h"
 #endif
 
+#include <array>
 #include <unordered_map>
 #include <glm/glm.hpp>
 
@@ -551,7 +554,24 @@ protected:
 	void renderVideoRouting();
 	void drawOSD();
 
+
+protected:
+	void initGpuTiming();
+	void termGpuTiming();
+	void pollGpuTiming();
+	void beginGpuTiming();
+	void endGpuTiming();
+
+
 private:
+	static constexpr std::size_t GpuTimingQueryCount = 4;
+	std::array<GLuint, GpuTimingQueryCount> gpuTimingQueries {};
+	std::size_t gpuTimingReadIndex = 0;
+	std::size_t gpuTimingWriteIndex = 0;
+	std::size_t gpuTimingWaitingCount = 0;
+	bool gpuTimingAvailable = false;
+	bool gpuTimingActive = false;
+
 	bool renderFrame(int width, int height);
 
 protected:

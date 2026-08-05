@@ -1,5 +1,6 @@
 /*
 	Copyright 2018 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -679,6 +680,7 @@ struct OpenGL4Renderer : OpenGLRenderer
 
 	void Term() override
 	{
+		termGpuTiming();
 		termABuffer();
 		glcache.DeleteTextures(1, &stencilTexId);
 		stencilTexId = 0;
@@ -699,8 +701,10 @@ struct OpenGL4Renderer : OpenGLRenderer
 	bool Render() override
 	{
 		saveCurrentFramebuffer();
+		beginGpuTiming();
 		renderFrame(gl.rendContext->framebufferWidth, gl.rendContext->framebufferHeight);
 		if (gl.rendContext->isRTT) {
+			endGpuTiming();
 			restoreCurrentFramebuffer();
 			return false;
 		}
@@ -712,6 +716,7 @@ struct OpenGL4Renderer : OpenGLRenderer
 			drawOSD();
 			renderVideoRouting();
 		}
+		endGpuTiming();
 		restoreCurrentFramebuffer();
 
 		return true;
@@ -750,6 +755,9 @@ bool OpenGL4Renderer::Init()
     //glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 
 	gl_create_resources();
+	// Per-pixel sorting has its own renderer implementation, so it must opt
+	// into the same timestamp-query lifecycle as the standard OpenGL renderer.
+	initGpuTiming();
 
 	initABuffer();
 

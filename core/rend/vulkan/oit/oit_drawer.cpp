@@ -2,6 +2,7 @@
     Created on: Nov 7, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -574,6 +575,10 @@ vk::CommandBuffer OITTextureDrawer::NewFrame()
 
 	vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 	commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	// Start once at the first OIT command buffer. The shared Vulkan context
+	// closes the query at PresentFrame(), so the sample includes RTT and all
+	// per-pixel passes submitted before the displayed frame.
+	GetContext()->BeginGpuTiming(commandBuffer);
 
 	MakeBuffers(width, height, config::RenderToTextureBuffer ? vk::ImageUsageFlagBits::eTransferSrc : vk::ImageUsageFlagBits::eSampled);
 
@@ -715,6 +720,7 @@ vk::CommandBuffer OITScreenDrawer::NewFrame()
 		NewImage();
 		currentCommandBuffer = commandPool->Allocate(true);
 		currentCommandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+		GetContext()->BeginGpuTiming(currentCommandBuffer);
 	}
 	matrices.CalcMatrices(rendContext, viewport.extent.width, viewport.extent.height);
 

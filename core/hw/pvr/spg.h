@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+*/
 #pragma once
 #include "ta_ctx.h"
 
@@ -13,3 +16,5 @@ void CalculateSync();
 void read_lightgun_position(int x, int y);
 void scheduleRenderDone(TA_context *cntx);
 void rescheduleSPG();
+u32 spg_getFrameCycles();
+float spg_getSh4ExecutionRate();

@@ -19,6 +19,8 @@ if(NOT LIBRETRO)
             http_client.cpp
             http_client.h
             oslib.cpp
+			cpu_usage.cpp
+			cpu_usage.h
             gpu_memory.cpp
             gpu_memory.h
             process_memory.cpp

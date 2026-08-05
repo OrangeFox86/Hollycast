@@ -2,6 +2,7 @@
 	Created on: Oct 8, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -435,6 +436,7 @@ vk::CommandBuffer TextureDrawer::BeginRenderPass()
 	NewImage();
 	vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 	commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	GetContext()->BeginGpuTiming(commandBuffer);
 
 	if (!depthAttachment || width > depthAttachment->getExtent().width || height > depthAttachment->getExtent().height)
 	{
@@ -690,6 +692,7 @@ vk::CommandBuffer ScreenDrawer::BeginRenderPass()
 		frameRendered = false;
 		vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 		commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+		GetContext()->BeginGpuTiming(commandBuffer);
 
 		if (transitionNeeded[GetCurrentImage()])
 		{

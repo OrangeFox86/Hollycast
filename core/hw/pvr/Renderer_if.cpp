@@ -239,6 +239,17 @@ private:
 				throw;
 			}
 		}
+		#ifndef LIBRETRO
+		// These are Dreamcast PVR scene counters produced by ta_parse(), not
+		// host GPU-driver counters. Keep them separate from the backend draw
+		// count so the OSD does not imply that the two workloads are equivalent.
+		const rend_context& context = taContext->rend;
+		const std::uint32_t primitiveCount = static_cast<std::uint32_t>(
+			context.global_param_op.size() + context.global_param_pt.size() + context.global_param_tr.size()
+			+ context.global_param_mvo.size() + context.global_param_mvo_tr.size());
+		performance_overlay::recordPvrScene(!context.isRTT, primitiveCount, static_cast<std::uint32_t>(context.verts.size()));
+		performance_overlay::recordRendererPass(static_cast<std::uint32_t>(context.render_passes.size()));
+		#endif
 
 		if (renderToScreen)
 			// If rendering to texture or in full framebuffer emulation, continue locking until the frame is rendered
@@ -247,6 +258,10 @@ private:
 		{
 			FC_PROFILE_SCOPE_NAMED("Renderer::Render");
 			try {
+#ifndef LIBRETRO
+				// Each renderer opts in only after it has started a valid timing query.
+				performance_overlay::setGpuTimingSupported(false);
+#endif
 				renderer->Render();
 			} catch (...) {
 				if (!renderToScreen)
