@@ -1,5 +1,6 @@
 /*
 	Copyright 2021 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -37,6 +38,7 @@ struct DX11Renderer : public Renderer
 	bool Init() override;
 	void Term() override;
 	void Process(TA_context* ctx) override;
+	void ProcessPreview(TA_context* ctx) override;
 	bool Render() override;
 	void RenderFramebuffer(const FramebufferInfo& info) override;
 

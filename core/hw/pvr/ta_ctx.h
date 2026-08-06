@@ -1,4 +1,5 @@
 #pragma once
+/* Portions Copyright 2026 The Hollycast Authors */
 #include "types.h"
 #include "ta_structs.h"
 #include "pvr_regs.h"
@@ -382,6 +383,8 @@ extern tad_context ta_tad;
 TA_context* tactx_Pop(u32 addr);
 void tactx_Term();
 TA_context *tactx_Alloc();
+TA_context *tactx_CloneRenderContext(const TA_context *source);
+void tactx_FreeRenderContext(TA_context *ctx);
 
 /*
 	Ta Context

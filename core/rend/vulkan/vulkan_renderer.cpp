@@ -2,6 +2,7 @@
     Created on: Oct 2, 2019
 
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -112,6 +113,24 @@ void BaseVulkanRenderer::Process(TA_context* ctx)
 	// TODO can't update fog or palette twice in multi render
 	CheckFogTexture();
 	CheckPaletteTexture();
+	texCommandBuffer.end();
+}
+
+void BaseVulkanRenderer::ProcessPreview(TA_context* ctx)
+{
+	rendContext = &ctx->rend;
+	if (!ctx->rend.isRTT)
+	{
+		framebufferRendered = false;
+		if (!config::EmulateFramebuffer)
+			clearLastFrame = false;
+	}
+	texCommandPool.BeginFrame();
+	textureCache.SetCurrentIndex(texCommandPool.GetIndex());
+	texCommandBuffer = texCommandPool.Allocate();
+	texCommandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
+		GetContext()->setSwapInterval(ctx->rend.swapInterval);
 	texCommandBuffer.end();
 }
 

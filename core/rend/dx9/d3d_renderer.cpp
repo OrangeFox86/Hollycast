@@ -331,6 +331,18 @@ void D3DRenderer::Process(TA_context* ctx)
 	ta_parse(ctx, false);
 }
 
+void D3DRenderer::ProcessPreview(TA_context* ctx)
+{
+	if (!DXContext::Instance()->isReady())
+	{
+		frameRendered = true;
+		return;
+	}
+	if (settings.platform.isNaomi2())
+		throw RendererException(i18n::T("DirectX 9 doesn't support Naomi 2 games. Select a different graphics API"));
+	rendContext = &ctx->rend;
+}
+
 inline void D3DRenderer::setTexMode(D3DSAMPLERSTATETYPE state, u32 clamp, u32 mirror)
 {
 	if (clamp)
@@ -1304,6 +1316,8 @@ void D3DRenderer::updateFogTexture()
 
 void D3DRenderer::drawOSD()
 {
+	if (rend_is_preview_frame())
+		return;
 	DXContext::Instance()->setOverlay(true);
 	gui_display_osd();
 	DXContext::Instance()->setOverlay(false);

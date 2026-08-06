@@ -14,6 +14,9 @@
 
 #include <mutex>
 #include <deque>
+#include <atomic>
+
+/* Portions Copyright 2026 The Hollycast Authors */
 
 #ifdef LIBRETRO
 void retro_rend_present();
@@ -23,6 +26,68 @@ void retro_resize_renderer(int w, int h, float aspectRatio);
 u32 FrameCount=1;
 
 Renderer* renderer;
+
+static TA_context *previewContext;
+static std::mutex previewMutex;
+static std::atomic_bool previewRequested { false };
+static std::atomic_bool previewRendering { false };
+
+static void releasePreviewContext()
+{
+	std::lock_guard<std::mutex> lock(previewMutex);
+	if (previewContext != nullptr)
+	{
+		tactx_FreeRenderContext(previewContext);
+		previewContext = nullptr;
+	}
+}
+
+bool rend_preview_frame_pending()
+{
+	return previewRequested.load();
+}
+
+void rend_request_preview_frame()
+{
+	std::lock_guard<std::mutex> lock(previewMutex);
+	if (previewContext != nullptr)
+		previewRequested.store(true);
+}
+
+bool rend_render_preview_frame()
+{
+	std::lock_guard<std::mutex> lock(previewMutex);
+	if (!previewRequested.exchange(false) || previewContext == nullptr || renderer == nullptr)
+		return false;
+
+	previewRendering = true;
+	try {
+		renderer->ProcessPreview(previewContext);
+		const bool rendered = renderer->Render();
+		previewRendering = false;
+		return rendered;
+	}
+	catch (...) {
+		previewRendering = false;
+		throw;
+	}
+}
+
+void rend_cancel_preview_frame()
+{
+	std::lock_guard<std::mutex> lock(previewMutex);
+	previewRequested.store(false);
+	if (previewContext != nullptr)
+	{
+		tactx_FreeRenderContext(previewContext);
+		previewContext = nullptr;
+	}
+}
+
+bool rend_is_preview_frame()
+{
+	return previewRendering;
+}
 
 static cResetEvent renderEnd;
 u32 fb_w_cur = 1;
@@ -195,6 +260,7 @@ private:
 	void render()
 	{
 		FC_PROFILE_SCOPE;
+		releasePreviewContext();
 
 		TA_context *taContext = DequeueRender();
 		if (taContext == nullptr)
@@ -243,8 +309,21 @@ private:
 		else if (config::DelayFrameSwapping && fb_w_cur == FB_R_SOF1)
 			present();
 
-		//clear up & free data ..
-		FinishRender(taContext);
+		if (renderToScreen)
+		{
+			// Keep the snapshot protected until the source context has been
+			// recycled. A lifecycle callback must not cancel the snapshot between
+			// those operations and leave the preview pointing at freed frame data.
+			std::lock_guard<std::mutex> lock(previewMutex);
+			TA_context *snapshot = tactx_CloneRenderContext(taContext);
+			FinishRender(taContext);
+			previewContext = snapshot;
+		}
+		else
+		{
+			//clear up & free data ..
+			FinishRender(taContext);
+		}
 	}
 
 	void renderFramebuffer(const FramebufferInfo& config)
@@ -471,6 +550,7 @@ void rend_term_renderer()
 	// also leave the producer side wedged, which manifests as audio/video
 	// drift after a renderer switch.
 	rend_cancel_emu_wait();
+	rend_cancel_preview_frame();
 
 	if (renderer != nullptr)
 	{
@@ -482,6 +562,7 @@ void rend_term_renderer()
 
 void rend_reset()
 {
+	rend_cancel_preview_frame();
 	FinishRender(DequeueRender());
 	render_called = false;
 	pend_rend = false;

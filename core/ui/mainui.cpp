@@ -47,7 +47,13 @@ bool mainui_rend_frame()
 	if (gui_is_open())
 	{
 		try {
+			if (rend_preview_frame_pending())
+				rend_render_preview_frame();
 			gui_display_ui();
+		} catch (const RendererException& e) {
+			WARN_LOG(RENDERER, "Filtering preview failed: %s", e.what());
+			rend_cancel_preview_frame();
+			return false;
 		} catch (const FlycastException& e) {
 			// Assume this is a graphics API issue
 			forceReinit = true;

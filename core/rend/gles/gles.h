@@ -500,6 +500,7 @@ struct OpenGLRenderer : Renderer
 	void Term() override;
 
 	void Process(TA_context* ctx) override;
+	void ProcessPreview(TA_context* ctx) override;
 
 	bool Render() override;
 

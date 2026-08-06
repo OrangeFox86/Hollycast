@@ -332,6 +332,13 @@ void DX11Renderer::Process(TA_context* ctx)
 	ta_parse(ctx, true);
 }
 
+void DX11Renderer::ProcessPreview(TA_context* ctx)
+{
+	rendContext = &ctx->rend;
+	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
+		DX11Context::Instance()->setSwapInterval(ctx->rend.swapInterval);
+}
+
 void DX11Renderer::resetContextState()
 {
 	// Reset device context state. Very much needed for libretro where current state is unknown.
@@ -1220,6 +1227,8 @@ void DX11Renderer::updateFogTexture()
 
 void DX11Renderer::drawOSD()
 {
+	if (rend_is_preview_frame())
+		return;
 #ifndef LIBRETRO
 	DX11Context::Instance()->setOverlay(true);
 	gui_display_osd();
