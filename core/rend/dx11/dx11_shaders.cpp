@@ -635,7 +635,9 @@ const char * const PixelShaderCommonPart4 = R"(
 		return separableReconstructionSample(sourceTex, sourceSampler, uv, 4, false);
 	if (pp_SampleTextureFilter == 17)
 		return separableReconstructionSample(sourceTex, sourceSampler, uv, 5, false);
-	return separableReconstructionSample(sourceTex, sourceSampler, uv, 6, false);
+	if (pp_SampleTextureFilter == 18)
+		return separableReconstructionSample(sourceTex, sourceSampler, uv, 6, false);
+	return legacyTextureSample(sourceTex, sourceSampler, uv);
 }
 )";
 const char * const PixelShaderCommonPart5 = R"(
@@ -978,7 +980,7 @@ const ComPtr<ID3D11PixelShader>& DX11Shaders::getShader(bool pp_Texture, bool pp
 	{
 		verify(pp_ShadInstr < std::size(MacroValues));
 		verify(pp_FogCtrl < std::size(MacroValues));
-		verify(sampleTextureFilter >= 0 && sampleTextureFilter <= 18);
+		verify(sampleTextureFilter >= 0 && sampleTextureFilter <= 19);
 		PixelMacros[MacroGouraud].Definition = MacroValues[gouraud];
 		PixelMacros[MacroTexture].Definition = MacroValues[pp_Texture];
 		PixelMacros[MacroUseAlpha].Definition = MacroValues[pp_UseAlpha];

@@ -2026,18 +2026,16 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 // Global state instance
 SettingsUIState g_state;
 
-static bool g_textureFilterPreviewActive;
-static bool g_textureFilterPreviewResumeOnExit;
 static bool g_textureFilterLiveTune;
 
 // Preserve the stored renderer IDs so old settings files cannot silently select a different filter.
 // ID 14 was Spline36 and is intentionally no longer exposed.
-static constexpr std::array<int, 18> sampleTextureFilterValues { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18 };
+static constexpr std::array<int, 19> sampleTextureFilterValues { 0, 19, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18 };
 
-static std::array<const char*, 18> getSampleTextureFilterLabels()
+static std::array<const char*, 19> getSampleTextureFilterLabels()
 {
 	return {
-		T("Disabled"), T("Bilinear"), T("Bilinear / No Edge Blending"), T("Jinc2"),
+		T("Disabled"), T("Nearest-Neighbor"), T("Bilinear"), T("Bilinear / No Edge Blending"), T("Jinc2"),
 		T("Jinc2 / No Edge Blending"), T("MMPX"), T("MMPX Enhanced"), T("MMPX Advanced"),
 		T("Jinc2 Anti-Ring"), T("Jinc2 Sharp Anti-Ring"), T("EWA Lanczos / Jinc"),
 		T("EWA Lanczos Sharp Anti-Ring"), T("Lanczos2 Anti-Ring"), T("Lanczos3 Anti-Ring"),
@@ -2059,63 +2057,6 @@ static constexpr std::array<int, 8> maxFilteredTextureSizeValues { 8, 16, 32, 64
 static std::array<const char*, 8> getMaxFilteredTextureSizeLabels()
 {
 	return { T("8x8"), T("16x16"), T("32x32"), T("64x64"), T("128x128"), T("256x256"), T("512x512"), T("1024x1024+") };
-}
-
-static bool beginTextureFilterPreview()
-{
-	if (g_textureFilterPreviewActive)
-		return true;
-	if (!game_started || ggpo::active())
-		return false;
-	if (emu.running() && !achievements::canPause())
-		return false;
-
-	if (!g_textureFilterPreviewResumeOnExit)
-		g_textureFilterPreviewResumeOnExit = emu.running();
-	try {
-		if (emu.running())
-			emu.stop();
-	}
-	catch (const FlycastException& exception) {
-		g_textureFilterPreviewResumeOnExit = false;
-		gui_stop_game(exception.what());
-		return false;
-	}
-
-	g_textureFilterPreviewActive = true;
-	return true;
-}
-
-static void leaveTextureFilterPreviewPage()
-{
-	if (!g_textureFilterPreviewActive)
-		return;
-	g_textureFilterPreviewActive = false;
-	rend_cancel_preview_frame();
-}
-
-static void requestTextureFilterPreview()
-{
-	if (g_textureFilterPreviewActive)
-		rend_request_preview_frame();
-}
-
-bool finishTextureFilterPreview()
-{
-	const bool resumeGame = g_textureFilterPreviewResumeOnExit && game_started;
-	g_textureFilterLiveTune = false;
-	g_textureFilterPreviewActive = false;
-	g_textureFilterPreviewResumeOnExit = false;
-	rend_cancel_preview_frame();
-	return resumeGame;
-}
-
-void cancelTextureFilterPreview()
-{
-	g_textureFilterLiveTune = false;
-	g_textureFilterPreviewActive = false;
-	g_textureFilterPreviewResumeOnExit = false;
-	rend_cancel_preview_frame();
 }
 
 bool textureFilterLiveTuneActive()
@@ -2156,27 +2097,6 @@ void renderTextureFilterLiveTuneOverlay()
 		ImGui::TextWrapped("%s", T("Try the filter and its texture-size limit while the game continues behind this panel."));
 		ImGui::Spacing();
 
-		const auto samplingLabels = std::array { T("Game Default"), T("Nearest-Neighbor"), T("Bilinear") };
-		int samplingSelection = std::clamp(config::TextureFiltering.get(), 0, static_cast<int>(samplingLabels.size()) - 1);
-		if (ImGui::BeginCombo(T("Texture Sampling Override"), samplingLabels[samplingSelection]))
-		{
-			for (int index = 0; index < static_cast<int>(samplingLabels.size()); ++index)
-			{
-				const bool selected = index == samplingSelection;
-				if (ImGui::Selectable(samplingLabels[index], selected))
-				{
-					config::TextureFiltering.set(index);
-					if (index != 0)
-						config::SampleTextureFilter.set(0);
-					SaveSettings();
-				}
-				if (selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-		ImGui::TextDisabled("%s", T("Nearest-Neighbor and Bilinear disable the custom sample filter. Trilinear remains game-controlled for mipmapped textures that request it."));
-
 		const auto filterLabels = getSampleTextureFilterLabels();
 		if (config::SampleTextureFilter.get() == 14)
 		{
@@ -2192,7 +2112,6 @@ void renderTextureFilterLiveTuneOverlay()
 				if (ImGui::Selectable(filterLabels[index], selected))
 				{
 					config::SampleTextureFilter.set(sampleTextureFilterValues[index]);
-					requestTextureFilterPreview();
 					SaveSettings();
 				}
 				if (selected)
@@ -2217,7 +2136,6 @@ void renderTextureFilterLiveTuneOverlay()
 				if (ImGui::Selectable(sizeLabels[index], selected))
 				{
 					config::MaxFilteredTextureSize.set(maxFilteredTextureSizeValues[index]);
-					requestTextureFilterPreview();
 					SaveSettings();
 				}
 				if (selected)
@@ -2429,9 +2347,6 @@ static void renderContentArea()
 
 	if (focusContent)
 		ImGui::SetKeyboardFocusHere();
-
-	if (g_textureFilterPreviewActive && g_state.currentTab != SettingsTab::Video)
-		leaveTextureFilterPreviewPage();
 
 	// Call the appropriate tab renderer based on current selection
 	switch (g_state.currentTab)
@@ -4533,11 +4448,10 @@ void renderVideoTab()
 			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(textureFilterLabels.size()))
 				return false;
 			config::TextureFiltering.set(selectedIndex);
-			requestTextureFilterPreview();
 			return true;
 		};
 
-		const bool textureFilteringRowActivated = RenderGeneralPopupSettingRow(
+		RenderGeneralPopupSettingRow(
 			Tnop("TextureFilteringSetting"),
 			T("Override the sampler mode used when textures are sampled."),
 			textureFilterCfg,
@@ -4546,14 +4460,11 @@ void renderVideoTab()
 				"Default: uses game behavior.\n"
 				"Force Nearest-Neighbor: crisp/pixelated look.\n"
 				"Force Linear: smoother/blurrier look.\n\n"
-				"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer.\n\n"
-				"Live preview: selecting this row pauses the current game image. Changes refresh that image immediately; gameplay and audio resume when filtering settings are left."
+				"For 2D/pixel-art, many users prefer Nearest-Neighbor. For 3D, Linear can look nicer."
 			));
-		if (textureFilteringRowActivated)
-			beginTextureFilterPreview();
 
 		const auto sampleTextureFilterLabels = getSampleTextureFilterLabels();
-		const std::array<const char*, 19> sampleTextureFilterDescriptions {
+		const std::array<const char*, 20> sampleTextureFilterDescriptions {
 			T(
 				"Sample Texture Filter: Disabled\n"
 				"Uses HollyCast's legacy texture sampling behavior."
@@ -4629,6 +4540,10 @@ void renderVideoTab()
 			T(
 				"Sample Texture Filter: Bicubic Mitchell\n"
 				"Softer Mitchell-Netravali bicubic reconstruction. Smooth low-ringing option for UI and texture sheets."
+			),
+			T(
+				"Sample Texture Filter: Nearest-Neighbor\n"
+				"Uses the sample-filter path with nearest-neighbor sampling only. This affects eligible textures up to the selected size limit and leaves Flycast's global sampler override at Default."
 			)
 		};
 		if (config::SampleTextureFilter.get() == 14)
@@ -4653,12 +4568,11 @@ void renderVideoTab()
 			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(sampleTextureFilterLabels.size()))
 				return false;
 			config::SampleTextureFilter.set(sampleTextureFilterValues[selectedIndex]);
-			requestTextureFilterPreview();
 			return true;
 		};
 
 		const bool sampleTextureFilterSupported = config::RendererType != RenderType::DirectX9;
-		const bool sampleTextureFilterRowActivated = RenderGeneralPopupSettingRow(
+		RenderGeneralPopupSettingRow(
 			Tnop("SampleTextureFilterSetting"),
 			T("Choose the sample-time texture filtering algorithm."),
 			sampleTextureFilterCfg,
@@ -4666,9 +4580,6 @@ void renderVideoTab()
 				? sampleTextureFilterDescriptions[sampleTextureFilterValues[sampleTextureFilterSelection]]
 				: T("Sample-time filtering is not available on DirectX 9."),
 			!sampleTextureFilterSupported);
-		if (sampleTextureFilterRowActivated)
-			beginTextureFilterPreview();
-
 		const auto maxFilteredTextureSizeLabels = getMaxFilteredTextureSizeLabels();
 		int maxFilteredTextureSizeSelection = 5;
 		for (size_t i = 0; i < maxFilteredTextureSizeValues.size(); i++)
@@ -4693,11 +4604,10 @@ void renderVideoTab()
 			if (selectedIndex < 0 || selectedIndex >= static_cast<int>(maxFilteredTextureSizeValues.size()))
 				return false;
 			config::MaxFilteredTextureSize.set(maxFilteredTextureSizeValues[selectedIndex]);
-			requestTextureFilterPreview();
 			return true;
 		};
 
-		const bool maxFilteredTextureSizeRowActivated = RenderGeneralPopupSettingRow(
+		RenderGeneralPopupSettingRow(
 			Tnop("MaxFilteredTextureSizeSetting"),
 			T("Limit filtering to smaller texture groups."),
 			maxFilteredTextureSizeCfg,
@@ -4708,16 +4618,12 @@ void renderVideoTab()
 				"1024x1024+ includes larger texture-pack assets.\n\n"
 				"Live preview updates sample-time filtering immediately. Already-uploaded texture-upscale results may require a cache refresh or game restart."
 			));
-		if (maxFilteredTextureSizeRowActivated)
-			beginTextureFilterPreview();
-
 		ImGui::Spacing();
 		const bool canLiveTune = game_started && !ggpo::active() && (!emu.running() || achievements::canPause());
 		if (!canLiveTune)
 			ImGui::BeginDisabled();
 		if (ImGui::Button(T("Texture Filtering Live Tune"), ScaledVec2(260.f, 34.f)))
 		{
-			finishTextureFilterPreview();
 			g_textureFilterLiveTune = true;
 			SaveSettings();
 			gui_setState(GuiState::Closed);
@@ -7412,7 +7318,6 @@ void renderSettingsNew()
 			ImGui::PushFont(settingsTitleFont);
 
 		const std::function<void()> exitSettings = [&]() {
-			const bool resumeGame = finishTextureFilterPreview();
 			dreampotato::update();
 			if (g_mapleDevicesChangedInSettings)
 			{
@@ -7429,12 +7334,7 @@ void renderSettingsNew()
 
 			SaveSettings();
 
-			if (resumeGame)
-			{
-				emu.start();
-				gui_setState(GuiState::Closed);
-			}
-			else if (game_started)
+			if (game_started)
 				gui_setState(GuiState::Commands);
 			else
 				gui_setState(GuiState::Main);

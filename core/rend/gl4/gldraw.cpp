@@ -95,7 +95,7 @@ static bool isSampleTextureFilterEligible(const TextureCacheData* texture)
 {
 	int sampleTextureFilter = config::SampleTextureFilter.get();
 	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
-	if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 19)
 		sampleTextureFilter = 0;
 	if (maxFilteredTextureSize <= 0)
 		sampleTextureFilter = 0;
@@ -141,7 +141,7 @@ static void SetGPState(const PolyParam* gp)
 	}
 	int sampleTextureFilter = config::SampleTextureFilter.get();
 	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
-	if (sampleTextureFilter < 1 || sampleTextureFilter > 18 || maxFilteredTextureSize <= 0)
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 19 || maxFilteredTextureSize <= 0)
 		sampleTextureFilter = 0;
 
 	if (pass == Pass::Depth)

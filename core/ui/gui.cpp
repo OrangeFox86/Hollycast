@@ -119,7 +119,6 @@ static void emuEventCallback(Event event, void *)
 	case Event::Terminate:
 		GamepadDevice::load_system_mappings();
 		game_started = false;
-		SettingsNew::cancelTextureFilterPreview();
 		break;
 	default:
 		break;

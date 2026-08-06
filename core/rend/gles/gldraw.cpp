@@ -82,7 +82,7 @@ static bool isSampleTextureFilterEligible(const TextureCacheData* texture)
 		return false;
 	int sampleTextureFilter = config::SampleTextureFilter.get();
 	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
-	if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 19)
 		sampleTextureFilter = 0;
 	if (maxFilteredTextureSize <= 0)
 		sampleTextureFilter = 0;
@@ -165,7 +165,7 @@ void SetGPState(const PolyParam* gp,u32 cflip=0)
 	}
 	int sampleTextureFilter = config::SampleTextureFilter.get();
 	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
-	if (sampleTextureFilter < 1 || sampleTextureFilter > 18 || maxFilteredTextureSize <= 0
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 19 || maxFilteredTextureSize <= 0
 			|| !strcmp(gl.gl_version, "GLES2") || !strcmp(gl.gl_version, "GL2"))
 		sampleTextureFilter = 0;
 

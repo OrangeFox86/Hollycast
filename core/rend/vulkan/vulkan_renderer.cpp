@@ -116,24 +116,6 @@ void BaseVulkanRenderer::Process(TA_context* ctx)
 	texCommandBuffer.end();
 }
 
-void BaseVulkanRenderer::ProcessPreview(TA_context* ctx)
-{
-	rendContext = &ctx->rend;
-	if (!ctx->rend.isRTT)
-	{
-		framebufferRendered = false;
-		if (!config::EmulateFramebuffer)
-			clearLastFrame = false;
-	}
-	texCommandPool.BeginFrame();
-	textureCache.SetCurrentIndex(texCommandPool.GetIndex());
-	texCommandBuffer = texCommandPool.Allocate();
-	texCommandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
-		GetContext()->setSwapInterval(ctx->rend.swapInterval);
-	texCommandBuffer.end();
-}
-
 void BaseVulkanRenderer::ReInitOSD()
 {
 	texCommandPool.Init();

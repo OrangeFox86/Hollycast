@@ -126,23 +126,6 @@ TA_context *tactx_Alloc()
 	return ctx;
 }
 
-TA_context *tactx_CloneRenderContext(const TA_context *source)
-{
-	if (source == nullptr)
-		return nullptr;
-	TA_context *clone = tactx_Alloc();
-	clone->Address = source->Address;
-	clone->lastFrameUsed = source->lastFrameUsed;
-	clone->rend = source->rend;
-	return clone;
-}
-
-void tactx_FreeRenderContext(TA_context *ctx)
-{
-	if (ctx != nullptr)
-		tactx_Recycle(ctx);
-}
-
 static void tactx_Recycle(TA_context* ctx)
 {
 	if (ctx->nextContext != nullptr)

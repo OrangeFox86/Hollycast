@@ -14,11 +14,6 @@ void rend_start_render();
 int rend_end_render(int tag, int cycles, int jitter, void *arg);
 void rend_cancel_emu_wait();
 bool rend_single_frame(const bool& enabled);
-bool rend_preview_frame_pending();
-void rend_request_preview_frame();
-bool rend_render_preview_frame();
-void rend_cancel_preview_frame();
-bool rend_is_preview_frame();
 void rend_swap_frame(u32 fb_r_sof1);
 void rend_set_fb_write_addr(u32 fb_w_sof1);
 void rend_reset();
@@ -71,9 +66,6 @@ struct Renderer
 	virtual void Term() = 0;
 
 	virtual void Process(TA_context *ctx) = 0;
-	// Reuses an already parsed scene while the guest is stopped. Backends may
-	// refresh per-frame graphics state here, but must not advance guest state.
-	virtual void ProcessPreview(TA_context *ctx) { Process(ctx); }
 	virtual bool Render() = 0;
 	virtual void RenderFramebuffer(const FramebufferInfo& info) = 0;
 	virtual bool RenderLastFrame() { return false; }

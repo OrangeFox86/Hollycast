@@ -112,7 +112,7 @@ public:
 		{
 			int sampleTextureFilter = config::SampleTextureFilter.get();
 			int maxFilteredTextureSize = config::MaxFilteredTextureSize.get();
-			if (sampleTextureFilter > 0 && sampleTextureFilter <= 18
+			if (sampleTextureFilter > 0 && sampleTextureFilter <= 19
 					&& maxFilteredTextureSize > 0
 					&& (maxFilteredTextureSize >= 1024 || texture->width <= (u32)maxFilteredTextureSize))
 				tsp.FilterMode = 0;

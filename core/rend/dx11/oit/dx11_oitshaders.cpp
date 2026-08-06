@@ -867,7 +867,7 @@ const ComPtr<ID3D11PixelShader>& DX11OITShaders::getShader(bool pp_Texture, bool
 		verify(pp_ShadInstr < std::size(MacroValues));
 		verify(pp_FogCtrl < std::size(MacroValues));
 		verify(pass < (int)std::size(MacroValues));
-		verify(sampleTextureFilter >= 0 && sampleTextureFilter <= 18);
+		verify(sampleTextureFilter >= 0 && sampleTextureFilter <= 19);
 		char sampleFilterMacro[4];
 		char maxFilteredTextureMacro[8];
 		snprintf(sampleFilterMacro, sizeof(sampleFilterMacro), "%d", sampleTextureFilter);

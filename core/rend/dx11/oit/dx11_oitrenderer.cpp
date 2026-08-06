@@ -168,7 +168,7 @@ struct DX11OITRenderer : public DX11Renderer
 		deviceContext->VSSetShader(vertexShader, nullptr, 0);
 
 		int sampleTextureFilter = gp->pcw.Texture ? config::SampleTextureFilter.get() : 0;
-		if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
+		if (sampleTextureFilter < 1 || sampleTextureFilter > 19)
 			sampleTextureFilter = 0;
 		int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
 		if (maxFilteredTextureSize <= 0)

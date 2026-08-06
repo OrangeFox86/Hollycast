@@ -588,7 +588,8 @@ lowp vec4 filteredTextureSample(highp vec3 coords)
 	if (pp_SampleTextureFilter == 15) return separableReconstructionSample(uv, 3, false);
 	if (pp_SampleTextureFilter == 16) return separableReconstructionSample(uv, 4, false);
 	if (pp_SampleTextureFilter == 17) return separableReconstructionSample(uv, 5, false);
-	return separableReconstructionSample(uv, 6, false);
+	if (pp_SampleTextureFilter == 18) return separableReconstructionSample(uv, 6, false);
+	return legacyTextureSample(coords);
 }
 
 #endif
@@ -1407,8 +1408,6 @@ static void updatePaletteTexture(GLenum texture_slot)
 
 void OpenGLRenderer::drawOSD()
 {
-	if (rend_is_preview_frame())
-		return;
 	drawVmusAndCrosshairs(width, height);
 #ifndef LIBRETRO
 	gui_display_osd();
@@ -1437,13 +1436,6 @@ void OpenGLRenderer::Process(TA_context* ctx)
 	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
 		GraphicsContext::Instance()->setSwapInterval(ctx->rend.swapInterval);
 	ta_parse(ctx, gl.prim_restart_fixed_supported || gl.prim_restart_supported);
-}
-
-void OpenGLRenderer::ProcessPreview(TA_context* ctx)
-{
-	gl.rendContext = &ctx->rend;
-	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
-		GraphicsContext::Instance()->setSwapInterval(ctx->rend.swapInterval);
 }
 
 static void upload_vertex_indices()

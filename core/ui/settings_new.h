@@ -65,9 +65,6 @@ void renderAboutTab();
 void focusBoxArtSection();
 void openTab(SettingsTab tab);
 
-// Ends or cancels the renderer-backed texture filtering preview session.
-bool finishTextureFilterPreview();
-void cancelTextureFilterPreview();
 bool textureFilterLiveTuneActive();
 void renderTextureFilterLiveTuneOverlay();
 

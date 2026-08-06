@@ -332,13 +332,6 @@ void DX11Renderer::Process(TA_context* ctx)
 	ta_parse(ctx, true);
 }
 
-void DX11Renderer::ProcessPreview(TA_context* ctx)
-{
-	rendContext = &ctx->rend;
-	if (!ctx->rend.isRTT && ctx->rend.swapInterval > 0)
-		DX11Context::Instance()->setSwapInterval(ctx->rend.swapInterval);
-}
-
 void DX11Renderer::resetContextState()
 {
 	// Reset device context state. Very much needed for libretro where current state is unknown.
@@ -640,7 +633,7 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 {
 	PixelPolyConstants constants;
 	int sampleTextureFilter = gp->pcw.Texture ? config::SampleTextureFilter.get() : 0;
-	if (sampleTextureFilter < 1 || sampleTextureFilter > 18)
+	if (sampleTextureFilter < 1 || sampleTextureFilter > 19)
 		sampleTextureFilter = 0;
 	int maxFilteredTextureSize = sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
 	if (maxFilteredTextureSize <= 0)
@@ -1227,8 +1220,6 @@ void DX11Renderer::updateFogTexture()
 
 void DX11Renderer::drawOSD()
 {
-	if (rend_is_preview_frame())
-		return;
 #ifndef LIBRETRO
 	DX11Context::Instance()->setOverlay(true);
 	gui_display_osd();

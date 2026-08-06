@@ -575,7 +575,9 @@ vec4 filteredTextureSample(sampler2D sourceTex, vec3 coords)
 		return separableReconstructionSample(sourceTex, uv, 4, false);
 	if (pp_SampleTextureFilter == 17)
 		return separableReconstructionSample(sourceTex, uv, 5, false);
-	return separableReconstructionSample(sourceTex, uv, 6, false);
+	if (pp_SampleTextureFilter == 18)
+		return separableReconstructionSample(sourceTex, uv, 6, false);
+	return legacyTextureSample(sourceTex, coords);
 }
 
 #endif

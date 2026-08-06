@@ -592,7 +592,8 @@ vec4 filteredTextureSample(sampler2D sourceTex, vec3 coords)
 	if (pp_SampleTextureFilter == 15) return separableReconstructionSample(sourceTex, uv, 3, false);
 	if (pp_SampleTextureFilter == 16) return separableReconstructionSample(sourceTex, uv, 4, false);
 	if (pp_SampleTextureFilter == 17) return separableReconstructionSample(sourceTex, uv, 5, false);
-	return separableReconstructionSample(sourceTex, uv, 6, false);
+	if (pp_SampleTextureFilter == 18) return separableReconstructionSample(sourceTex, uv, 6, false);
+	return legacyTextureSample(sourceTex, coords);
 }
 
 )" R"(

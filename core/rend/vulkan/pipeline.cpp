@@ -409,7 +409,7 @@ void PipelineManager::CreatePipeline(u32 listType, bool sortTriangles, const Pol
 	params.useAlpha = pp.tsp.UseAlpha;
 	params.palette = gpuPalette;
 	params.sampleTextureFilter = pp.pcw.Texture ? config::SampleTextureFilter.get() : 0;
-	if (params.sampleTextureFilter < 0 || params.sampleTextureFilter > 18)
+	if (params.sampleTextureFilter < 0 || params.sampleTextureFilter > 19)
 		params.sampleTextureFilter = 0;
 	params.maxFilteredTextureSize = params.sampleTextureFilter == 0 ? 0 : config::MaxFilteredTextureSize.get();
 	if (params.maxFilteredTextureSize <= 0)
