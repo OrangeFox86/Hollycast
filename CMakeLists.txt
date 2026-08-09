@@ -109,6 +109,11 @@ option(ENABLE_FC_PROFILER "Build with support for host app (Hollycast) profiler"
 option(USE_DISCORD "Use Discord Presence API" OFF)
 option(USE_LIBCDIO "Use libcdio for CDROM access" OFF)
 
+if(ASAN AND MSVC)
+	add_compile_options(/fsanitize=address)
+	add_link_options(/INCREMENTAL:NO)
+endif()
+
 if(IOS AND NOT LIBRETRO)
 	set(USE_VULKAN OFF CACHE BOOL "Force vulkan off" FORCE)
 endif()
@@ -699,7 +704,28 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 if(ASAN)
-	if(ANDROID)
+	if(MSVC)
+		# Copy address sanitizer runtime dll to output
+		if(ARCHITECTURE STREQUAL "x86_64")
+			set(MSVC_ASAN_ARCH x86_64)
+		elseif(ARCHITECTURE STREQUAL "x86")
+			set(MSVC_ASAN_ARCH i386)
+		elseif(ARCHITECTURE STREQUAL "arm64")
+			set(MSVC_ASAN_ARCH aarch64)
+		else()
+			message(FATAL_ERROR "MSVC AddressSanitizer is not supported for ${ARCHITECTURE}")
+		endif()
+		get_filename_component(MSVC_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+		set(MSVC_ASAN_RUNTIME "${MSVC_COMPILER_DIR}/clang_rt.asan_dynamic-${MSVC_ASAN_ARCH}.dll")
+		if(NOT EXISTS "${MSVC_ASAN_RUNTIME}")
+			message(FATAL_ERROR "MSVC AddressSanitizer runtime not found: ${MSVC_ASAN_RUNTIME}")
+		endif()
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MSVC_ASAN_RUNTIME}"
+				"$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+			VERBATIM)
+	elseif(ANDROID)
 		target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 		set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS -fsanitize=address)
 	else()
