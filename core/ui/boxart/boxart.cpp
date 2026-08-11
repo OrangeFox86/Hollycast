@@ -63,7 +63,7 @@ std::string appendFilesystemPath(const std::string& directory, const std::string
 	if (directory.empty() || directory.back() == '/' || directory.back() == '\\')
 		return directory + name;
 #ifdef _WIN32
-	return directory + "\\\\" + name;
+	return directory + "\\" + name;
 #else
 	return directory + "/" + name;
 #endif
@@ -71,6 +71,8 @@ std::string appendFilesystemPath(const std::string& directory, const std::string
 
 bool ensureFilesystemDirectory(const std::string& path)
 {
+	// Android SAF paths can persist in shared settings. Reject content URIs in
+	// every build so native filesystem APIs never treat one as a directory.
 	return !path.empty() && !isContentUri(path) && (file_exists(path) || make_directory(path));
 }
 
