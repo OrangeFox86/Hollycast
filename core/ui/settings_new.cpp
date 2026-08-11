@@ -2891,10 +2891,11 @@ static void renderSettingsContentTab(SettingsTab tab)
 
 		RenderGeneralPopupSettingRow(
 			Tnop("BoxartSourceSetting"),
-			T("Choose where Hollycast gets normal library artwork."),
+			T("Choose the base artwork source for each game."),
 			boxartSourceCfg,
 			T(
 				"Box Art Source\n"
+				"Sets the base artwork used for each game. Library Cover Media can replace it when matching custom media is available.\n"
 				"Original Box Art uses Hollycast's normal scraped box art database.\n"
 				"Physical Media uses the disc/media image pulled from the game when available.\n"
 				"Custom Boxart uses the folder you set below. Pick this when you already scraped artwork with ES-DE, Skraper, or another frontend."
@@ -3057,7 +3058,7 @@ static void renderSettingsContentTab(SettingsTab tab)
 		};
 		SettingsUI::PopupConfig libraryImageSourceCfg {};
 		libraryImageSourceCfg.type = SettingsUI::PopupType::Options;
-		libraryImageSourceCfg.options.label = T("Library Image Source");
+		libraryImageSourceCfg.options.label = T("Library Image Priority");
 		libraryImageSourceCfg.options.icon = ICON_FA_IMAGE;
 		libraryImageSourceCfg.options.popupID = Tnop("LibraryImageSourcePopup");
 		libraryImageSourceCfg.options.options = libraryImageSources;
@@ -3067,11 +3068,12 @@ static void renderSettingsContentTab(SettingsTab tab)
 		libraryImageSourceCfg.options.onChange = [](int) { return true; };
 		RenderGeneralPopupSettingRow(
 			Tnop("LibraryImageSource"),
-			T("Select the image source for library icons."),
+			T("Choose whether artwork or cached VMU icons appear in the library."),
 			libraryImageSourceCfg,
-			T("Library Image Source\n"
-			"Controls which icon source the table/list view uses for each row.\n"
-			"VMU icon options use the selected normal artwork fallback until a game has cached VMU icons."));
+			T("Library Image Priority\n"
+			"Chooses the final image shown for each game in the library.\n"
+			"Current Artwork is the result of Box Art Source and Library Cover Media.\n"
+			"Combined options use the first available image in the order shown."));
 
 		const char* libraryCoverMediaSources[] = {
 			T("Current Artwork"),
@@ -3086,7 +3088,7 @@ static void renderSettingsContentTab(SettingsTab tab)
 		};
 		SettingsUI::PopupConfig libraryCoverMediaCfg {};
 		libraryCoverMediaCfg.type = SettingsUI::PopupType::Options;
-		libraryCoverMediaCfg.options.label = T("What Media To Use For Library Covers");
+		libraryCoverMediaCfg.options.label = T("Library Cover Media");
 		libraryCoverMediaCfg.options.icon = ICON_FA_IMAGE;
 		libraryCoverMediaCfg.options.popupID = Tnop("LibraryCoverMediaPopup");
 		libraryCoverMediaCfg.options.options = libraryCoverMediaSources;
@@ -3096,10 +3098,11 @@ static void renderSettingsContentTab(SettingsTab tab)
 		libraryCoverMediaCfg.options.onChange = [](int) { return true; };
 		RenderGeneralPopupSettingRow(
 			Tnop("LibraryCoverMedia"),
-			T("Choose which custom media type is used as the main library image."),
+			T("Choose which custom media category can replace the base artwork in the library."),
 			libraryCoverMediaCfg,
-			T("What Media To Use For Library Covers\n"
-			"This only changes the main image shown in the library grid/list.\n\n"
+			T("Library Cover Media\n"
+			"Selects a custom media category for the main library image.\n"
+			"Current Artwork keeps the image selected by Box Art Source. Other options use matching files from the Custom Boxart Folder and fall back to Current Artwork when unavailable.\n\n"
 			"Use Mix Image for ES-DE/Skraper miximages, Cover for front covers, Marquee for transparent logo/title art, Title Screen for title-screen images, Screenshot for gameplay shots, Fan Art for background art, Physical Media for disc images, or Case / 3D Box for 3D/back-cover style art.\n\n"
 			"Other media can still appear in the game info hover/profile when the matching folders and files are present."));
 
