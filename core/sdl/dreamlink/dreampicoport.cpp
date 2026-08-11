@@ -502,6 +502,9 @@ class DreamPicoPort : public SDLDreamLink
 	std::string activeGameId;
 	//! Game title paired with activeGameId for VMU icon caching.
 	std::string activeGameTitle;
+	//! Last A1 VMU mirror captured before its Maple device was destroyed.
+	std::array<u8, DPP_VMU_FLASH_SIZE> vmuMirrorSnapshot {};
+	bool vmuMirrorSnapshotAvailable = false;
 	//! The name to return on getName
 	const std::string device_name;
 
@@ -577,19 +580,46 @@ public:
 		SDLDreamLink::onGameStarted();
 		activeGameId = settings.content.gameId;
 		activeGameTitle = settings.content.title;
+		vmuMirrorSnapshotAvailable = false;
 		sendGameId();
 	}
 
 	void onGameTermination() override {
 		SDLDreamLink::onGameTermination();
-		cacheLoadedVmuIcons();
+		if (!cacheVmuIconFromMirror())
+			cacheLoadedVmuIconFromHardware();
 		// Need a short delay to wait for last screen draw to complete
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// Reset screen to selected port
 		sendPort();
 	}
 
-	void cacheLoadedVmuIcons() {
+	void snapshotVmuMirror(const DppVirtualVmu& vmu) {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		if (!EventManager::isGameRunning() || vmu.fileBacked)
+			return;
+
+		memcpy(vmuMirrorSnapshot.data(), vmu.flash_data, vmuMirrorSnapshot.size());
+		vmuMirrorSnapshotAvailable = true;
+	}
+
+	bool cacheVmuIconFromMirror() {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		if (!vmuMirrorSnapshotAvailable || !vmuIconCachingEnabled(activeGameId)
+				|| hw_info.hardware_bus < 0 || !storageEnabled()) {
+			return false;
+		}
+
+		return cacheVmuIconFromFlash(
+			activeGameId,
+			activeGameTitle,
+			vmuMirrorSnapshot.data(),
+			vmuMirrorSnapshot.size());
+	}
+
+	void cacheLoadedVmuIconFromHardware() {
 		// DreamPicoPort reads a physical VMU, independently of Flycast's virtual
 		// per-game VMU setting, so physical icon capture must not use that gate.
 		if (!vmuIconCachingEnabled(activeGameId) || hw_info.hardware_bus < 0 || !storageEnabled()) {
@@ -1229,7 +1259,16 @@ DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) 
 }
 
 DppMapleLinkDevice::~DppMapleLinkDevice()
-{}
+{
+	// The VMU mirror belongs to this Maple device and will be gone before the
+	// DreamPicoPort termination event. A1 is the source used for library icons.
+	if (bus_port == 0 && virtualVmu)
+	{
+		std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
+		if (linkedDpp)
+			linkedDpp->snapshotVmuMirror(*virtualVmu);
+	}
+}
 
 void DppMapleLinkDevice::OnSetup()
 {
