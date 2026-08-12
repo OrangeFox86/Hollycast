@@ -575,10 +575,6 @@ vk::CommandBuffer OITTextureDrawer::NewFrame()
 
 	vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 	commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-	// Start once at the first OIT command buffer. The shared Vulkan context
-	// closes the query at PresentFrame(), so the sample includes RTT and all
-	// per-pixel passes submitted before the displayed frame.
-	GetContext()->BeginGpuTiming(commandBuffer);
 
 	MakeBuffers(width, height, config::RenderToTextureBuffer ? vk::ImageUsageFlagBits::eTransferSrc : vk::ImageUsageFlagBits::eSampled);
 
@@ -720,6 +716,8 @@ vk::CommandBuffer OITScreenDrawer::NewFrame()
 		NewImage();
 		currentCommandBuffer = commandPool->Allocate(true);
 		currentCommandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+		// Measure only the displayed renderer frame. Render-to-texture scenes
+		// are separate work and must not inflate ms/present.
 		GetContext()->BeginGpuTiming(currentCommandBuffer);
 	}
 	matrices.CalcMatrices(rendContext, viewport.extent.width, viewport.extent.height);

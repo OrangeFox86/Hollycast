@@ -44,7 +44,6 @@ struct vram_block
 
 bool VramLockedWriteOffset(size_t offset);
 bool VramLockedWrite(u8* address);
-u32 getTrackedTextureCount();
 u64 getTextureUploadCount();
 
 void UpscalexBRZ(int factor, u32* source, u32* dest, int width, int height, bool has_alpha);
@@ -82,8 +81,6 @@ public:
 		custom_load_in_progress = 0;
 		gpuPalette = other.gpuPalette;
 		area = other.area;
-		trackedOnGpu = other.trackedOnGpu;
-		other.trackedOnGpu = false;
 	}
 
 	TSP tsp;        	//dreamcast texture parameters
@@ -185,7 +182,6 @@ public:
 
 private:
 	void recordTextureUpload();
-	bool trackedOnGpu = false;
 };
 
 template<typename Texture>

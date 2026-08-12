@@ -713,6 +713,7 @@ void VulkanContext::CreateSwapChain()
 		// started a timestamp pair whose matching present command is discarded.
 		// Drop that incomplete sample before reusing query slots.
 		gpuTimingFenceIndices.fill(-1);
+		gpuTimingEpochs.fill(0);
 		gpuTimingReadIndex = 0;
 		gpuTimingWriteIndex = 0;
 		gpuTimingWaitingCount = 0;
@@ -1083,7 +1084,8 @@ void VulkanContext::pollGpuTiming()
 		if (result == vk::Result::eSuccess && timestamps[1] >= timestamps[0])
 		{
 			const double nanoseconds = static_cast<double>(timestamps[1] - timestamps[0]) * gpuTimestampPeriod;
-			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+			performance_overlay::recordGpuTimingSample(
+				static_cast<std::uint64_t>(nanoseconds), gpuTimingEpochs[gpuTimingReadIndex]);
 		}
 		else if (result != vk::Result::eNotReady)
 		{
@@ -1107,6 +1109,7 @@ void VulkanContext::BeginGpuTiming(vk::CommandBuffer commandBuffer)
 		return;
 
 	const std::uint32_t firstQuery = static_cast<std::uint32_t>(gpuTimingWriteIndex * 2);
+	gpuTimingEpochs[gpuTimingWriteIndex] = performance_overlay::getGpuTimingEpoch();
 	commandBuffer.resetQueryPool(*gpuTimingQueryPool, firstQuery, 2);
 	commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, *gpuTimingQueryPool, firstQuery);
 	gpuTimingActive = true;
@@ -1346,6 +1349,7 @@ void VulkanContext::term()
 	overlay.reset();
 	gpuTimingQueryPool.reset();
 	gpuTimingFenceIndices.fill(-1);
+	gpuTimingEpochs.fill(0);
 	gpuTimingWaitingCount = 0;
 	gpuTimingActive = false;
 	gpuTimingAvailable = false;

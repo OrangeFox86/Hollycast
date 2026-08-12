@@ -298,7 +298,7 @@ void DX11Context::pollGpuTiming()
 		if (!disjoint.Disjoint && end >= start && disjoint.Frequency != 0)
 		{
 			const double nanoseconds = static_cast<double>(end - start) * 1000000000.0 / static_cast<double>(disjoint.Frequency);
-			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds), query.epoch);
 		}
 		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
 		--gpuTimingWaitingCount;
@@ -307,17 +307,20 @@ void DX11Context::pollGpuTiming()
 
 void DX11Context::BeginGpuTiming()
 {
+	// Retire completed queries even while timing is disabled so samples from a
+	// previous enabled interval cannot leak into a later one.
+	pollGpuTiming();
 	if (!performance_overlay::isGpuTimingRequested())
 		return;
 	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
 	if (!gpuTimingAvailable || !pDeviceContext)
 		return;
 
-	pollGpuTiming();
 	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
 		return;
 
 	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	query.epoch = performance_overlay::getGpuTimingEpoch();
 	pDeviceContext->Begin(query.disjoint);
 	pDeviceContext->End(query.start);
 	gpuTimingActive = true;

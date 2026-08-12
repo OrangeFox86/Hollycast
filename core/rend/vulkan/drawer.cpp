@@ -436,7 +436,6 @@ vk::CommandBuffer TextureDrawer::BeginRenderPass()
 	NewImage();
 	vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 	commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-	GetContext()->BeginGpuTiming(commandBuffer);
 
 	if (!depthAttachment || width > depthAttachment->getExtent().width || height > depthAttachment->getExtent().height)
 	{
@@ -692,6 +691,8 @@ vk::CommandBuffer ScreenDrawer::BeginRenderPass()
 		frameRendered = false;
 		vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 		commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+		// Measure only the displayed renderer frame. Render-to-texture scenes
+		// are separate work and must not inflate ms/present.
 		GetContext()->BeginGpuTiming(commandBuffer);
 
 		if (transitionNeeded[GetCurrentImage()])

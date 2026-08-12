@@ -109,13 +109,7 @@ bool DXContext::init(bool keepCurrentWindow)
 void DXContext::term()
 {
 	NOTICE_LOG(RENDERER, "DX9 Context terminating");
-	gpuTimingActive = false;
-	gpuTimingAvailable = false;
-	gpuTimingReadIndex = 0;
-	gpuTimingWriteIndex = 0;
-	gpuTimingWaitingCount = 0;
-	gpuTimingQueries = {};
-	performance_overlay::setGpuTimingSupported(false);
+	termGpuTiming();
 	overlay.term();
 	imguiDriver.reset();
 	pDevice.reset();
@@ -147,6 +141,17 @@ bool DXContext::initGpuTiming()
 	}
 	gpuTimingAvailable = true;
 	return true;
+}
+
+void DXContext::termGpuTiming()
+{
+	gpuTimingActive = false;
+	gpuTimingAvailable = false;
+	gpuTimingReadIndex = 0;
+	gpuTimingWriteIndex = 0;
+	gpuTimingWaitingCount = 0;
+	gpuTimingQueries = {};
+	performance_overlay::setGpuTimingSupported(false);
 }
 
 void DXContext::pollGpuTiming()
@@ -186,7 +191,7 @@ void DXContext::pollGpuTiming()
 		if (!disjoint && end >= start && frequency != 0)
 		{
 			const double nanoseconds = static_cast<double>(end - start) * 1000000000.0 / static_cast<double>(frequency);
-			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds), query.epoch);
 		}
 		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
 		--gpuTimingWaitingCount;
@@ -195,23 +200,27 @@ void DXContext::pollGpuTiming()
 
 void DXContext::BeginGpuTiming()
 {
+	// Retire completed queries even while timing is disabled so samples from a
+	// previous enabled interval cannot leak into a later one.
+	pollGpuTiming();
 	if (!performance_overlay::isGpuTimingRequested())
 		return;
 	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
 	if (!gpuTimingAvailable || !pDevice)
 		return;
 
-	pollGpuTiming();
 	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
 		return;
 
 	GpuTimingQuery& query = gpuTimingQueries[gpuTimingWriteIndex];
+	const u32 epoch = performance_overlay::getGpuTimingEpoch();
 	if (FAILED(query.disjoint->Issue(D3DISSUE_BEGIN)) || FAILED(query.start->Issue(D3DISSUE_END)))
 	{
 		gpuTimingAvailable = false;
 		performance_overlay::setGpuTimingSupported(false);
 		return;
 	}
+	query.epoch = epoch;
 	gpuTimingActive = true;
 }
 
@@ -326,6 +335,9 @@ void DXContext::resetDevice()
 		dxrenderer = dynamic_cast<D3DRenderer*>(renderer);
 	if (dxrenderer != nullptr)
 		dxrenderer->preReset();
+	// D3D9 query objects become invalid with a lost device. Release the full
+	// timing ring before Reset so stale queries cannot block later samples.
+	termGpuTiming();
 	overlay.term();
     ImGui_ImplDX9_InvalidateDeviceObjects();
     HRESULT hr = pDevice->Reset(&d3dpp);
@@ -338,6 +350,7 @@ void DXContext::resetDevice()
     deviceReady = true;
     ImGui_ImplDX9_CreateDeviceObjects();
     overlay.init(pDevice);
+	initGpuTiming();
 	if (dxrenderer != nullptr)
 		dxrenderer->postReset();
 }

@@ -961,9 +961,9 @@ bool D3DRenderer::Render()
 {
 	if (!DXContext::Instance()->isReady())
 		return false;
-	DX9GpuTimingScope gpuTiming(DXContext::Instance());
 
-	bool is_rtt = rendContext->isRTT;
+	const bool is_rtt = rendContext->isRTT;
+	DX9GpuTimingScope gpuTiming(DXContext::Instance(), !is_rtt);
 
 	backbuffer.reset();
 	bool rc = SUCCEEDED(device->GetRenderTarget(0, &backbuffer.get()));

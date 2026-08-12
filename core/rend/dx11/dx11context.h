@@ -121,6 +121,7 @@ private:
 		ComPtr<ID3D11Query> disjoint;
 		ComPtr<ID3D11Query> start;
 		ComPtr<ID3D11Query> end;
+		u32 epoch = 0;
 	};
 	static constexpr std::size_t GpuTimingQueryCount = 4;
 	std::array<GpuTimingQuery, GpuTimingQueryCount> gpuTimingQueries {};
@@ -139,17 +140,22 @@ private:
 class DX11GpuTimingScope
 {
 public:
-	explicit DX11GpuTimingScope(DX11Context *context) : context(context)
+	explicit DX11GpuTimingScope(DX11Context *context, bool enabled)
+		: context(enabled ? context : nullptr)
 	{
-		context->BeginGpuTiming();
+		if (this->context != nullptr)
+			this->context->BeginGpuTiming();
 	}
 
 	~DX11GpuTimingScope()
 	{
-		context->EndGpuTiming();
+		if (context != nullptr)
+			context->EndGpuTiming();
 	}
+	DX11GpuTimingScope(const DX11GpuTimingScope&) = delete;
+	DX11GpuTimingScope& operator=(const DX11GpuTimingScope&) = delete;
 
 private:
-	DX11Context *context;
+	DX11Context *const context;
 };
 #endif

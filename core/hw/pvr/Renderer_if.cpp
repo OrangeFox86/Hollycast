@@ -181,31 +181,44 @@ private:
 
 	bool execute(Message msg)
 	{
+	#ifndef LIBRETRO
+		const bool measurePvrWork = performance_overlay::isCollectionEnabled()
+			&& (msg.type == Render || msg.type == RenderFramebuffer || msg.type == Present);
+		const std::uint64_t performanceStart = measurePvrWork
+			? performance_overlay::currentThreadCpuTimeMicroseconds()
+			: 0;
+	#endif
+		bool executed = true;
 		switch (msg.type)
 		{
 		case Render:
 			render();
-			return true;
+			break;
 		case RenderFramebuffer:
 			renderFramebuffer(msg.config);
-			return true;
+			break;
 		case Present:
 			present();
-			return true;
+			break;
 		case Stop:
 		case NoMessage:
 		default:
-			return false;
+			executed = false;
+			break;
 		}
+	#ifndef LIBRETRO
+		if (measurePvrWork)
+		{
+			const std::uint64_t performanceEnd = performance_overlay::currentThreadCpuTimeMicroseconds();
+			performance_overlay::recordPvrWork(performanceEnd >= performanceStart ? performanceEnd - performanceStart : 0);
+		}
+	#endif
+		return executed;
 	}
 
 	void render()
 	{
 		FC_PROFILE_SCOPE;
-#ifndef LIBRETRO
-		const std::uint64_t performanceStart = performance_overlay::currentThreadCpuTimeMicroseconds();
-#endif
-
 		TA_context *taContext = DequeueRender();
 		if (taContext == nullptr)
 			return;
@@ -219,7 +232,7 @@ private:
 		#ifndef LIBRETRO
 		// Keep both values so the OSD can distinguish Dreamcast source timing
 		// from the actual scaled framebuffer allocated by the active renderer.
-		if (!taContext->rend.isRTT)
+		if (!taContext->rend.isRTT && performance_overlay::isCollectionEnabled())
 			performance_overlay::recordRenderedResolution(rawWidth, rawHeight, width, height);
 		#endif
 		bool renderToScreen = !taContext->rend.isRTT && !config::EmulateFramebuffer;
@@ -243,12 +256,15 @@ private:
 		// These are Dreamcast PVR scene counters produced by ta_parse(), not
 		// host GPU-driver counters. Keep them separate from the backend draw
 		// count so the OSD does not imply that the two workloads are equivalent.
-		const rend_context& context = taContext->rend;
-		const std::uint32_t primitiveCount = static_cast<std::uint32_t>(
-			context.global_param_op.size() + context.global_param_pt.size() + context.global_param_tr.size()
-			+ context.global_param_mvo.size() + context.global_param_mvo_tr.size());
-		performance_overlay::recordPvrScene(!context.isRTT, primitiveCount, static_cast<std::uint32_t>(context.verts.size()));
-		performance_overlay::recordRendererPass(static_cast<std::uint32_t>(context.render_passes.size()));
+		if (performance_overlay::isCollectionEnabled())
+		{
+			const rend_context& context = taContext->rend;
+			const std::uint32_t primitiveCount = static_cast<std::uint32_t>(
+				context.global_param_op.size() + context.global_param_pt.size() + context.global_param_tr.size()
+				+ context.global_param_mvo.size() + context.global_param_mvo_tr.size());
+			performance_overlay::recordPvrScene(!context.isRTT, primitiveCount, static_cast<std::uint32_t>(context.verts.size()));
+			performance_overlay::recordRendererPass(static_cast<std::uint32_t>(context.render_passes.size()));
+		}
 		#endif
 
 		if (renderToScreen)
@@ -260,7 +276,10 @@ private:
 			try {
 #ifndef LIBRETRO
 				// Each renderer opts in only after it has started a valid timing query.
-				performance_overlay::setGpuTimingSupported(false);
+				// RTT passes do not issue display-frame queries and must not overwrite
+				// the capability reported by the active display renderer.
+				if (!taContext->rend.isRTT)
+					performance_overlay::setGpuTimingSupported(false);
 #endif
 				renderer->Render();
 			} catch (...) {
@@ -278,10 +297,6 @@ private:
 
 		//clear up & free data ..
 		FinishRender(taContext);
-#ifndef LIBRETRO
-		const std::uint64_t performanceEnd = performance_overlay::currentThreadCpuTimeMicroseconds();
-		performance_overlay::recordPvrWork(performanceEnd >= performanceStart ? performanceEnd - performanceStart : 0);
-#endif
 	}
 
 	void renderFramebuffer(const FramebufferInfo& config)

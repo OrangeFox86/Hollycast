@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "oslib/cpu_usage.h"
 #include "oslib/gpu_memory.h"
+#include "oslib/i18n.h"
 #include "oslib/process_memory.h"
 #include "rend/TexCache.h"
 #include "stdclass.h"
@@ -31,7 +32,14 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <pthread.h>
 #include <time.h>
+#include <unistd.h>
+#endif
+
+#if !defined(_WIN32) && defined(CLOCK_THREAD_CPUTIME_ID) \
+	&& defined(_POSIX_THREAD_CPUTIME) && _POSIX_THREAD_CPUTIME >= 0
+#define HOLLYCAST_HAS_PTHREAD_CPU_CLOCK 1
 #endif
 
 namespace performance_overlay {
@@ -41,7 +49,7 @@ namespace {
 constexpr const char *Section = "rend";
 constexpr std::size_t FrameTimeHistorySize = 152;
 
-std::atomic<std::uint64_t> sh4WorkMicroseconds { 0 };
+std::atomic<bool> collectionEnabled { false };
 std::atomic<std::uint64_t> pvrWorkMicroseconds { 0 };
 std::atomic<std::uint32_t> vblankCount { 0 };
 std::atomic<std::uint32_t> gameFrameCount { 0 };
@@ -49,6 +57,7 @@ std::atomic<std::uint64_t> gpuTimingNanoseconds { 0 };
 std::atomic<std::uint32_t> gpuTimingSampleCount { 0 };
 std::atomic<bool> gpuTimingSupported { false };
 std::atomic<bool> gpuTimingRequested { false };
+std::atomic<std::uint32_t> gpuTimingEpoch { 0 };
 std::atomic<std::uint64_t> pvrPrimitiveCount { 0 };
 std::atomic<std::uint64_t> pvrVertexCount { 0 };
 std::atomic<std::uint32_t> rendererSceneCount { 0 };
@@ -61,7 +70,150 @@ std::atomic<int> renderedWidth { 0 };
 std::atomic<int> renderedHeight { 0 };
 std::atomic<int> outputViewportWidth { 0 };
 std::atomic<int> outputViewportHeight { 0 };
-thread_local std::uint64_t lastSh4ThreadCpuTime = 0;
+
+#ifdef _WIN32
+bool readThreadCpuTimeMicroseconds(HANDLE thread, std::uint64_t& microseconds)
+{
+	FILETIME creationTime {};
+	FILETIME exitTime {};
+	FILETIME kernelTime {};
+	FILETIME userTime {};
+	if (!GetThreadTimes(thread, &creationTime, &exitTime, &kernelTime, &userTime))
+		return false;
+
+	ULARGE_INTEGER kernel {};
+	kernel.LowPart = kernelTime.dwLowDateTime;
+	kernel.HighPart = kernelTime.dwHighDateTime;
+	ULARGE_INTEGER user {};
+	user.LowPart = userTime.dwLowDateTime;
+	user.HighPart = userTime.dwHighDateTime;
+	microseconds = (kernel.QuadPart + user.QuadPart) / 10;
+	return true;
+}
+#endif
+
+#if defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+bool readThreadCpuTimeMicroseconds(clockid_t clock, std::uint64_t& microseconds)
+{
+	timespec time {};
+	if (clock_gettime(clock, &time) != 0)
+		return false;
+	microseconds = static_cast<std::uint64_t>(time.tv_sec) * 1000000 + time.tv_nsec / 1000;
+	return true;
+}
+#endif
+
+// Vblank callbacks cannot publish useful CPU time while the SH4 is stalled
+// before its next vblank. Keep a real reference to the execution thread so the
+// OSD thread can sample cumulative CPU time independently once per interval.
+class Sh4ThreadCpuSampler
+{
+public:
+	~Sh4ThreadCpuSampler()
+	{
+		clear();
+	}
+
+	void registerCurrentThread()
+	{
+#ifdef _WIN32
+		HANDLE newThread = nullptr;
+		DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
+			&newThread, 0, FALSE, DUPLICATE_SAME_ACCESS);
+		const std::lock_guard<std::mutex> lock(mutex);
+		releaseThreadLocked();
+		thread = newThread;
+#elif defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+		clockid_t newClock {};
+		const bool newClockValid = pthread_getcpuclockid(pthread_self(), &newClock) == 0;
+		const std::lock_guard<std::mutex> lock(mutex);
+		clock = newClock;
+		clockValid = newClockValid;
+#else
+		const std::lock_guard<std::mutex> lock(mutex);
+#endif
+		resetBaselineLocked();
+	}
+
+	void clear()
+	{
+		const std::lock_guard<std::mutex> lock(mutex);
+		releaseThreadLocked();
+		baselineValid = false;
+		baselineMicroseconds = 0;
+	}
+
+	void resetBaseline()
+	{
+		const std::lock_guard<std::mutex> lock(mutex);
+		baselineValid = readRegisteredThreadLocked(baselineMicroseconds);
+	}
+
+	bool sample(std::uint64_t& elapsedMicroseconds)
+	{
+		const std::lock_guard<std::mutex> lock(mutex);
+		std::uint64_t currentMicroseconds = 0;
+		if (!readRegisteredThreadLocked(currentMicroseconds))
+		{
+			baselineValid = false;
+			elapsedMicroseconds = 0;
+			return false;
+		}
+		if (!baselineValid || currentMicroseconds < baselineMicroseconds)
+		{
+			baselineMicroseconds = currentMicroseconds;
+			baselineValid = true;
+			elapsedMicroseconds = 0;
+			return false;
+		}
+
+		elapsedMicroseconds = currentMicroseconds - baselineMicroseconds;
+		baselineMicroseconds = currentMicroseconds;
+		return true;
+	}
+
+private:
+	bool readRegisteredThreadLocked(std::uint64_t& microseconds) const
+	{
+#ifdef _WIN32
+		return thread != nullptr && readThreadCpuTimeMicroseconds(thread, microseconds);
+#elif defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+		return clockValid && readThreadCpuTimeMicroseconds(clock, microseconds);
+#else
+		return false;
+#endif
+	}
+
+	void resetBaselineLocked()
+	{
+		baselineValid = readRegisteredThreadLocked(baselineMicroseconds);
+	}
+
+	void releaseThreadLocked()
+	{
+#ifdef _WIN32
+		if (thread != nullptr)
+		{
+			CloseHandle(thread);
+			thread = nullptr;
+		}
+#elif defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+		clockValid = false;
+#endif
+	}
+
+	std::mutex mutex;
+#ifdef _WIN32
+	HANDLE thread = nullptr;
+#elif defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+	clockid_t clock {};
+	bool clockValid = false;
+#endif
+	std::uint64_t baselineMicroseconds = 0;
+	bool baselineValid = false;
+};
+
+Sh4ThreadCpuSampler sh4ThreadCpuSampler;
 
 struct PresentSamples {
 	std::mutex mutex;
@@ -106,10 +258,10 @@ struct Metrics {
 	float hostProcessCpuUsage = 0.f;
 	float hostSystemCpuUsage = 0.f;
 	float sh4ExecutionRate = 0.f;
-	float sh4TimePerFrame = 0.f;
-	float pvrTimePerFrame = 0.f;
+	float sh4TimePerVblank = 0.f;
+	float pvrTimePerVblank = 0.f;
 	float gpuUsage = 0.f;
-	float gpuTimePerPresent = 0.f;
+	float gpuTimePerRenderedFrame = 0.f;
 	float pvrScheduledRenderPercent = 0.f;
 	float pvrPrimitivesPerScene = 0.f;
 	float pvrVerticesPerScene = 0.f;
@@ -131,6 +283,8 @@ struct Metrics {
 	bool processMemoryValid = false;
 	bool hostProcessCpuValid = false;
 	bool hostSystemCpuValid = false;
+	bool sh4ThreadCpuValid = false;
+	bool sh4TimePerVblankValid = false;
 	bool frameTimeValid = false;
 	bool gpuTimingSupported = false;
 	bool gpuTimingValid = false;
@@ -143,7 +297,7 @@ bool show(const char *key, bool defaultValue = true)
 	return config::loadBool(Section, key, defaultValue);
 }
 
-void updateMetrics()
+void updateMetrics(bool queryGpuMemory)
 {
 	const std::uint64_t now = getTimeMs();
 	if (metrics.lastMemorySampleTime == 0 || now - metrics.lastMemorySampleTime >= 1000)
@@ -156,8 +310,13 @@ void updateMetrics()
 		metrics.hostSystemCpuUsage = cpu.systemPercent;
 		metrics.hostProcessCpuValid = cpu.processValid;
 		metrics.hostSystemCpuValid = cpu.systemValid;
-		const gpu_memory::Stats gpu = gpu_memory::queryCurrentProcess();
-		metrics.gpuAdapters = gpu.adapters;
+		if (queryGpuMemory)
+		{
+			const gpu_memory::Stats gpu = gpu_memory::queryCurrentProcess();
+			metrics.gpuAdapters = gpu.adapters;
+		}
+		else
+			metrics.gpuAdapters.clear();
 		metrics.lastMemorySampleTime = now;
 	}
 	if (metrics.lastSampleTime == 0)
@@ -170,22 +329,29 @@ void updateMetrics()
 		metrics.sh4Usage = 0.f;
 		metrics.pvrUsage = 0.f;
 		metrics.sh4ExecutionRate = 0.f;
-		metrics.sh4TimePerFrame = 0.f;
-		metrics.pvrTimePerFrame = 0.f;
+		metrics.sh4TimePerVblank = 0.f;
+		metrics.pvrTimePerVblank = 0.f;
 		metrics.gpuUsage = 0.f;
-		metrics.gpuTimePerPresent = 0.f;
+		metrics.gpuTimePerRenderedFrame = 0.f;
 		metrics.pvrScheduledRenderPercent = 0.f;
 		metrics.pvrPrimitivesPerScene = 0.f;
 		metrics.pvrVerticesPerScene = 0.f;
 		metrics.rendererPassesPerScene = 0.f;
+		metrics.textureUploadsPerSecond = 0.f;
+		metrics.sh4ThreadCpuValid = false;
+		metrics.sh4TimePerVblankValid = false;
 		metrics.frameTimeValid = false;
+		// The CPU sampler is delta-based. The call above establishes a new
+		// baseline after Off; do not display the hidden interval it replaced.
+		metrics.hostProcessCpuValid = false;
+		metrics.hostSystemCpuValid = false;
 		metrics.gpuTimingSupported = gpuTimingSupported.load(std::memory_order_relaxed);
 		metrics.gpuTimingValid = false;
 		metrics.frameTimeHistoryCount = 0;
 		metrics.hostProcessCpuHistory = {};
 		metrics.hostSystemCpuHistory = {};
 		metrics.gpuUsageHistory = {};
-		sh4WorkMicroseconds.exchange(0);
+		sh4ThreadCpuSampler.resetBaseline();
 		pvrWorkMicroseconds.exchange(0);
 		vblankCount.exchange(0);
 		gameFrameCount.exchange(0);
@@ -197,6 +363,12 @@ void updateMetrics()
 		rendererPassCount.exchange(0);
 		pvrScheduledRenderCycles.exchange(0);
 		pvrVideoFrameCycles.exchange(0);
+		rawRenderWidth.store(0, std::memory_order_relaxed);
+		rawRenderHeight.store(0, std::memory_order_relaxed);
+		renderedWidth.store(0, std::memory_order_relaxed);
+		renderedHeight.store(0, std::memory_order_relaxed);
+		outputViewportWidth.store(0, std::memory_order_relaxed);
+		outputViewportHeight.store(0, std::memory_order_relaxed);
 		std::lock_guard<std::mutex> lock(presentSamples.mutex);
 		presentSamples.lastPresentMicroseconds = 0;
 		presentSamples.intervalSumMicroseconds = 0;
@@ -251,23 +423,29 @@ void updateMetrics()
 	}
 	const std::uint32_t vblanks = vblankCount.exchange(0);
 	const std::uint32_t gameFrames = gameFrameCount.exchange(0);
-	const std::uint64_t sh4Work = sh4WorkMicroseconds.exchange(0);
+	std::uint64_t sh4Work = 0;
+	metrics.sh4ThreadCpuValid = sh4ThreadCpuSampler.sample(sh4Work);
+	metrics.sh4TimePerVblankValid = metrics.sh4ThreadCpuValid && vblanks != 0;
 	const std::uint64_t pvrWork = pvrWorkMicroseconds.exchange(0);
 	metrics.vps = static_cast<float>(vblanks) * 1000.f / static_cast<float>(elapsed);
 	metrics.gameFps = static_cast<float>(gameFrames) * 1000.f / static_cast<float>(elapsed);
-	metrics.sh4Usage = std::min(100.f, static_cast<float>(sh4Work) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
+	metrics.sh4Usage = metrics.sh4ThreadCpuValid
+		? std::min(100.f, static_cast<float>(sh4Work) / (static_cast<float>(elapsed) * 1000.f) * 100.f)
+		: 0.f;
 	metrics.pvrUsage = std::min(100.f, static_cast<float>(pvrWork) / (static_cast<float>(elapsed) * 1000.f) * 100.f);
 	metrics.sh4ExecutionRate = spg_getSh4ExecutionRate();
-	const float frames = static_cast<float>(std::max(vblanks, 1u));
-	metrics.sh4TimePerFrame = static_cast<float>(sh4Work) / frames / 1000.f;
-	metrics.pvrTimePerFrame = static_cast<float>(pvrWork) / frames / 1000.f;
+	const float vblankSamples = static_cast<float>(std::max(vblanks, 1u));
+	metrics.sh4TimePerVblank = metrics.sh4TimePerVblankValid
+		? static_cast<float>(sh4Work) / vblankSamples / 1000.f
+		: 0.f;
+	metrics.pvrTimePerVblank = static_cast<float>(pvrWork) / vblankSamples / 1000.f;
 	const std::uint64_t gpuNanoseconds = gpuTimingNanoseconds.exchange(0);
 	const std::uint32_t gpuSamples = gpuTimingSampleCount.exchange(0);
 	metrics.gpuTimingSupported = gpuTimingSupported.load(std::memory_order_relaxed);
 	metrics.gpuTimingValid = gpuSamples != 0;
 	if (metrics.gpuTimingValid)
 	{
-		metrics.gpuTimePerPresent = static_cast<float>(gpuNanoseconds) / static_cast<float>(gpuSamples) / 1000000.f;
+		metrics.gpuTimePerRenderedFrame = static_cast<float>(gpuNanoseconds) / static_cast<float>(gpuSamples) / 1000000.f;
 		metrics.gpuUsage = std::min(100.f, static_cast<float>(gpuNanoseconds) / (static_cast<float>(elapsed) * 1000000.f) * 100.f);
 		appendHistory(metrics.gpuUsageHistory, metrics.gpuUsage);
 	}
@@ -287,7 +465,7 @@ void updateMetrics()
 	const std::uint64_t videoFrameCycles = pvrVideoFrameCycles.exchange(0);
 	metrics.pvrScheduledRenderPercent = videoFrameCycles == 0
 		? 0.f
-		: std::min(100.f, static_cast<float>(scheduledRenderCycles) / static_cast<float>(videoFrameCycles) * 100.f);
+		: static_cast<float>(scheduledRenderCycles) / static_cast<float>(videoFrameCycles) * 100.f;
 	const u64 textureUploads = getTextureUploadCount();
 	metrics.textureUploadsPerSecond = static_cast<float>(textureUploads - metrics.lastTextureUploadCount) * 1000.f / static_cast<float>(elapsed);
 	metrics.lastTextureUploadCount = textureUploads;
@@ -297,14 +475,20 @@ void updateMetrics()
 std::string formatSpeed()
 {
 	const float targetFps = SPG_CONTROL.isPAL() ? 50.f : 60.f;
-	const float currentSpeed = metrics.vps / targetFps * 100.f;
+	const int currentSpeed = static_cast<int>(std::round(metrics.vps / targetFps * 100.f));
+	char value[64];
 	if (!settings.input.fastForwardMode)
-		return std::to_string(static_cast<int>(std::round(currentSpeed))) + "% (set 100%)";
+		std::snprintf(value, sizeof(value), i18n::T("%d%% (set 100%%)"), currentSpeed);
+	else
+	{
+		const int limit = config::FastForwardSpeedLimit.get();
+		if (limit >= 300)
+			std::snprintf(value, sizeof(value), i18n::T("%d%% (set Infinite)"), currentSpeed);
+		else
+			std::snprintf(value, sizeof(value), i18n::T("%d%% (set %d%%)"), currentSpeed, 100 + limit);
+	}
 
-	const int limit = config::FastForwardSpeedLimit.get();
-	if (limit >= 300)
-		return std::to_string(static_cast<int>(std::round(currentSpeed))) + "% (set Infinite)";
-	return std::to_string(static_cast<int>(std::round(currentSpeed))) + "% (set " + std::to_string(100 + limit) + "%)";
+	return value;
 }
 
 std::string formatFrameRate(bool includeRates, bool includeSpeed)
@@ -313,7 +497,7 @@ std::string formatFrameRate(bool includeRates, bool includeSpeed)
 	if (includeRates)
 	{
 		char rates[64];
-		std::snprintf(rates, sizeof(rates), "%.2f FPS | %.2f VPS", metrics.gameFps, metrics.vps);
+		std::snprintf(rates, sizeof(rates), i18n::T("%.2f FPS | %.2f VPS"), metrics.gameFps, metrics.vps);
 		value = rates;
 	}
 	if (includeSpeed)
@@ -321,7 +505,7 @@ std::string formatFrameRate(bool includeRates, bool includeSpeed)
 		if (!value.empty())
 			value += " | ";
 		else
-			value = "Speed: ";
+			value = i18n::T("Speed: ");
 		value += formatSpeed();
 	}
 	return value;
@@ -330,7 +514,7 @@ std::string formatFrameRate(bool includeRates, bool includeSpeed)
 std::string formatOutputFrameRate()
 {
 	char rate[32];
-	std::snprintf(rate, sizeof(rate), "Output FPS: %.2f", metrics.outputFps);
+	std::snprintf(rate, sizeof(rate), i18n::T("Output FPS: %.2f"), metrics.outputFps);
 	return rate;
 }
 
@@ -340,25 +524,25 @@ std::string formatResolution()
 	const int height = renderedHeight.load(std::memory_order_relaxed);
 	const std::string rendered = width > 0 && height > 0
 		? std::to_string(width) + "x" + std::to_string(height)
-		: "unavailable";
+		: i18n::T("unavailable");
 	const int rawWidth = rawRenderWidth.load(std::memory_order_relaxed);
 	const int rawHeight = rawRenderHeight.load(std::memory_order_relaxed);
 	const std::string raw = rawWidth > 0 && rawHeight > 0
 		? std::to_string(rawWidth) + "x" + std::to_string(rawHeight)
-		: "unavailable";
+		: i18n::T("unavailable");
 	const std::string output = settings.display.width > 0 && settings.display.height > 0
 		? std::to_string(settings.display.width) + "x" + std::to_string(settings.display.height)
-		: "unavailable";
-	std::string value = "Rendered: " + rendered + " | Raw: " + raw;
+		: i18n::T("unavailable");
+	std::string value = i18n::T("Rendered: ") + rendered + i18n::T(" | Raw: ") + raw;
 	if (config::IntegerScale)
 	{
 		const int viewportWidth = outputViewportWidth.load(std::memory_order_relaxed);
 		const int viewportHeight = outputViewportHeight.load(std::memory_order_relaxed);
 		if (viewportWidth > 0 && viewportHeight > 0
 				&& (viewportWidth != settings.display.width || viewportHeight != settings.display.height))
-			value += " | Viewport: " + std::to_string(viewportWidth) + "x" + std::to_string(viewportHeight);
+			value += i18n::T(" | Viewport: ") + std::to_string(viewportWidth) + "x" + std::to_string(viewportHeight);
 	}
-	return value + " | Output: " + output;
+	return value + i18n::T(" | Output: ") + output;
 }
 
 std::string formatGpuStatistics()
@@ -366,7 +550,7 @@ std::string formatGpuStatistics()
 	const RenderType renderer = config::RendererType.get();
 	const char *api = isOpenGL(renderer) ? "OpenGL" : isVulkan(renderer) ? "Vulkan" : isDirectX(renderer) ? "DirectX" : "Renderer";
 	char statistics[192];
-	std::snprintf(statistics, sizeof(statistics), "%s%s HW | %.0f PVR P | %.0f V | %.1f RP | %.1f TU/s", api,
+	std::snprintf(statistics, sizeof(statistics), i18n::T("%s%s HW | %.0f PVR P | %.0f V | %.1f RP | %.1f TU/s"), api,
 		static_cast<bool>(config::ThreadedRendering) ? "-MT" : "", metrics.pvrPrimitivesPerScene,
 		metrics.pvrVerticesPerScene, metrics.rendererPassesPerScene, metrics.textureUploadsPerSecond);
 	return statistics;
@@ -375,19 +559,19 @@ std::string formatGpuStatistics()
 std::string formatGpuTiming()
 {
 	if (!metrics.gpuTimingSupported)
-		return "Host GPU: unavailable (backend timing unsupported)";
+		return i18n::T("Host GPU: unavailable (backend timing unsupported)");
 	if (!metrics.gpuTimingValid)
-		return "Host GPU: sampling timestamp queries";
+		return i18n::T("Host GPU: sampling timestamp queries");
 	char value[96];
-	std::snprintf(value, sizeof(value), "Host GPU: %.1f%% (%.2f ms/present)", metrics.gpuUsage,
-		metrics.gpuTimePerPresent);
+	std::snprintf(value, sizeof(value), i18n::T("Host GPU: %.1f%% (%.2f ms/rendered frame)"), metrics.gpuUsage,
+		metrics.gpuTimePerRenderedFrame);
 	return value;
 }
 
 std::string formatPvrRenderSchedule()
 {
 	char value[128];
-	std::snprintf(value, sizeof(value), "Dreamcast PVR: %.1f%% scheduled frame budget",
+	std::snprintf(value, sizeof(value), i18n::T("Dreamcast PVR: %.1f%% scheduled frame pressure"),
 		metrics.pvrScheduledRenderPercent);
 	return value;
 }
@@ -398,16 +582,18 @@ std::string formatBytes(std::uint64_t bytes)
 	constexpr double Mebibyte = 1024.0 * 1024.0;
 	constexpr double Gibibyte = 1024.0 * Mebibyte;
 	if (bytes >= static_cast<std::uint64_t>(Gibibyte))
-		std::snprintf(value, sizeof(value), "%.2f GiB", bytes / Gibibyte);
+		std::snprintf(value, sizeof(value), i18n::T("%.2f GiB"), bytes / Gibibyte);
 	else
-		std::snprintf(value, sizeof(value), "%.1f MiB", bytes / Mebibyte);
+		std::snprintf(value, sizeof(value), i18n::T("%.1f MiB"), bytes / Mebibyte);
 	return value;
 }
 
 std::string formatRam()
 {
-	const std::string host = metrics.processMemoryValid ? formatBytes(metrics.processResidentBytes) : "unavailable";
-	return "HollyCast RAM (Resident): " + host;
+	const std::string host = metrics.processMemoryValid ? formatBytes(metrics.processResidentBytes) : i18n::T("unavailable");
+	char value[96];
+	std::snprintf(value, sizeof(value), i18n::T("HollyCast RAM (Resident): %s"), host.c_str());
+	return value;
 }
 
 std::string formatVram()
@@ -417,70 +603,85 @@ std::string formatVram()
 	{
 		if (!value.empty())
 			value += " | ";
-		value += "GPU " + std::to_string(adapter.adapterIndex) + " VRAM (DXGI App): "
-			+ formatBytes(adapter.usedBytes) + " / " + formatBytes(adapter.budgetBytes);
+		char adapterValue[128];
+		const std::string used = formatBytes(adapter.usedBytes);
+		const std::string budget = formatBytes(adapter.budgetBytes);
+		std::snprintf(adapterValue, sizeof(adapterValue), i18n::T("GPU %u VRAM (DXGI App): %s / %s"), adapter.adapterIndex,
+			used.c_str(), budget.c_str());
+		value += adapterValue;
 	}
 	if (value.empty())
-		value = "GPU VRAM: unavailable (no authoritative query)";
+		value = i18n::T("GPU VRAM: unavailable (no authoritative query)");
 	return value;
 }
 
 std::string formatThreadingState()
 {
 	return static_cast<bool>(config::ThreadedRendering)
-		? "Threads: ON (SH4 + PVR separate)"
-		: "Threads: OFF (SH4 + PVR shared)";
+		? i18n::T("Threads: ON (SH4 + PVR separate)")
+		: i18n::T("Threads: OFF (SH4 + PVR shared)");
 }
 
-std::string formatThreadWork(const char *label, float usage, float millisecondsPerFrame)
+std::string formatThreadWork(const char *label, float usage, float millisecondsPerVblank)
 {
-	char value[96];
-	std::snprintf(value, sizeof(value), "%s: %.1f%% (%.2f ms/frame)", label, usage, millisecondsPerFrame);
+	char value[128];
+	std::snprintf(value, sizeof(value), i18n::T("%s: %.1f%% (%.2f ms/vblank)"), label, usage, millisecondsPerVblank);
 	return value;
 }
 
 std::string formatSh4Work()
 {
-#if defined(_WIN32) || defined(CLOCK_THREAD_CPUTIME_ID)
+#if defined(_WIN32) || defined(HOLLYCAST_HAS_PTHREAD_CPU_CLOCK)
+	if (!metrics.sh4ThreadCpuValid)
+		return i18n::T("Host CPU (SH4): sampling thread usage");
+	if (!metrics.sh4TimePerVblankValid)
+	{
+		const char *label = config::ThreadedRendering
+			? i18n::T("Host CPU (SH4 Thread)")
+			: i18n::T("Host CPU (SH4 + PVR)");
+		char value[128];
+		std::snprintf(value, sizeof(value), i18n::T("%s: %.1f%% (no vblank)"), label, metrics.sh4Usage);
+		return value;
+	}
 	if (config::ThreadedRendering)
-		return formatThreadWork("Host CPU (SH4 Thread)", metrics.sh4Usage, metrics.sh4TimePerFrame);
-	return formatThreadWork("Host CPU (SH4 + PVR)", metrics.sh4Usage, metrics.sh4TimePerFrame);
+		return formatThreadWork(i18n::T("Host CPU (SH4 Thread)"), metrics.sh4Usage, metrics.sh4TimePerVblank);
+	return formatThreadWork(i18n::T("Host CPU (SH4 + PVR)"), metrics.sh4Usage, metrics.sh4TimePerVblank);
 #else
-	return "SH4 CPU Work: unavailable (no thread CPU timer)";
+	return i18n::T("SH4 CPU Work: unavailable (no thread CPU timer)");
 #endif
 }
 
 std::string formatPvrWork()
 {
 #if defined(_WIN32) || defined(CLOCK_THREAD_CPUTIME_ID)
-	return formatThreadWork(static_cast<bool>(config::ThreadedRendering) ? "Host CPU (PVR Renderer)" : "Host CPU (PVR Portion)", metrics.pvrUsage,
-		metrics.pvrTimePerFrame);
+	return formatThreadWork(static_cast<bool>(config::ThreadedRendering) ? i18n::T("Host CPU (PVR Renderer)") : i18n::T("Host CPU (PVR Portion)"), metrics.pvrUsage,
+		metrics.pvrTimePerVblank);
 #else
-	return "PVR Renderer CPU Work: unavailable (no thread CPU timer)";
+	return i18n::T("PVR Renderer CPU Work: unavailable (no thread CPU timer)");
 #endif
 }
 
 std::string formatHostCpu()
 {
 	if (!metrics.hostProcessCpuValid && !metrics.hostSystemCpuValid)
-		return "Host CPU: sampling process and device usage";
+		return i18n::T("Host CPU: sampling process and device usage");
 	char value[128];
 	if (metrics.hostProcessCpuValid && metrics.hostSystemCpuValid)
-		std::snprintf(value, sizeof(value), "Host CPU: HollyCast %.1f%% | Device %.1f%%", metrics.hostProcessCpuUsage,
+		std::snprintf(value, sizeof(value), i18n::T("Host CPU: HollyCast %.1f%% | Device %.1f%%"), metrics.hostProcessCpuUsage,
 			metrics.hostSystemCpuUsage);
 	else if (metrics.hostProcessCpuValid)
-		std::snprintf(value, sizeof(value), "Host CPU: HollyCast %.1f%% of device capacity", metrics.hostProcessCpuUsage);
+		std::snprintf(value, sizeof(value), i18n::T("Host CPU: HollyCast %.1f%% of device capacity"), metrics.hostProcessCpuUsage);
 	else
-		std::snprintf(value, sizeof(value), "Host CPU: Device %.1f%%", metrics.hostSystemCpuUsage);
+		std::snprintf(value, sizeof(value), i18n::T("Host CPU: Device %.1f%%"), metrics.hostSystemCpuUsage);
 	return value;
 }
 
 std::string formatSh4ExecutionRate()
 {
 	if (metrics.sh4ExecutionRate <= 0.f)
-		return "Dreamcast SH4: sampling execution rate";
+		return i18n::T("Dreamcast SH4: sampling execution rate");
 	char value[96];
-	std::snprintf(value, sizeof(value), "Dreamcast SH4: %.0f%% target execution rate", metrics.sh4ExecutionRate);
+	std::snprintf(value, sizeof(value), i18n::T("Dreamcast SH4: %.0f%% target execution rate"), metrics.sh4ExecutionRate);
 	return value;
 }
 
@@ -531,8 +732,8 @@ void drawFrameTimeGraph(ImDrawList *drawList, ImFont *font, float fontSize, cons
 
 	char maximumLabel[16];
 	char minimumLabel[16];
-	std::snprintf(maximumLabel, sizeof(maximumLabel), "%.0f ms", maximum);
-	std::snprintf(minimumLabel, sizeof(minimumLabel), "%.0f ms", minimum);
+	std::snprintf(maximumLabel, sizeof(maximumLabel), i18n::T("%.0f ms"), maximum);
+	std::snprintf(minimumLabel, sizeof(minimumLabel), i18n::T("%.0f ms"), minimum);
 	drawList->AddText(font, labelSize, position + ImVec2(uiScaled(4.f), 0.f), textColor, maximumLabel);
 	const ImVec2 minimumSize = font->CalcTextSizeA(labelSize, FLT_MAX, 0.f, minimumLabel);
 	drawList->AddText(font, labelSize, position + ImVec2(width - minimumSize.x - uiScaled(4.f), height - labelSize), textColor,
@@ -579,10 +780,10 @@ void drawUsageGraph(ImDrawList *drawList, ImFont *font, float fontSize, const Im
 
 	char label[112];
 	if (secondary != nullptr && secondary->count != 0)
-		std::snprintf(label, sizeof(label), "%s: %.0f%% app | %.0f%% device", title,
+		std::snprintf(label, sizeof(label), i18n::T("%s: %.0f%% app | %.0f%% device"), title,
 			historyValue(primary, primary.count - 1), historyValue(*secondary, secondary->count - 1));
 	else
-		std::snprintf(label, sizeof(label), "%s: %.0f%%", title, historyValue(primary, primary.count - 1));
+		std::snprintf(label, sizeof(label), i18n::T("%s: %.0f%%"), title, historyValue(primary, primary.count - 1));
 	drawList->AddText(font, labelSize, position + ImVec2(uiScaled(4.f), 0.f), primaryColor, label);
 	const char *zeroLabel = "0%";
 	const ImVec2 zeroLabelSize = font->CalcTextSizeA(labelSize, FLT_MAX, 0.f, zeroLabel);
@@ -593,30 +794,40 @@ void drawUsageGraph(ImDrawList *drawList, ImFont *font, float fontSize, const Im
 
 int mode()
 {
-	return std::clamp(config::loadInt(Section, "ResourceMonitorMode", 2), 0, 2);
+	return std::clamp(config::loadInt(Section, "ResourceMonitorMode", 0), 0, 2);
+}
+
+bool isCollectionEnabled()
+{
+	return collectionEnabled.load(std::memory_order_acquire);
 }
 
 void resetSh4ThreadSample()
 {
-	lastSh4ThreadCpuTime = currentThreadCpuTimeMicroseconds();
+	sh4ThreadCpuSampler.registerCurrentThread();
 }
 
-void sampleSh4Thread()
+void clearSh4ThreadSample()
 {
-	vblankCount.fetch_add(1, std::memory_order_relaxed);
-	const std::uint64_t current = currentThreadCpuTimeMicroseconds();
-	if (lastSh4ThreadCpuTime != 0 && current >= lastSh4ThreadCpuTime)
-		sh4WorkMicroseconds.fetch_add(current - lastSh4ThreadCpuTime, std::memory_order_relaxed);
-	lastSh4ThreadCpuTime = current;
+	sh4ThreadCpuSampler.clear();
+}
+
+void recordSh4Vblank()
+{
+	if (isCollectionEnabled())
+		vblankCount.fetch_add(1, std::memory_order_relaxed);
 }
 
 void recordPvrWork(std::uint64_t microseconds)
 {
-	pvrWorkMicroseconds.fetch_add(microseconds, std::memory_order_relaxed);
+	if (isCollectionEnabled())
+		pvrWorkMicroseconds.fetch_add(microseconds, std::memory_order_relaxed);
 }
 
 void recordRenderedResolution(int rawWidth, int rawHeight, int renderedWidth, int renderedHeight)
 {
+	if (!isCollectionEnabled())
+		return;
 	rawRenderWidth.store(rawWidth, std::memory_order_relaxed);
 	rawRenderHeight.store(rawHeight, std::memory_order_relaxed);
 	performance_overlay::renderedWidth.store(renderedWidth, std::memory_order_relaxed);
@@ -625,12 +836,16 @@ void recordRenderedResolution(int rawWidth, int rawHeight, int renderedWidth, in
 
 void recordOutputViewport(int width, int height)
 {
+	if (!isCollectionEnabled())
+		return;
 	outputViewportWidth.store(width, std::memory_order_relaxed);
 	outputViewportHeight.store(height, std::memory_order_relaxed);
 }
 
 void recordPresentedFrame()
 {
+	if (!isCollectionEnabled())
+		return;
 	const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
 		std::chrono::steady_clock::now().time_since_epoch()).count());
 	std::lock_guard<std::mutex> lock(presentSamples.mutex);
@@ -651,6 +866,8 @@ void recordPresentedFrame()
 
 void recordPvrScene(bool displayScene, std::uint32_t primitiveCount, std::uint32_t vertexCount)
 {
+	if (!isCollectionEnabled())
+		return;
 	// This mirrors DuckStation's internal-frame counter: a completed PVR scene
 	// for the Dreamcast display, excluding render-to-texture passes. It must not
 	// be derived from Present(), which can repeat or omit a host output frame.
@@ -663,30 +880,50 @@ void recordPvrScene(bool displayScene, std::uint32_t primitiveCount, std::uint32
 
 void recordRendererPass(std::uint32_t count)
 {
-	rendererPassCount.fetch_add(count, std::memory_order_relaxed);
+	if (isCollectionEnabled())
+		rendererPassCount.fetch_add(count, std::memory_order_relaxed);
 }
 
-void recordGpuTimingSample(std::uint64_t nanoseconds)
+void recordGpuTimingSample(std::uint64_t nanoseconds, std::uint32_t epoch)
 {
-	gpuTimingNanoseconds.fetch_add(nanoseconds, std::memory_order_relaxed);
-	gpuTimingSampleCount.fetch_add(1, std::memory_order_relaxed);
+	// Timestamp queries complete asynchronously. Accept only samples started in
+	// the current enabled timing interval so an old query cannot contaminate a
+	// later Off-to-On or metric re-enable interval.
+	if (isCollectionEnabled() && isGpuTimingRequested()
+			&& epoch == gpuTimingEpoch.load(std::memory_order_acquire))
+	{
+		gpuTimingNanoseconds.fetch_add(nanoseconds, std::memory_order_relaxed);
+		gpuTimingSampleCount.fetch_add(1, std::memory_order_relaxed);
+	}
 }
 
 void setGpuTimingSupported(bool supported)
 {
-	gpuTimingSupported.store(supported, std::memory_order_relaxed);
+	if (isCollectionEnabled())
+		gpuTimingSupported.store(supported, std::memory_order_relaxed);
 }
 
 bool isGpuTimingRequested()
 {
-	return gpuTimingRequested.load(std::memory_order_relaxed);
+	return gpuTimingRequested.load(std::memory_order_acquire);
 }
 
-void recordPvrRenderSchedule(std::uint32_t renderCycles, std::uint32_t frameCycles)
+std::uint32_t getGpuTimingEpoch()
 {
-	if (frameCycles == 0)
+	return gpuTimingEpoch.load(std::memory_order_acquire);
+}
+
+void recordPvrRenderSchedule(std::uint32_t renderCycles)
+{
+	if (!isCollectionEnabled())
 		return;
 	pvrScheduledRenderCycles.fetch_add(renderCycles, std::memory_order_relaxed);
+}
+
+void recordPvrFrameBudget(std::uint32_t frameCycles)
+{
+	if (!isCollectionEnabled() || frameCycles == 0)
+		return;
 	pvrVideoFrameCycles.fetch_add(frameCycles, std::memory_order_relaxed);
 }
 
@@ -715,17 +952,38 @@ void draw()
 	const int overlayMode = mode();
 	if (overlayMode == 0)
 	{
-		// Start a fresh interval when the overlay is re-enabled instead of
-		// treating the time it was hidden as an emulator performance sample.
-		metrics.lastSampleTime = 0;
-		gpuTimingRequested.store(false, std::memory_order_relaxed);
-		gpuTimingSupported.store(false, std::memory_order_relaxed);
+		if (collectionEnabled.exchange(false, std::memory_order_acq_rel))
+		{
+			metrics.lastSampleTime = 0;
+			metrics.lastMemorySampleTime = 0;
+			metrics.gpuAdapters.clear();
+			gpuTimingRequested.store(false, std::memory_order_release);
+			gpuTimingSupported.store(false, std::memory_order_relaxed);
+			gpuTimingNanoseconds.store(0, std::memory_order_relaxed);
+			gpuTimingSampleCount.store(0, std::memory_order_relaxed);
+		}
 		return;
 	}
-	gpuTimingRequested.store(overlayMode == 2
-		&& (show("OverlayShowGpuUsage", true) || show("OverlayShowGpuGraph", false)), std::memory_order_relaxed);
+	// Publish collection before producers inspect the gate. updateMetrics()
+	// resets every baseline on the first enabled draw, so no hidden interval is
+	// included when diagnostics are re-enabled.
+	if (!collectionEnabled.load(std::memory_order_relaxed))
+	{
+		collectionEnabled.store(true, std::memory_order_release);
+	}
+	const bool requestGpuTiming = overlayMode == 2
+		&& (show("OverlayShowGpuUsage", true) || show("OverlayShowGpuGraph", false));
+	const bool wasGpuTimingRequested = gpuTimingRequested.load(std::memory_order_relaxed);
+	if (requestGpuTiming && !wasGpuTimingRequested)
+	{
+		// Publish the new generation before enabling producers. An acquire load of
+		// gpuTimingRequested therefore observes the matching epoch.
+		gpuTimingEpoch.fetch_add(1, std::memory_order_relaxed);
+	}
+	gpuTimingRequested.store(requestGpuTiming, std::memory_order_release);
 
-	updateMetrics();
+	const bool showVram = overlayMode == 2 && show("OverlayShowVram", true);
+	updateMetrics(showVram);
 
 	std::vector<std::string> lines;
 	char text[128];
@@ -754,18 +1012,18 @@ void draw()
 		add(show("OverlayShowSh4ExecutionRate", true), formatSh4ExecutionRate());
 		add(show("OverlayShowPvrTimingPressure", true), formatPvrRenderSchedule());
 		add(show("OverlayShowThreadingState"), formatThreadingState());
-		add(show("OverlayShowCpuUsage"), formatSh4Work());
-		add(show("OverlayShowPvrUsage"), formatPvrWork());
+		add(show("OverlayShowCpuUsage", false), formatSh4Work());
+		add(show("OverlayShowPvrUsage", false), formatPvrWork());
 		add(show("OverlayShowResolution"), formatResolution());
 		if (showFrameTimes && metrics.frameTimeValid)
-			std::snprintf(text, sizeof(text), "Frame Times: %.2f ms Min | %.2f ms Avg | %.2f ms Max", metrics.frameTimeMinimum,
+			std::snprintf(text, sizeof(text), i18n::T("Frame Times: %.2f ms Min | %.2f ms Avg | %.2f ms Max"), metrics.frameTimeMinimum,
 				metrics.frameTimeAverage, metrics.frameTimeMaximum);
 		else
-			std::snprintf(text, sizeof(text), "Frame Times: unavailable");
+			std::snprintf(text, sizeof(text), "%s", i18n::T("Frame Times: unavailable"));
 		add(showFrameTimes, text);
 		add(show("OverlayShowGpuStatistics"), formatGpuStatistics());
-		add(show("OverlayShowLatencyStatistics", false), "Latency: N/A (no end to end probe)");
-		add(show("OverlayShowVram"), formatVram());
+		add(show("OverlayShowLatencyStatistics", false), i18n::T("Latency: N/A (no end to end probe)"));
+		add(showVram, formatVram());
 		add(show("OverlayShowRam"), formatRam());
 	}
 
@@ -840,10 +1098,10 @@ void draw()
 			drawNextGraph([&](const ImVec2& position) { drawFrameTimeGraph(drawList, font, fontSize, position, graphWidth, graphHeight, textColor, opacity); });
 		if (showHostCpuGraph)
 			drawNextGraph([&](const ImVec2& position) { drawUsageGraph(drawList, font, fontSize, position, graphWidth, graphHeight, textColor, opacity,
-				"Host CPU", metrics.hostProcessCpuHistory, metrics.hostSystemCpuHistory.count >= 2 ? &metrics.hostSystemCpuHistory : nullptr); });
+				i18n::T("Host CPU"), metrics.hostProcessCpuHistory, metrics.hostSystemCpuHistory.count >= 2 ? &metrics.hostSystemCpuHistory : nullptr); });
 		if (showGpuGraph)
 			drawNextGraph([&](const ImVec2& position) { drawUsageGraph(drawList, font, fontSize, position, graphWidth, graphHeight, textColor, opacity,
-				"Host GPU", metrics.gpuUsageHistory); });
+				i18n::T("Host GPU"), metrics.gpuUsageHistory); });
 	}
 }
 

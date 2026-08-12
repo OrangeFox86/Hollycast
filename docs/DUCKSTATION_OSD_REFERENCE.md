@@ -73,14 +73,14 @@ The current HollyCast implementation is in
 | DuckStation value | HollyCast value today | Important difference |
 | --- | --- | --- |
 | FPS | `metrics.gameFps`, from completed non-RTT PVR scenes | Counts distinct screen PVR scenes, matching DuckStation's internal game-frame meaning. |
-| VPS | `metrics.vps`, from `vblankCount` and `sampleSh4Thread()` | Counts Dreamcast vblank samples. This is an emulated timing signal. |
+| VPS | `metrics.vps`, from `vblankCount` and `recordSh4Vblank()` | Counts Dreamcast vblank samples. This is an emulated timing signal. |
 | Output FPS | `metrics.outputFps`, from `recordPresentedFrame()` | Counts successful host presents. It is an optional display-cadence diagnostic, not DuckStation's FPS counter. |
 | Speed | `formatSpeed()` | Uses VPS against PAL/NTSC target and fast-forward settings. |
-| CPU | `Host CPU` and `Host CPU (SH4 Thread)` | `Host CPU` separates the HollyCast process share of all logical cores from total device use. The SH4-thread line is a supporting single-core diagnostic, not Dreamcast SH4 saturation. |
+| CPU | `Host CPU` and `Host CPU (SH4 Thread)` | `Host CPU` separates the HollyCast process share of all logical cores from total device use. The SH4-thread line samples the registered execution thread independently of vblank, so a stalled SH4 loop remains visible; it is still host single-core usage, not Dreamcast SH4 saturation. |
 | RNDR | `Host CPU (PVR Renderer)` | PVR renderer host-thread CPU work. It exposes emulator and driver-preparation cost, not hardware GPU utilization. |
 | Emulated CPU | `Dreamcast SH4: target execution rate` | Emulated SH4 cycles advanced relative to the real-time target. Below 100% means HollyCast is not advancing SH4 time at the expected rate. |
-| Emulated GPU `U` | `Dreamcast PVR: scheduled frame budget` | The scheduled renderer-complete delay divided by the current Dreamcast video-frame budget. It is scheduler pressure, not a complete PVR busy-cycle percentage. |
-| GPU | `Host GPU: percent (ms/present)` | Uses non-blocking timestamp queries on Vulkan, OpenGL/GLES, and DirectX 11. It is GPU execution time in HollyCast's render/present path, not total device utilization. DirectX 9 clearly reports unsupported. |
+| Emulated GPU `U` | `Dreamcast PVR: scheduled frame pressure` | All renderer-complete delays scheduled during the sample divided by one active Dreamcast video-frame budget per vblank. Multiple renders accumulate, and values can exceed 100%. It is scheduler pressure, not a complete PVR busy-cycle percentage. |
+| GPU | `Host GPU: percent (ms/rendered frame)` | Uses non-blocking timestamp queries on Vulkan, OpenGL/GLES, DirectX 11, and DirectX 9. It is GPU execution time for displayed, non-RTT renderer frames, not total device utilization. Standalone iOS OpenGLES reports unavailable because it does not use the GLAD timer-query implementation. |
 | GPU statistics | `formatGpuStatistics()` | Reports API, PVR primitive batches (`PVR P`), PVR vertices (`V`), PVR render passes (`RP`), and texture-upload rate (`TU/s`). These are not host API draw-call or copy counters. |
 | Resolution | `formatResolution()` | Reports raw, rendered, viewport, and output dimensions. |
 | Frame times | Present-interval average/min/max and 152-sample graph | These are successful-present intervals rather than full emulation frame-start intervals. |
@@ -95,7 +95,7 @@ The Full OSD starts with four intentionally separate readings:
 1. **Host CPU**: HollyCast's share of all logical CPU capacity and total device
    CPU use. Use the supporting SH4/PVR host-thread rows to find one saturated
    emulation thread on a multicore device.
-2. **Host GPU**: timestamped backend execution time. `ms/present` is the most
+2. **Host GPU**: timestamped backend execution time. `ms/rendered frame` is the most
    direct comparison with the 16.67 ms budget at 60 FPS.
 3. **Dreamcast SH4**: emulated SH4 execution rate versus its real-time target.
    It indicates whether SH4 time is advancing fast enough, not host CPU use.
@@ -108,11 +108,9 @@ and Host GPU graph options use 152 one-second samples. The CPU graph has a
 HollyCast-process line and a total-device line; the GPU graph only appears
 when the backend is returning real timestamp samples.
 
-`getTrackedTextureCount()` is **not** VRAM usage and is not currently shown in
-the OSD. It counts texture-cache entries after their first backend upload and
-decrements when those cache entries are destroyed. It cannot say how many
-bytes are resident in host VRAM at that instant, so the renderer-statistics
-description deliberately does not call it a VRAM or live-texture metric.
+The renderer-statistics row reports texture uploads per second. It deliberately
+does not estimate live texture count or VRAM residency; those require
+authoritative backend or operating-system data.
 
 ## Implementation plan
 
@@ -132,10 +130,11 @@ description deliberately does not call it a VRAM or live-texture metric.
    renderer interface. The line stays explicitly PVR-side so it cannot be read
    as a host graphics-driver counter.
 2. Add four-slot, non-blocking GPU timestamp rings for Vulkan, OpenGL/GLES,
-   and DirectX 11. Each sample is collected only after its completion fence or
-   query result is ready. DirectX 9 remains unavailable rather than guessed.
-3. Record the Dreamcast PVR renderer-complete delay scheduled by `spg.cpp` as
-   a share of the active Dreamcast video-frame budget.
+   DirectX 11, and DirectX 9. Each sample is collected only after its completion
+   fence or query result is ready. Standalone iOS OpenGLES remains explicitly
+   unavailable until it has a native timer-query implementation.
+3. Accumulate every Dreamcast PVR renderer-complete delay scheduled by `spg.cpp`
+   and divide by one active Dreamcast video-frame budget per vblank.
 
 ### Later renderer-counter work
 

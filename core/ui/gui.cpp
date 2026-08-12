@@ -1750,7 +1750,11 @@ static float fps = -1;
 
 static std::string getFPSNotification()
 {
-	if (config::ShowFPS && performance_overlay::mode() == 0)
+	// Minimal and Full own the frame-rate presentation while active. Keeping
+	// the lightweight counter exclusive to Off avoids overlapping OSDs; the
+	// settings screen exposes the corresponding FPS control for each mode.
+	const bool showLightweightFps = config::ShowFPS && performance_overlay::mode() == 0;
+	if (showLightweightFps)
 	{
 		u64 now = getTimeMs();
 		if (now - LastFPSTime >= 1000) {

@@ -478,11 +478,11 @@ void DX11Renderer::setupPixelShaderConstants()
 
 bool DX11Renderer::Render()
 {
+	const bool is_rtt = rendContext->isRTT;
 #ifndef LIBRETRO
-	DX11GpuTimingScope gpuTiming(DX11Context::Instance());
+	DX11GpuTimingScope gpuTiming(DX11Context::Instance(), !is_rtt);
 #endif
 	resetContextState();
-	bool is_rtt = rendContext->isRTT;
 	if (!is_rtt)
 	{
 		resize(rendContext->framebufferWidth, rendContext->framebufferHeight);

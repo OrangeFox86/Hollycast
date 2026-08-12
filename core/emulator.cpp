@@ -60,6 +60,28 @@ settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
 static bool skipAutoSaveOnNextUnload = false;
 
+#ifndef LIBRETRO
+// The performance overlay keeps a native reference to the SH4 thread so it can
+// sample CPU time even when that thread is stalled before its next vblank.
+// Scope ownership guarantees the native reference is released on every exit.
+class Sh4ThreadSampleRegistration
+{
+public:
+	Sh4ThreadSampleRegistration()
+	{
+		performance_overlay::resetSh4ThreadSample();
+	}
+
+	~Sh4ThreadSampleRegistration()
+	{
+		performance_overlay::clearSh4ThreadSample();
+	}
+
+	Sh4ThreadSampleRegistration(const Sh4ThreadSampleRegistration&) = delete;
+	Sh4ThreadSampleRegistration& operator=(const Sh4ThreadSampleRegistration&) = delete;
+};
+#endif
+
 void dc_skipAutoSaveOnNextUnload()
 {
 	skipAutoSaveOnNextUnload = true;
@@ -853,6 +875,9 @@ void Emulator::stop()
 		nvmem::saveFiles();
 		EventManager::event(Event::Pause);
 #endif
+#ifndef LIBRETRO
+		performance_overlay::clearSh4ThreadSample();
+#endif
 	}
 }
 
@@ -1039,7 +1064,7 @@ void Emulator::start()
 		threadResult = std::async(std::launch::async, [this] {
 				ThreadName _("Flycast-emu");
 #ifndef LIBRETRO
-				performance_overlay::resetSh4ThreadSample();
+				const Sh4ThreadSampleRegistration sh4ThreadSampleRegistration;
 #endif
 				InitAudio();
 
@@ -1127,9 +1152,7 @@ bool Emulator::render()
 void Emulator::vblank()
 {
 #ifndef LIBRETRO
-	// Vblank runs on the SH4 execution thread in both threading modes, so it
-	// provides a live sample without waiting for the long-running CPU loop to exit.
-	performance_overlay::sampleSh4Thread();
+	performance_overlay::recordSh4Vblank();
 #endif
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());

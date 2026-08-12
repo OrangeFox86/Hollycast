@@ -20,6 +20,9 @@
 #include "xbrz/xbrz.h"
 #include "hw/pvr/pvr_mem.h"
 #include "hw/mem/addrspace.h"
+#ifndef LIBRETRO
+#include "ui/performance_overlay.h"
+#endif
 
 #include <mutex>
 #include <xxhash.h>
@@ -30,13 +33,7 @@
 
 extern bool pal_needs_update;
 
-static std::atomic<u32> trackedTextureCount { 0 };
 static std::atomic<u64> textureUploadCount { 0 };
-
-u32 getTrackedTextureCount()
-{
-	return trackedTextureCount.load(std::memory_order_relaxed);
-}
 
 u64 getTextureUploadCount()
 {
@@ -411,20 +408,14 @@ BaseTextureCacheData::BaseTextureCacheData(TSP tsp, TCW tcw, int area)
 	}
 }
 
-BaseTextureCacheData::~BaseTextureCacheData()
-{
-	if (trackedOnGpu)
-		trackedTextureCount.fetch_sub(1, std::memory_order_relaxed);
-}
+BaseTextureCacheData::~BaseTextureCacheData() = default;
 
 void BaseTextureCacheData::recordTextureUpload()
 {
-	textureUploadCount.fetch_add(1, std::memory_order_relaxed);
-	if (!trackedOnGpu)
-	{
-		trackedTextureCount.fetch_add(1, std::memory_order_relaxed);
-		trackedOnGpu = true;
-	}
+#ifndef LIBRETRO
+	if (performance_overlay::isCollectionEnabled())
+		textureUploadCount.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 void BaseTextureCacheData::ComputeHash()

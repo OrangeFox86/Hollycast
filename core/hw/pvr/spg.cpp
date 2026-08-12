@@ -162,6 +162,12 @@ static int spg_line_sched(int tag, int cycles, int jitter, void *arg)
 		// Vblank
 		if (prv_cur_scanline == 0)
 		{
+#ifndef LIBRETRO
+			// Accrue one active video-frame budget per vblank. Scheduled renders
+			// are accumulated independently, so multiple renders increase the
+			// pressure instead of being averaged away.
+			performance_overlay::recordPvrFrameBudget(spg_getFrameCycles());
+#endif
 			if (SPG_CONTROL.interlace)
 				SPG_STATUS.fieldnum = ~SPG_STATUS.fieldnum;
 			else
@@ -318,7 +324,7 @@ void scheduleRenderDone(TA_context *cntx)
 	// This is the renderer-complete delay scheduled into Dreamcast time. It
 	// deliberately measures emulated PVR timing, not host GPU execution time.
 	if (cntx != nullptr)
-		performance_overlay::recordPvrRenderSchedule(static_cast<u32>(cycles), spg_getFrameCycles());
+		performance_overlay::recordPvrRenderSchedule(static_cast<u32>(cycles));
 	#endif
 	sh4_sched_request(render_end_schid, cycles);
 }

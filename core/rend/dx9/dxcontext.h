@@ -71,6 +71,7 @@ private:
 	void term();
 	void resetDevice();
 	bool initGpuTiming();
+	void termGpuTiming();
 	void pollGpuTiming();
 
 	WinLibLoader d3d9Library{ "D3D9.DLL" };
@@ -92,6 +93,7 @@ private:
 		ComPtr<IDirect3DQuery9> frequency;
 		ComPtr<IDirect3DQuery9> start;
 		ComPtr<IDirect3DQuery9> end;
+		u32 epoch = 0;
 	};
 	static constexpr std::size_t GpuTimingQueryCount = 4;
 	std::array<GpuTimingQuery, GpuTimingQueryCount> gpuTimingQueries {};
@@ -105,17 +107,22 @@ private:
 class DX9GpuTimingScope
 {
 public:
-	explicit DX9GpuTimingScope(DXContext *context) : context(context)
+	explicit DX9GpuTimingScope(DXContext *context, bool enabled)
+		: context(enabled ? context : nullptr)
 	{
-		context->BeginGpuTiming();
+		if (this->context != nullptr)
+			this->context->BeginGpuTiming();
 	}
 
 	~DX9GpuTimingScope()
 	{
-		context->EndGpuTiming();
+		if (context != nullptr)
+			context->EndGpuTiming();
 	}
+	DX9GpuTimingScope(const DX9GpuTimingScope&) = delete;
+	DX9GpuTimingScope& operator=(const DX9GpuTimingScope&) = delete;
 
 private:
-	DXContext *context;
+	DXContext *const context;
 };
 #endif

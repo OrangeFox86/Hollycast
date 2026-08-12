@@ -1327,10 +1327,11 @@ void OpenGLRenderer::Term()
 bool OpenGLRenderer::Render()
 {
 	saveCurrentFramebuffer();
-	beginGpuTiming();
+	const bool is_rtt = gl.rendContext->isRTT;
+	if (!is_rtt)
+		beginGpuTiming();
 	renderFrame(gl.rendContext->framebufferWidth, gl.rendContext->framebufferHeight);
-	if (gl.rendContext->isRTT) {
-		endGpuTiming();
+	if (is_rtt) {
 		restoreCurrentFramebuffer();
 		return false;
 	}
@@ -1350,7 +1351,7 @@ bool OpenGLRenderer::Render()
 
 void OpenGLRenderer::initGpuTiming()
 {
-#ifndef LIBRETRO
+#if !defined(LIBRETRO) && !defined(TARGET_IPHONE)
 	gpuTimingAvailable = gl.is_gles ? GLAD_GL_EXT_disjoint_timer_query : GLAD_GL_ARB_timer_query;
 	if (!gpuTimingAvailable)
 		return;
@@ -1366,12 +1367,16 @@ void OpenGLRenderer::initGpuTiming()
 			return;
 		}
 	}
+#elif !defined(LIBRETRO)
+	// iOS uses the native OpenGLES headers rather than GLAD. Keep GPU timing
+	// explicitly unavailable until a native timer-query implementation exists.
+	performance_overlay::setGpuTimingSupported(false);
 #endif
 }
 
 void OpenGLRenderer::termGpuTiming()
 {
-#ifndef LIBRETRO
+#if !defined(LIBRETRO) && !defined(TARGET_IPHONE)
 	if (gpuTimingQueries[0] != 0)
 	{
 		if (gl.is_gles)
@@ -1379,9 +1384,12 @@ void OpenGLRenderer::termGpuTiming()
 		else
 			glDeleteQueries(static_cast<GLsizei>(gpuTimingQueries.size()), gpuTimingQueries.data());
 	}
+#endif
+#ifndef LIBRETRO
 	performance_overlay::setGpuTimingSupported(false);
 #endif
 	gpuTimingQueries = {};
+	gpuTimingEpochs = {};
 	gpuTimingReadIndex = 0;
 	gpuTimingWriteIndex = 0;
 	gpuTimingWaitingCount = 0;
@@ -1391,7 +1399,7 @@ void OpenGLRenderer::termGpuTiming()
 
 void OpenGLRenderer::pollGpuTiming()
 {
-#ifndef LIBRETRO
+#if !defined(LIBRETRO) && !defined(TARGET_IPHONE)
 	if (!gpuTimingAvailable)
 		return;
 
@@ -1420,7 +1428,8 @@ void OpenGLRenderer::pollGpuTiming()
 				glGetQueryObjectui64vEXT(query, GL_QUERY_RESULT_EXT, &nanoseconds);
 			else
 				glGetQueryObjectui64v(query, GL_QUERY_RESULT, &nanoseconds);
-			performance_overlay::recordGpuTimingSample(static_cast<std::uint64_t>(nanoseconds));
+			performance_overlay::recordGpuTimingSample(
+				static_cast<std::uint64_t>(nanoseconds), gpuTimingEpochs[gpuTimingReadIndex]);
 		}
 		gpuTimingReadIndex = (gpuTimingReadIndex + 1) % GpuTimingQueryCount;
 		--gpuTimingWaitingCount;
@@ -1430,17 +1439,20 @@ void OpenGLRenderer::pollGpuTiming()
 
 void OpenGLRenderer::beginGpuTiming()
 {
-#ifndef LIBRETRO
+#if !defined(LIBRETRO) && !defined(TARGET_IPHONE)
+	// Retire completed queries even while timing is disabled so samples from a
+	// previous enabled interval cannot leak into a later one.
+	pollGpuTiming();
 	if (!performance_overlay::isGpuTimingRequested())
 		return;
 	performance_overlay::setGpuTimingSupported(gpuTimingAvailable);
 	if (!gpuTimingAvailable)
 		return;
 
-	pollGpuTiming();
 	if (gpuTimingActive || gpuTimingWaitingCount == GpuTimingQueryCount)
 		return;
 	const GLuint query = gpuTimingQueries[gpuTimingWriteIndex];
+	gpuTimingEpochs[gpuTimingWriteIndex] = performance_overlay::getGpuTimingEpoch();
 	if (gl.is_gles)
 		glBeginQueryEXT(GL_TIME_ELAPSED_EXT, query);
 	else
@@ -1451,7 +1463,7 @@ void OpenGLRenderer::beginGpuTiming()
 
 void OpenGLRenderer::endGpuTiming()
 {
-#ifndef LIBRETRO
+#if !defined(LIBRETRO) && !defined(TARGET_IPHONE)
 	if (!gpuTimingActive)
 		return;
 	if (gl.is_gles)

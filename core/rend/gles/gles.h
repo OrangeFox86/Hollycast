@@ -566,6 +566,7 @@ protected:
 private:
 	static constexpr std::size_t GpuTimingQueryCount = 4;
 	std::array<GLuint, GpuTimingQueryCount> gpuTimingQueries {};
+	std::array<u32, GpuTimingQueryCount> gpuTimingEpochs {};
 	std::size_t gpuTimingReadIndex = 0;
 	std::size_t gpuTimingWriteIndex = 0;
 	std::size_t gpuTimingWaitingCount = 0;
