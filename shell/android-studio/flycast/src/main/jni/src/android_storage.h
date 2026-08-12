@@ -34,10 +34,10 @@ public:
 		jstorage = env->NewGlobalRef(storage);
 		jni::Class clazz(env->GetObjectClass(storage));
 		jopenFile = env->GetMethodID(clazz, "openFile", "(Ljava/lang/String;Ljava/lang/String;)I");
-		jlistContent = env->GetMethodID(clazz, "listContent", "(Ljava/lang/String;)[Lcom/flycast/emulator/FileInfo;");
+		jlistContent = env->GetMethodID(clazz, "listContent", "(Ljava/lang/String;)[Lcom/hollycast/emulator/FileInfo;");
 		jgetParentUri = env->GetMethodID(clazz, "getParentUri", "(Ljava/lang/String;)Ljava/lang/String;");
 		jgetSubPath = env->GetMethodID(clazz, "getSubPath", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-		jgetFileInfo = env->GetMethodID(clazz, "getFileInfo", "(Ljava/lang/String;)Lcom/flycast/emulator/FileInfo;");
+		jgetFileInfo = env->GetMethodID(clazz, "getFileInfo", "(Ljava/lang/String;)Lcom/hollycast/emulator/FileInfo;");
 		jexists = env->GetMethodID(clazz, "exists", "(Ljava/lang/String;)Z");
 		jaddStorage = env->GetMethodID(clazz, "addStorage", "(ZZLjava/lang/String;Ljava/lang/String;)Z");
 		jsaveScreenshot = env->GetMethodID(clazz, "saveScreenshot", "(Ljava/lang/String;[B)V");
@@ -274,17 +274,17 @@ void exportHomeDirectory() {
 
 }	// namespace hostfs
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_AndroidStorage_addStorageCallback(JNIEnv *env, jobject obj, jstring path)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_AndroidStorage_addStorageCallback(JNIEnv *env, jobject obj, jstring path)
 {
 	static_cast<hostfs::AndroidStorage&>(hostfs::customStorage()).doStorageCallback(path);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_AndroidStorage_init(JNIEnv *env, jobject jstorage)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_AndroidStorage_init(JNIEnv *env, jobject jstorage)
 {
 	static_cast<hostfs::AndroidStorage&>(hostfs::customStorage()).init(env, jstorage);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_AndroidStorage_reloadConfig(JNIEnv *env)
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_AndroidStorage_reloadConfig(JNIEnv *env)
 {
 	if (config::open())
 	{

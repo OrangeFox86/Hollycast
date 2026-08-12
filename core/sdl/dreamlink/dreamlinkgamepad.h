@@ -29,9 +29,8 @@
 #include "../sdl_gamepad.h"
 #include "sdldreamlink.h"
 
-#include <functional>
 #include <memory>
-#include <array>
+#include <string>
 
 class DreamLinkGamepad : public SDLGamepad
 {

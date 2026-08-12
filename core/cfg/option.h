@@ -18,16 +18,16 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
-#include <string>
-#include <vector>
-#include <array>
-#include <cmath>
-#include <type_traits>
 #include "cfg.h"
 #include "hw/maple/maple_cfg.h"
 #ifdef LIBRETRO
 #include <libretro.h>
 #endif
+#include <array>
+#include <cmath>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace config {
 
@@ -564,6 +564,7 @@ extern Option<int> VirtualGamepadTransparency;
 extern std::array<Option<MapleDeviceType>, 4> MapleMainDevices;
 extern std::array<std::array<Option<MapleDeviceType>, 2>, 4> MapleExpansionDevices;
 extern std::array<std::array<Option<int>, 2>, 4> NetworkExpansionDevices;
+extern std::array<std::array<Option<std::string, false>, 2>, 4> MapleVmuSlotFileNames;
 // When true, automatically change the peripheral setting to DreamLink when a DreamLink controller attaches
 extern std::array<std::array<Option<bool>, 2>, 4> DreamLinkSelect;
 extern Option<bool> PerGameVmu;

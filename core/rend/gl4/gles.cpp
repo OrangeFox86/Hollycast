@@ -701,10 +701,12 @@ struct OpenGL4Renderer : OpenGLRenderer
 	bool Render() override
 	{
 		saveCurrentFramebuffer();
-		beginGpuTiming();
+		// Render-to-texture passes are not displayed frames and must not pollute
+		// the Host GPU timing sample or incur timestamp-query overhead.
+		if (!gl.rendContext->isRTT)
+			beginGpuTiming();
 		renderFrame(gl.rendContext->framebufferWidth, gl.rendContext->framebufferHeight);
 		if (gl.rendContext->isRTT) {
-			endGpuTiming();
 			restoreCurrentFramebuffer();
 			return false;
 		}

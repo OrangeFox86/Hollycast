@@ -692,7 +692,7 @@ vk::CommandBuffer ScreenDrawer::BeginRenderPass()
 		vk::CommandBuffer commandBuffer = commandPool->Allocate(true);
 		commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 		// Measure only the displayed renderer frame. Render-to-texture scenes
-		// are separate work and must not inflate ms/present.
+		// are separate work and must not inflate ms/rendered frame.
 		GetContext()->BeginGpuTiming(commandBuffer);
 
 		if (transitionNeeded[GetCurrentImage()])

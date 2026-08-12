@@ -44,9 +44,14 @@ if(APPLE)
 endif()
 
 if(LIBRETRO)
-	project(flycast_libretro)
+	project(Hollycast_libretro)
 else()
-	project(flycast)
+	project(Hollycast)
+endif()
+
+option(FLYCAST_PRESEED_DARWIN_XCODE_CHECKS "Pre-seed stable macOS feature checks for faster Xcode generation" ON)
+if(FLYCAST_PRESEED_DARWIN_XCODE_CHECKS)
+	include(DarwinXcodeProbeCache)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -86,6 +91,7 @@ option(USE_HOST_SDL "Use host SDL library" ${USE_HOST_SDL_DEFAULT})
 option(USE_HOST_LIBCHDR "Use host libchdr" OFF)
 option(USE_OPENMP "Use OpenMP if available" ON)
 option(USE_VULKAN "Build with Vulkan support" ON)
+set(MOLTENVK_DYLIB "" CACHE FILEPATH "Path to macOS MoltenVK dylib for macOS Vulkan builds")
 option(USE_DX9 "Build with Direct3D 9 support" ON)
 option(USE_DX11 "Build with Direct3D 11 support" ON)
 option(LIBRETRO "Build libretro core" OFF)
@@ -99,9 +105,14 @@ option(USE_BREAKPAD "Build and link with breakpad library" ON)
 option(USE_LUA "Build with Lua support" ON)
 option(ENABLE_GDB_SERVER "Build with GDB debugging support" OFF)
 option(ENABLE_DC_PROFILER "Build with support for target machine (SH4) profiler" OFF)
-option(ENABLE_FC_PROFILER "Build with support for host app (Flycast) profiler" OFF)
+option(ENABLE_FC_PROFILER "Build with support for host app (Hollycast) profiler" OFF)
 option(USE_DISCORD "Use Discord Presence API" OFF)
 option(USE_LIBCDIO "Use libcdio for CDROM access" OFF)
+
+if(ASAN AND MSVC)
+	add_compile_options(/fsanitize=address)
+	add_link_options(/INCREMENTAL:NO)
+endif()
 
 if(IOS AND NOT LIBRETRO)
 	set(USE_VULKAN OFF CACHE BOOL "Force vulkan off" FORCE)
@@ -174,7 +185,7 @@ if(NINTENDO_SWITCH)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE LIBRETRO HAVE_LIBNX HAVE_OPENGL HAVE_OIT)
 		find_path(GLEXT_H_INCLUDE_DIR NAMES GL/glext.h REQUIRED)
 		target_include_directories(${PROJECT_NAME} PRIVATE ${GLEXT_H_INCLUDE_DIR})
-		set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "flycast_libretro_libnx")
+		set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast_libretro_libnx")
 		set(CMAKE_STATIC_LIBRARY_PREFIX "")
 	else()
 		add_executable(${PROJECT_NAME} core/emulator.cpp)
@@ -203,7 +214,7 @@ elseif(LIBRETRO)
 			set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
 		endif()
 	endif()
-	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "flycast_libretro"
+	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast_libretro"
 	  XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
 	  XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
     )
@@ -276,10 +287,6 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
 		CMAKE_CXX_STANDARD 20
 		CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if(NOT LIBRETRO)
-	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast")
-endif()
 
 if(WINDOWS_STORE)
 	set(USE_OPENGL OFF)
@@ -403,26 +410,26 @@ if(USE_BREAKPAD AND NOT LIBRETRO)
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a x86_64
 					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Hollycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Hollycast-x64.sym
+					$<TARGET_FILE:Hollycast> > ../symbols/Hollycast-x64.sym
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a arm64
 					-g ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Hollycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Hollycast-arm64.sym
+					$<TARGET_FILE:Hollycast> > ../symbols/Hollycast-arm64.sym
 			)
 		else()
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 				COMMAND sleep 20
 				COMMAND mkdir -p ../symbols
-				COMMAND dsymutil $<TARGET_FILE:flycast>
+				COMMAND dsymutil $<TARGET_FILE:Hollycast>
 					-o ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a x86_64
 					-g ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Hollycast-x64.sym
+					$<TARGET_FILE:Hollycast> > ../symbols/Hollycast-x64.sym
 				COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build/breakpad/dump_syms
 					-a arm64
 					-g ${CMAKE_CURRENT_BINARY_DIR}/Hollycast.app.dSYM
-					$<TARGET_FILE:flycast> > ../symbols/Hollycast-arm64.sym
+					$<TARGET_FILE:Hollycast> > ../symbols/Hollycast-arm64.sym
 			)
 		endif()
 	endif()
@@ -697,7 +704,28 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 if(ASAN)
-	if(ANDROID)
+	if(MSVC)
+		# Copy address sanitizer runtime dll to output
+		if(ARCHITECTURE STREQUAL "x86_64")
+			set(MSVC_ASAN_ARCH x86_64)
+		elseif(ARCHITECTURE STREQUAL "x86")
+			set(MSVC_ASAN_ARCH i386)
+		elseif(ARCHITECTURE STREQUAL "arm64")
+			set(MSVC_ASAN_ARCH aarch64)
+		else()
+			message(FATAL_ERROR "MSVC AddressSanitizer is not supported for ${ARCHITECTURE}")
+		endif()
+		get_filename_component(MSVC_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+		set(MSVC_ASAN_RUNTIME "${MSVC_COMPILER_DIR}/clang_rt.asan_dynamic-${MSVC_ASAN_ARCH}.dll")
+		if(NOT EXISTS "${MSVC_ASAN_RUNTIME}")
+			message(FATAL_ERROR "MSVC AddressSanitizer runtime not found: ${MSVC_ASAN_RUNTIME}")
+		endif()
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MSVC_ASAN_RUNTIME}"
+				"$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+			VERBATIM)
+	elseif(ANDROID)
 		target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 		set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS -fsanitize=address)
 	else()
@@ -930,7 +958,7 @@ if(USE_DISCORD AND NOT LIBRETRO)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE USE_DISCORD)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE flycast::res)
+target_link_libraries(${PROJECT_NAME} PRIVATE Hollycast::res)
 
 if(LIBRETRO)
 	target_include_directories(${PROJECT_NAME} PRIVATE core/deps/libretro-common/include)
@@ -1264,7 +1292,9 @@ if(NOT LIBRETRO)
 		target_compile_options(swappy_static PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-vla-cxx-extension>)
 		target_compile_definitions(swappy_static PRIVATE ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE core/deps/gamesdk/games-frame-pacing/include)
+		target_include_directories(${PROJECT_NAME} PRIVATE
+				core/deps/gamesdk/include
+				core/deps/gamesdk/games-frame-pacing/include)
 		target_link_libraries(${PROJECT_NAME} PRIVATE swappy_static)
 		target_compile_definitions(${PROJECT_NAME} PRIVATE SWAPPY)
 
@@ -1366,7 +1396,7 @@ if(NOT LIBRETRO)
 			target_link_libraries(${PROJECT_NAME} PRIVATE Syphon)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E copy ${SYPHON_METALLIB}
-				$<TARGET_FILE_DIR:flycast>/../Resources/)
+				$<TARGET_FILE_DIR:Hollycast>/../Resources/)
 			target_compile_definitions(${PROJECT_NAME} PRIVATE VIDEO_ROUTING)
 
 			target_sources(${PROJECT_NAME} PRIVATE
@@ -1417,26 +1447,15 @@ if(NOT LIBRETRO)
 				${IOSURFACE_LIBRARY}
 				${MULTITOUCH_SUPPORT_LIBRARY})
 
-			# Determine the source path of MoltenVK
-			if(NOT "$ENV{VULKAN_SDK}" STREQUAL "")
-				message(STATUS "Searching for MoltenVK under VULKAN_SDK: $ENV{VULKAN_SDK}")
-				set(MOLTENVK_SRC "$ENV{VULKAN_SDK}/lib/libMoltenVK.dylib")
-			else()
-				# Fallback assumption (default location after: brew install molten-vk)
-				set(MOLTENVK_SRC "/usr/local/lib/libMoltenVK.dylib")
+			if(USE_VULKAN)
+				set(MOLTENVK_DYLIB_PATH "${MOLTENVK_DYLIB}")
+				if(NOT MOLTENVK_DYLIB_PATH OR NOT EXISTS "${MOLTENVK_DYLIB_PATH}")
+					message(FATAL_ERROR "A macOS MoltenVK dylib is required for macOS Vulkan builds. Run shell/apple/generate_xcode_project.command to download the configured MoltenVK release, or pass -DMOLTENVK_DYLIB=/path/to/libMoltenVK.dylib.")
+				endif()
+				add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E copy "${MOLTENVK_DYLIB_PATH}"
+					$<TARGET_FILE_DIR:Hollycast>/../Frameworks/libMoltenVK.dylib)
 			endif()
-
-			if(NOT EXISTS "${MOLTENVK_SRC}")
-				message(
-					FATAL_ERROR
-					"MoltenVK library not found! Set VULKAN_SDK in environment or install with: brew install molten-vk"
-				)
-			endif()
-			message(STATUS "Found MoltenVK at: ${MOLTENVK_SRC}")
-
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy "${MOLTENVK_SRC}"
-				$<TARGET_FILE_DIR:flycast>/../Frameworks/libvulkan.dylib)
 		endif()
 	elseif(UNIX)
 		if(NOT BUILD_TESTING)
@@ -1501,14 +1520,14 @@ if(NINTENDO_SWITCH)
 			COMMAND ${CMAKE_AR} -x $<TARGET_FILE:chdr-static>
 			COMMAND ${CMAKE_AR} -x $<TARGET_FILE:zip>
 			COMMAND ${CMAKE_AR} -x $<TARGET_FILE:elf>
-			COMMAND ${CMAKE_AR} -x $<TARGET_FILE:flycast::res>
-			COMMAND ${CMAKE_AR} -rs flycast_libretro_libnx.a *.o
+			COMMAND ${CMAKE_AR} -x $<TARGET_FILE:Hollycast::res>
+			COMMAND ${CMAKE_AR} -rs Hollycast_libretro_libnx.a *.o
 			COMMAND rm *.o
 			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 			DEPENDS xxHash::xxhash chdr-static zip ${PROJECT_NAME})
 	else()
-		nx_generate_nacp(flycast.nacp NAME "Hollycast" AUTHOR "The Hollycast Authors" VERSION "${GIT_VERSION}")
-		nx_create_nro(flycast NACP flycast.nacp ICON "${CMAKE_SOURCE_DIR}/shell/switch/flycast.jpeg")
+		nx_generate_nacp(Hollycast.nacp NAME "Hollycast" AUTHOR "The Hollycast Authors" VERSION "${GIT_VERSION}")
+		nx_create_nro(Hollycast NACP Hollycast.nacp ICON "${CMAKE_SOURCE_DIR}/shell/switch/flycast.jpeg")
 	endif()
 endif()
 
@@ -1532,7 +1551,7 @@ if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT LIBRETRO)
 	install(FILES shell/linux/${PROJECT_NAME}.png
 		DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/pixmaps"
 	)
-	install(FILES shell/linux/org.${PROJECT_NAME}.Flycast.metainfo.xml
+	install(FILES shell/linux/org.hollycast.${PROJECT_NAME}.metainfo.xml
 		DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo"
 	)
 	foreach(size 16 32 64 128 256 512)

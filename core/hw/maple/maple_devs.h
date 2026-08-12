@@ -1,15 +1,17 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+ */
 #pragma once
 #include "types.h"
 #include "maple_cfg.h"
 #include "maple_helper.h"
-#include <cmath>
 #include "input/gamepad.h"
 #include "serialize.h"
 #include "hw/hwreg.h"
 #include "hw/sh4/sh4_sched.h"
 
+#include <cmath>
 #include <memory>
-#include <vector>
 
 //! Number of ports (aka buses) on a Dreamcast
 inline constexpr int MAPLE_PORTS = 4;
@@ -344,6 +346,8 @@ struct BaseMIE : public maple_base
 	u32 dma(u32 cmd) override;
 	void reply(u8 code, u8 sizew = 0);
 
+	virtual u8 getExtDeviceMap() const { return maple_GetAttachedDevices(bus_id); }
+
 	virtual void handle_86_subcommand();
 	virtual void firmwareLoaded(u32 hash) {}
 };
@@ -361,6 +365,8 @@ struct RFIDReaderWriter : public BaseMIE
 //
 // Specific Devices
 //
+
+bool buildDefaultVmuImage(u8 *buffer, size_t bufferSize);
 
 struct maple_sega_controller: maple_base
 {
@@ -566,4 +572,9 @@ struct maple_dreamparapara_controller : maple_device
 	MapleDeviceType get_device_type() override;
 	u16 get_state();
 	u32 RawDma(const u32 *buffer_in, u32 buffer_in_len, u32 *buffer_out) override;
+};
+
+struct WccfCamera : public BaseMIE
+{
+	static std::shared_ptr<maple_device> Create();
 };

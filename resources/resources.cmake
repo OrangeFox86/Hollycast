@@ -1,6 +1,6 @@
-cmrc_add_resource_library(flycast-resources ALIAS flycast::res NAMESPACE flycast)
+cmrc_add_resource_library(Hollycast-resources ALIAS Hollycast::res NAMESPACE Hollycast)
 
-cmrc_add_resources(flycast-resources
+cmrc_add_resources(Hollycast-resources
         WHENCE resources
         resources/flash/alienfnt.nvmem.zip	# network settings
         resources/flash/gunsur2.nvmem.zip
@@ -25,14 +25,14 @@ cmrc_add_resources(flycast-resources
         resources/flash/smarinef.nvmem.zip	# standard cabinet
         resources/picture/f355_print_template.png)
 
-cmrc_add_resources(flycast-resources
+cmrc_add_resources(Hollycast-resources
         fonts/printer_ascii8x16.bin.zip
         fonts/printer_ascii12x24.bin.zip
         fonts/printer_kanji16x16.bin.zip
         fonts/printer_kanji24x24.bin.zip)
 
 if(NOT LIBRETRO)
-    cmrc_add_resources(flycast-resources
+    cmrc_add_resources(Hollycast-resources
             fonts/Roboto-Medium.ttf.zip
             fonts/Roboto-Bold.ttf.zip
             fonts/Roboto-Regular.ttf.zip
@@ -40,16 +40,16 @@ if(NOT LIBRETRO)
             fonts/EncodeSans-wdth-wght.ttf.zip
             fonts/fa-solid-900.ttf.zip)
     if(ANDROID OR IOS)
-        cmrc_add_resources(flycast-resources
+        cmrc_add_resources(Hollycast-resources
                 WHENCE resources
                 resources/picture/buttons.png
                 resources/picture/buttons-arcade.png)
     endif()
 endif()
 
-cmrc_add_resources(flycast-resources fonts/biosfont.bin.zip)
+cmrc_add_resources(Hollycast-resources fonts/biosfont.bin.zip)
 
-cmrc_add_resources(flycast-resources
+cmrc_add_resources(Hollycast-resources
 	WHENCE resources
 	resources/i18n/fr.po
 	resources/i18n/hu.po

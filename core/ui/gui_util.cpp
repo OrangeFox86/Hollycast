@@ -18,14 +18,6 @@
     along with reicast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "gui_util.h"
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
-#include <cctype>
-#include <ctime>
-
 #include "types.h"
 #include "stdclass.h"
 #include "oslib/oslib.h"
@@ -43,6 +35,13 @@
 #include "stdclass.h"
 #include "rend/osd.h"
 #include <stb_image.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <future>
+#include <string>
+#include <vector>
 
 using namespace i18n;
 
@@ -188,7 +187,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 				success = callback && callback(false, path);
 			}
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(TARGET_UWP)
 			if (!success)
 				MessageBeep(MB_ICONERROR);
 #endif
