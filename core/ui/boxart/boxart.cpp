@@ -656,6 +656,9 @@ std::string Boxart::getCustomBoxartPath(const GameMedia& media)
 
 std::string Boxart::getLibraryCoverMediaPath(const GameMedia& media)
 {
+	if (config::BoxartSourceMode.get() != static_cast<int>(BoxartSourceMode::CustomThenScraped))
+		return {};
+
 	const auto coverMediaMode = static_cast<config::LibraryCoverMediaMode>(config::LibraryCoverMedia.get());
 	if (coverMediaMode == config::LibraryCoverMediaMode::CurrentArtwork)
 		return {};
