@@ -30,7 +30,7 @@
 #include <utility>
 #include <vector>
 #include <chrono>
-#include <time.h>
+#include <ctime>
 
 void loadGameSpecificSettings();
 void SaveSettings();

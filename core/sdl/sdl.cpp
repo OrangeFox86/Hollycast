@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
+#include <memory>
 
 static SDL_Window* window = NULL;
 static u32 windowFlags;
@@ -422,6 +423,7 @@ void input_sdl_handle()
 							return (sdl_keyboard->get_input_mapping()->get_button_id(0, inputSet) != EMU_BTN_NONE);
 						}
 					};
+
 					if (event.type == SDL_KEYDOWN)
 					{
 						// Alt-Return and F11 toggle full screen
@@ -1039,7 +1041,7 @@ void sdl_window_create()
 			die("error initializing SDL Video subsystem");
 		}
 #if defined(__APPLE__) && defined(USE_VULKAN)
-		SDL_Vulkan_LoadLibrary("libvulkan.dylib");
+		SDL_Vulkan_LoadLibrary("@executable_path/../Frameworks/libMoltenVK.dylib");
 #endif
 	}
 	sdlDeInit.initialized = true;

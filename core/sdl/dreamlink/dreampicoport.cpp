@@ -25,6 +25,7 @@
 
 #include "hw/maple/maple_devs.h"
 #include "hw/maple/maple_if.h"
+#include "ui/boxart/vmu_icon.h"
 #include "ui/gui.h"
 #include "cfg/option.h"
 #include "oslib/i18n.h"
@@ -64,6 +65,16 @@
 
 namespace dream_pico_port
 {
+
+constexpr size_t DPP_VMU_BLOCK_SIZE = 512;
+constexpr size_t DPP_VMU_BLOCK_COUNT = 256;
+constexpr size_t DPP_VMU_FLASH_SIZE = DPP_VMU_BLOCK_SIZE * DPP_VMU_BLOCK_COUNT;
+
+bool vmuIconCachingEnabled(const std::string& gameId)
+{
+	return config::LibraryImageSource.get() != static_cast<int>(config::LibraryImageSourceMode::CurrentArtwork)
+		&& !gameId.empty();
+}
 
 //! A Sega VMU with an optional file back-end
 struct DppVirtualVmu : public maple_sega_vmu
@@ -487,6 +498,13 @@ class DreamPicoPort : public SDLDreamLink
 
 	//! Hardware information determined on instantiation
 	HardwareInfo hw_info;
+	//! Game metadata captured when this device is created or a game starts; settings.content is cleared before termination events.
+	std::string activeGameId;
+	//! Game title paired with activeGameId for VMU icon caching.
+	std::string activeGameTitle;
+	//! Last A1 VMU mirror captured before its Maple device was destroyed.
+	std::array<u8, DPP_VMU_FLASH_SIZE> vmuMirrorSnapshot {};
+	bool vmuMirrorSnapshotAvailable = false;
 	//! The name to return on getName
 	const std::string device_name;
 
@@ -495,6 +513,8 @@ public:
 		SDLDreamLink(true),
 		software_bus(bus),
 		hw_info(parseHardwareInfo(joystick_idx, sdl_joystick)),
+		activeGameId(settings.content.gameId),
+		activeGameTitle(settings.content.title),
 		device_name(hw_info.getName())
 	{
 	}
@@ -539,7 +559,7 @@ public:
 				continue;
 			}
 
-			const std::string& gameId = settings.content.gameId;
+			const std::string& gameId = activeGameId;
 			if (gameId.empty()) {
 				return;
 			}
@@ -558,15 +578,80 @@ public:
 
 	void onGameStarted() override {
 		SDLDreamLink::onGameStarted();
+		activeGameId = settings.content.gameId;
+		activeGameTitle = settings.content.title;
+		vmuMirrorSnapshotAvailable = false;
 		sendGameId();
 	}
 
 	void onGameTermination() override {
 		SDLDreamLink::onGameTermination();
+		if (!cacheVmuIconFromMirror())
+			cacheLoadedVmuIconFromHardware();
 		// Need a short delay to wait for last screen draw to complete
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// Reset screen to selected port
 		sendPort();
+	}
+
+	void snapshotVmuMirror(const DppVirtualVmu& vmu) {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		if (!EventManager::isGameRunning() || vmu.fileBacked)
+			return;
+
+		memcpy(vmuMirrorSnapshot.data(), vmu.flash_data, vmuMirrorSnapshot.size());
+		vmuMirrorSnapshotAvailable = true;
+	}
+
+	bool cacheVmuIconFromMirror() {
+		std::lock_guard<std::recursive_mutex> lock(mutex);
+
+		if (!vmuMirrorSnapshotAvailable || !vmuIconCachingEnabled(activeGameId)
+				|| hw_info.hardware_bus < 0 || !storageEnabled()) {
+			return false;
+		}
+
+		return cacheVmuIconFromFlash(
+			activeGameId,
+			activeGameTitle,
+			vmuMirrorSnapshot.data(),
+			vmuMirrorSnapshot.size());
+	}
+
+	void cacheLoadedVmuIconFromHardware() {
+		// DreamPicoPort reads a physical VMU, independently of Flycast's virtual
+		// per-game VMU setting, so physical icon capture must not use that gate.
+		if (!vmuIconCachingEnabled(activeGameId) || hw_info.hardware_bus < 0 || !storageEnabled()) {
+			return;
+		}
+
+		constexpr int perGameVmuPort = 0;
+		if ((getFunctionCodesMask(perGameVmuPort) & MFID_1_Storage) == 0) {
+			return;
+		}
+
+		std::vector<u8> flash(DPP_VMU_FLASH_SIZE);
+		bool readOk = true;
+		for (u32 block = 0; block < DPP_VMU_BLOCK_COUNT; ++block) {
+			MapleMsg msg{};
+			msg.command = MDCF_BlockRead;
+			msg.destAP = (hw_info.hardware_bus << 6) | (1u << perGameVmuPort);
+			msg.originAP = hw_info.hardware_bus << 6;
+			msg.pushData(MFID_1_Storage);
+			msg.pushData((block & 0xff) << 24);
+
+			MapleMsg rxMsg{};
+			if (!sendReceive(msg, rxMsg) || rxMsg.command != MDRS_DataTransfer || rxMsg.size < 130) {
+				readOk = false;
+				break;
+			}
+			memcpy(&flash[block * DPP_VMU_BLOCK_SIZE], &rxMsg.data[8], DPP_VMU_BLOCK_SIZE);
+		}
+
+		if (readOk) {
+			cacheVmuIconFromFlash(activeGameId, activeGameTitle, flash.data(), flash.size());
+		}
 	}
 
 	//! Transform flycast port index into DreamPicoPort port index
@@ -918,7 +1003,11 @@ private:
 		const char* joystick_serial = SDL_JoystickGetSerial(sdl_joystick);
 		if (joystick_serial) {
 			hw_info.serial_number = joystick_serial;
-		} else {
+		}
+
+		// Windows will cache the joystick name, so it's not a good idea to check that on Windows
+#if !defined(_WIN32)
+		if (hw_info.serial_number.empty()) {
 			// Version 1.2.0 and later embeds serial in name as a workaround for MacOS and Linux
 			// Serial is expected between a dash (-) and space ( ) character or until end of string
 			const char* joystick_name = SDL_JoystickName(sdl_joystick);
@@ -938,6 +1027,7 @@ private:
 				}
 			}
 		}
+#endif
 
 #if defined(_WIN32)
 		// This only works in Windows because the joystick_path is not given in other OSes
@@ -1169,7 +1259,16 @@ DppMapleLinkDevice::DppMapleLinkDevice(const MapleLink& link, u32 supportedFns) 
 }
 
 DppMapleLinkDevice::~DppMapleLinkDevice()
-{}
+{
+	// The VMU mirror belongs to this Maple device and will be gone before the
+	// DreamPicoPort termination event. A1 is the source used for library icons.
+	if (bus_port == 0 && virtualVmu)
+	{
+		std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
+		if (linkedDpp)
+			linkedDpp->snapshotVmuMirror(*virtualVmu);
+	}
+}
 
 void DppMapleLinkDevice::OnSetup()
 {

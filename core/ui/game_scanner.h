@@ -27,14 +27,36 @@
 #include <unordered_map>
 #include <unordered_set>
 
+struct GameListMetadata
+{
+	std::string name;
+	std::string desc;
+	std::string developer;
+	std::string publisher;
+	std::string genre;
+	std::string players;
+	std::string releaseDate;
+	std::string manualPath;
+};
+
+using GameListMetadataMap = std::unordered_map<std::string, GameListMetadata>;
+
 struct GameMedia
 {
 	std::string name;		// Display name
 	std::string path;		// Full path to rom. May be an encoded uri
 	std::string fileName;	// Last component of the path, decoded
 	std::string gameName;	// for arcade games only, description from the rom list
+	std::string desc;
+	std::string developer;
+	std::string publisher;
+	std::string genre;
+	std::string players;
+	std::string releaseDate;
+	std::string manualPath;
 	bool arcade = false;	// Arcade game (naomi, atomiswave, system sp, ...)
 	bool device = false;	// Corresponds to a physical cdrom device
+	size_t size = 0;		// File size, if available from the storage backend
 };
 
 class GameScanner
@@ -51,7 +73,9 @@ class GameScanner
 
 	void insert_game(const GameMedia& game);
 	void insert_arcade_game(GameMedia game);
-	void add_game_directory(const std::string& path);
+	void add_game_directory(const std::string& path, const GameListMetadataMap& metadata,
+			const std::unordered_map<std::string, std::string>& manualIndex,
+			const std::string& gamelistPath);
 
 public:
 	~GameScanner()

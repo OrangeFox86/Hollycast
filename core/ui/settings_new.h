@@ -26,6 +26,7 @@ namespace SettingsNew {
 enum class SettingsTab
 {
 	General,
+	Library,
 	Video,
 	Audio,
 	Controls,
@@ -57,6 +58,7 @@ const char* getTabName(SettingsTab tab);
 
 // Individual tab renderers
 void renderGeneralTab();
+void renderLibraryTab();
 void renderVideoTab();
 void renderAudioTab();
 void renderControlsTab();

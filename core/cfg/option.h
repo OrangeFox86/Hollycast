@@ -18,16 +18,16 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
-#include <string>
-#include <vector>
-#include <array>
-#include <cmath>
-#include <type_traits>
 #include "cfg.h"
 #include "hw/maple/maple_cfg.h"
 #ifdef LIBRETRO
 #include <libretro.h>
 #endif
+#include <array>
+#include <cmath>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace config {
 
@@ -372,6 +372,46 @@ extern Option<bool> ForceFreePlay;
 extern Option<bool, false> FetchBoxart;
 extern Option<bool, false> BoxartDisplayMode;
 extern Option<int, false> BoxartSourceMode; // 0 -> Scraped, 1 -> Physical Media, 2 -> Custom with scraped fallback
+enum class LibraryDisplayStyleMode
+{
+	Classic = 0,
+	List = 1,
+};
+
+enum class LibraryImageSourceMode
+{
+	CurrentArtwork = 0,
+	VmuSaveIcon = 1,
+	VmuThenCurrentArtwork = 2,
+	CurrentArtworkThenVmu = 3,
+};
+
+enum class LibraryCoverMediaMode
+{
+	CurrentArtwork = 0,
+	MixImage = 1,
+	Cover = 2,
+	Case = 3,
+	Screenshot = 4,
+	Title = 5,
+	Physical = 6,
+	FanArt = 7,
+	TitleScreen = 8,
+	Manual = 9,
+	Count = 10,
+};
+
+enum class VmuIconPlaybackMode
+{
+	Static = 0,
+	Active = 1,
+};
+
+extern Option<int, false> LibraryDisplayStyle;
+extern Option<int, false> LibraryImageSource;
+extern Option<int, false> LibraryCoverMedia;
+extern Option<int, false> LibraryIconScale;
+extern Option<int, false> VmuIconMode;
 extern Option<int, false> UIScaling;
 extern Option<int, false> UITheme;          // 0 -> Dark, 1 -> Light, 2 -> Dreamcast, 3 -> High Contrast, 4 -> Nintendo, 5 -> Aqua Chill
 
@@ -452,7 +492,14 @@ extern Option<int> PerPixelLayers;
 #endif
 extern Option<float> ExtraDepthScale;
 extern Option<bool> CustomTextures;
-extern Option<bool> PreloadCustomTextures;
+enum class CustomTexturePreloadMode : int
+{
+	Off = 0,
+	SystemMemory = 1,
+	VideoMemory = 2,
+};
+extern Option<int> PreloadCustomTextures;
+CustomTexturePreloadMode customTexturePreloadMode();
 extern Option<bool> DumpTextures;
 extern Option<bool> DumpUniqueTextures;
 extern Option<bool> DumpReplacedTextures;
@@ -504,6 +551,7 @@ extern Option<bool> OpenGlChecks;
 extern Option<std::vector<std::string>, false> ContentPath;
 extern Option<std::vector<std::string>, false> BiosPath;
 extern Option<std::string, false> VMUPath;
+extern Option<std::string, false> GameListPath;
 extern Option<std::vector<std::string>, false> SavestatePath;
 extern Option<std::string, false> SavePath;
 extern Option<std::vector<std::string>, false> TexturePath;

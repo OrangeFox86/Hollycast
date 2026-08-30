@@ -61,7 +61,7 @@ static const PresetSetting potatoSettings[] = {
 
 static const PresetSetting lowSettings[] = {
 	{"Sh4Clock", 190},                            // Underclock SH4
-	{"RenderResolution", 640},                    // 1x - 640x480 (Native)
+	{"RenderResolution", 480},                    // 1x - 640x480 (Native)
 	{"AnisotropicFiltering", 0},                  // Disabled
 	{"AutoSkipFrame", 1},                         // Normal skip
 	{"DupeFrames", true},                         // Enable duplicate frames
@@ -76,7 +76,7 @@ static const PresetSetting lowSettings[] = {
 
 static const PresetSetting mediumSettings[] = {
 	{"Sh4Clock", 215},                            // Mild SH4 overclock
-	{"RenderResolution", 960},                    // 1.5x - 960x720
+	{"RenderResolution", 720},                    // 1.5x - 960x720
 	{"AnisotropicFiltering", 4},                  // 16x
 	{"AutoSkipFrame", 0},                         // No skip
 	{"SkipFrame", 0},                             // No fixed skip
@@ -92,7 +92,7 @@ static const PresetSetting mediumSettings[] = {
 
 static const PresetSetting highSettings[] = {
 	{"Sh4Clock", 220},                            // Overclock SH4
-	{"RenderResolution", 1600},                   // 2.5x - 1600x1200
+	{"RenderResolution", 1200},                   // 2.5x - 1600x1200
 	{"AnisotropicFiltering", 3},                  // 8x
 	{"AutoSkipFrame", 0},                         // No skip
 	{"SkipFrame", 0},                             // No fixed skip
@@ -108,7 +108,7 @@ static const PresetSetting highSettings[] = {
 
 static const PresetSetting godModeSettings[] = {
 	{"Sh4Clock", 250},                            // Overclock SH4
-	{"RenderResolution", 2560},                   // 4x - 2560x1920
+	{"RenderResolution", 1920},                   // 4x - 2560x1920
 	{"AnisotropicFiltering", 4},                  // 16x (max)
 	{"AutoSkipFrame", 0},                         // No skip
 	{"SkipFrame", 0},                             // No fixed skip

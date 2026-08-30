@@ -42,6 +42,7 @@ void gui_keyboard_key(u8 keyCode, bool pressed);
 bool gui_keyboard_captured();
 bool gui_mouse_captured();
 void gui_set_mouse_position(int x, int y, bool touchscreen);
+bool gui_is_menu_touch_target(float x, float y);
 // 0: left, 1: right, 2: middle/wheel, 3: button 4
 void gui_set_mouse_button(int button, bool pressed, bool touchscreen);
 void gui_set_mouse_wheel(float delta);
@@ -85,6 +86,7 @@ enum class GuiState {
 	NetworkStart,
 	Cheats,
 	Achievements,
+	GameInfo,
 };
 extern GuiState gui_state;
 

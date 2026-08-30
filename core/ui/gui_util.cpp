@@ -18,14 +18,6 @@
     along with reicast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "gui_util.h"
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
-#include <cctype>
-#include <ctime>
-
 #include "types.h"
 #include "stdclass.h"
 #include "oslib/oslib.h"
@@ -43,6 +35,13 @@
 #include "stdclass.h"
 #include "rend/osd.h"
 #include <stb_image.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <future>
+#include <string>
+#include <vector>
 
 using namespace i18n;
 
@@ -1166,11 +1165,49 @@ void ImguiTexture::draw(ImDrawList *drawList, const ImVec2& pos, const ImVec2& s
 }
 
 bool ImguiTexture::button(const char* str_id, const ImVec2& image_size, const std::string& title,
-		const ImVec4& bg_col, const ImVec4& tint_col)
+		const ImVec4& bg_col, const ImVec4& tint_col, float fallbackTitleSize)
 {
 	ImTextureID id = getId();
 	if (id == ImTextureID{})
-		return ImGui::Button(title.c_str(), image_size);
+	{
+		if (fallbackTitleSize <= 0.0f || title.empty())
+			return ImGui::Button(title.c_str(), image_size);
+
+		ImGui::PushFont(nullptr, fallbackTitleSize);
+		const bool pressed = ImGui::Button(str_id, image_size);
+		const ImVec2 min = ImGui::GetItemRectMin() + ImGui::GetStyle().FramePadding;
+		const ImVec2 max = ImGui::GetItemRectMax() - ImGui::GetStyle().FramePadding;
+		const float wrapWidth = std::max(1.0f, max.x - min.x);
+		const ImVec4 clipRect(min.x, min.y, max.x, max.y);
+		ImFont *font = ImGui::GetFont();
+		const float fontSize = ImGui::GetFontSize();
+		const char *text = title.c_str();
+		const char *textEnd = text + title.size();
+		std::vector<std::pair<const char *, const char *>> lines;
+		for (const char *line = text; line < textEnd; )
+		{
+			const char *lineEnd = font->CalcWordWrapPosition(fontSize, line, textEnd, wrapWidth);
+			if (lineEnd == line)
+				lineEnd = textEnd;
+			lines.emplace_back(line, lineEnd);
+			line = ImTextCalcWordWrapNextLineStart(lineEnd, textEnd);
+		}
+
+		const float lineHeight = ImGui::GetTextLineHeight();
+		float y = min.y + std::max(0.0f, (max.y - min.y - lineHeight * lines.size()) * 0.5f);
+		for (const auto& line : lines)
+		{
+			const float lineWidth = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, line.first, line.second).x;
+			const ImVec2 textPos(min.x + std::max(0.0f, (max.x - min.x - lineWidth) * 0.5f), y);
+			ImGui::GetWindowDrawList()->AddText(font, fontSize, textPos, ImGui::GetColorU32(ImGuiCol_Text),
+					line.first, line.second, 0.0f, &clipRect);
+			y += lineHeight;
+			if (y > max.y)
+				break;
+		}
+		ImGui::PopFont();
+		return pressed;
+	}
 	else
 	{
 		const float ar = imguiDriver->getAspectRatio(id);
@@ -1183,15 +1220,19 @@ bool ImguiTexture::button(const char* str_id, const ImVec2& image_size, const st
 
 static u8 *loadImage(const std::string& path, int& width, int& height)
 {
-	FILE *file = nowide::fopen(path.c_str(), "rb");
+	std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(path, "rb"));
 	if (file == nullptr)
 		return nullptr;
 
 	int channels;
 	stbi_set_flip_vertically_on_load_thread(0);
-	u8 *imgData = stbi_load_from_file(file, &width, &height, &channels, STBI_rgb_alpha);
-	std::fclose(file);
-	return imgData;
+	const s64 fileSize = file->size();
+	if (fileSize <= 0)
+		return nullptr;
+	std::vector<u8> data(fileSize);
+	if (file->read(data.data(), 1, data.size()) != data.size())
+		return nullptr;
+	return stbi_load_from_memory(data.data(), data.size(), &width, &height, &channels, STBI_rgb_alpha);
 }
 
 int ImguiFileTexture::textureLoadCount;
@@ -1201,19 +1242,23 @@ ImTextureID ImguiFileTexture::getId()
 	if (path.empty())
 		return {};
 	ImTextureID id = imguiDriver->getTexture(path);
-	if (id == ImTextureID() && textureLoadCount < 10)
+	if (id == ImTextureID())
 	{
-		textureLoadCount++;
-		int width, height;
-		u8 *imgData = loadImage(path, width, height);
-		if (imgData != nullptr)
+		constexpr int MaxTextureLoadsPerFrame = 5;
+		if (textureLoadCount < MaxTextureLoadsPerFrame)
 		{
-			try {
-				id = imguiDriver->updateTextureAndAspectRatio(path, imgData, width, height, nearestSampling);
-			} catch (...) {
-				// vulkan can throw during resizing
+			textureLoadCount++;
+			int width, height;
+			u8 *imgData = loadImage(path, width, height);
+			if (imgData != nullptr)
+			{
+				try {
+					id = imguiDriver->updateTextureAndAspectRatio(path, imgData, width, height, nearestSampling);
+				} catch (...) {
+					// vulkan can throw during resizing
+				}
+				free(imgData);
 			}
-			free(imgData);
 		}
 	}
 	return id;

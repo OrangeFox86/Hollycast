@@ -57,7 +57,9 @@ if(NOT LIBRETRO)
             boxart/gamesdb.h
             boxart/pvrparser.h
             boxart/scraper.cpp
-            boxart/scraper.h)
+            boxart/scraper.h
+            boxart/vmu_icon.cpp
+            boxart/vmu_icon.h)
 
     if(USE_DISCORD)
         target_sources(${PROJECT_NAME} PRIVATE discord.cpp)

@@ -26,6 +26,7 @@
 #include "hw/naomi/naomi_cart.h"
 #include "reios/reios.h"
 #include "hw/sh4/modules/mmu.h"
+#include "hw/sh4/modules/modules.h"
 #include "hw/sh4/sh4_if.h"
 #include "hw/sh4/sh4_mem.h"
 #include "hw/sh4/sh4_sched.h"
@@ -43,17 +44,21 @@
 #include "hw/pvr/pvr.h"
 #include "profiler/fc_profiler.h"
 #include "oslib/storage.h"
-#include "wsi/context.h"
-#include <chrono>
 #ifndef LIBRETRO
 #include "ui/gui.h"
 #endif
-#include "hw/sh4/sh4_interpreter.h"
-#include "hw/sh4/dyna/ngen.h"
 #include "oslib/i18n.h"
 #ifndef LIBRETRO
 #include <thread>
 #endif
+
+#include <algorithm>
+#include <chrono>
+#include <exception>
+#include <future>
+#include <mutex>
+#include <string>
+#include <utility>
 
 settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
@@ -399,6 +404,10 @@ static void loadSpecialSettings()
 			NOTICE_LOG(BOOT, "Forcing DCNet use");
 			config::UseDCNet.override(true);
 		}
+		if ((prod_id == "HDR-0164"			// Shenmue II (JP)
+				|| prod_id == "MK-5118450")	// Shenmue II (EU)
+				&& !memcmp(ip_meta.disk_num, "4/4  ", 5))
+			config::WidescreenGameHacks.override(false);
 	}
 	else if (settings.platform.isArcade())
 	{
@@ -881,7 +890,6 @@ void loadGameSpecificSettings()
 	loadSpecialSettings();
 
 	config::Settings::instance().setGameId(settings.content.gameId);
-	custom_texture.init();
 
 	// Reload per-game settings
 	config::Settings::instance().load(true);
@@ -913,11 +921,8 @@ void Emulator::stepRange(u32 from, u32 to)
 
 void Emulator::loadstate(Deserializer& deser)
 {
-	if (!custom_texture.preloaded())
-	{
-		custom_texture.terminate();
-		custom_texture.init();
-	}
+	if (config::customTexturePreloadMode() == config::CustomTexturePreloadMode::Off)
+		custom_texture.refresh();
 #if FEAT_AREC == DYNAREC_JIT
 	aica::arm::recompiler::flush();
 #endif
@@ -1179,7 +1184,6 @@ void Emulator::diskChange()
 {
 	config::Settings::instance().reset();
 	config::Settings::instance().load(false);
-	custom_texture.terminate();
 	if (!settings.content.path.empty())
 	{
 		hostfs::FileInfo info = hostfs::storage().getFileInfo(settings.content.path);

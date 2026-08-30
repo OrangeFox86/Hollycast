@@ -68,6 +68,11 @@ bool isMenuBarVisible();
 // Current effective menu bar height for laying out full-screen UI.
 float mainMenuBarHeight();
 
+// Returns whether an ImGui-space touch belongs to the gameplay menu or its
+// top reveal area. Android uses this before virtual-gamepad hit testing so
+// menu interactions have the same input priority as their draw order.
+bool isTouchTarget(float x, float y);
+
 // Shared menu actions. Native platform menus call these so behavior stays
 // aligned with the ImGui menu implementation.
 void addRomDirectory(const std::string& path);
