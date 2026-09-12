@@ -18,6 +18,9 @@
  */
 #include "settings.h"
 #include "settings_new.h"
+#include "log/Log.h"
+
+#include <cstdlib>
 
 namespace {
 
