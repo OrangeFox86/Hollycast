@@ -620,7 +620,7 @@ static void saveLayout()
 	config::setAutoSave(false);
 	for (auto& element : Layout)
 		element.save();
-	config::setAutoSave(false);
+	config::setAutoSave(true);
 }
 
 static void resetLayout()
