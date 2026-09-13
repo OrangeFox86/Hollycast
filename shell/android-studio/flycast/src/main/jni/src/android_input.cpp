@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -22,6 +23,10 @@
 #include "cfg/option.h"
 #include "hw/maple/maple_if.h"
 
+#include <algorithm>
+
+constexpr int MAX_VIBRATION_POWER = 100;
+
 static std::shared_ptr<AndroidMouse> mouse;
 static std::shared_ptr<TouchMouse> touchMouse;
 static std::shared_ptr<AndroidKeyboard> keyboard;
@@ -37,7 +42,14 @@ jmethodID inputDeviceManager_rumble;
 // VGamepad
 //
 extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getVibrationPower(JNIEnv *env, jobject obj) {
-	return (jint)config::VirtualGamepadVibration;
+	return config::VirtualGamepadHapticFeedback
+			? std::clamp(static_cast<int>(config::VirtualGamepadVibration), 0, MAX_VIBRATION_POWER)
+			: 0;
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_VGamepad_getIdleTimeoutSeconds(JNIEnv *env, jobject obj) {
+	return std::clamp(static_cast<int>(config::VirtualGamepadIdleTimeout), 0,
+			vgamepad::MAX_IDLE_TIMEOUT_SECONDS);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_VGamepad_show(JNIEnv * env, jobject obj) {
