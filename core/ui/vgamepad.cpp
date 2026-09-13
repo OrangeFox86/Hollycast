@@ -39,11 +39,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace vgamepad
 {
 static void stopEditing(bool canceled);
 static void loadLayout();
+static Element controlToElement(ControlId control);
+static int getControlTransparency(ControlId control);
+static float getControlHitPadding(ControlId control);
+static float getFingerHitPadding();
 
 struct Control
 {
@@ -66,6 +71,8 @@ constexpr float REFERENCE_WIDTH = 640.f;
 constexpr float REFERENCE_HEIGHT = 480.f;
 constexpr float MIN_ELEMENT_SCALE = 0.5f;
 constexpr float MAX_ELEMENT_SCALE = 1.8f;
+constexpr float MAX_TOUCH_PADDING = 24.f;
+constexpr int MAX_PERCENT = 100;
 constexpr char const *BTN_PATH = "picture/buttons.png";
 constexpr char const *BTN_PATH_ARCADE = "picture/buttons-arcade.png";
 constexpr char const *CFG_SECTION = "vgamepad";
@@ -274,12 +281,32 @@ void hide() {
 
 ControlId hitTest(float x, float y)
 {
+	ControlId closestControl = None;
+	float closestDistanceSquared = std::numeric_limits<float>::max();
+	const float fingerPadding = getFingerHitPadding();
 	for (const auto& control : Controls)
-		if (!control.disabled
-				&& x >= control.pos.x && x < control.pos.x + control.size.x
-				&& y >= control.pos.y && y < control.pos.y + control.size.y)
-			return static_cast<ControlId>(&control - &Controls[0]);
-	return None;
+	{
+		const ControlId controlId = static_cast<ControlId>(&control - &Controls[0]);
+		const float padding = getControlHitPadding(controlId) + fingerPadding;
+		if (control.disabled
+				|| x < control.pos.x - padding || x >= control.pos.x + control.size.x + padding
+				|| y < control.pos.y - padding || y >= control.pos.y + control.size.y + padding)
+			continue;
+
+		// Expanded targets can overlap. Prefer the control whose original bounds
+		// are nearest to the touch instead of relying on enum order.
+		const float nearestX = std::clamp(x, control.pos.x, control.pos.x + control.size.x);
+		const float nearestY = std::clamp(y, control.pos.y, control.pos.y + control.size.y);
+		const float dx = x - nearestX;
+		const float dy = y - nearestY;
+		const float distanceSquared = dx * dx + dy * dy;
+		if (distanceSquared < closestDistanceSquared)
+		{
+			closestControl = controlId;
+			closestDistanceSquared = distanceSquared;
+		}
+	}
+	return closestControl;
 }
 
 static u32 buttonMap[_Count] {
@@ -371,7 +398,10 @@ static void drawButtonDim(ImDrawList *drawList, const Control& control, int stat
 		pos += StickPos * size;
 
 	float col = (0.5f - 0.25f * state / 255) * AlphaTrans;
-	float alpha = (100.f - config::VirtualGamepadTransparency) / 100.f * AlphaTrans;
+	const float globalAlpha = (MAX_PERCENT - std::clamp(static_cast<int>(config::VirtualGamepadTransparency), 0, MAX_PERCENT))
+			/ static_cast<float>(MAX_PERCENT);
+	const float elementAlpha = (MAX_PERCENT - getControlTransparency(controlId)) / static_cast<float>(MAX_PERCENT);
+	float alpha = globalAlpha * elementAlpha * AlphaTrans;
 	ImVec4 color(col, col, col, alpha);
 
 	const ImVec2* uv0 = &control.uv0;
@@ -457,6 +487,8 @@ struct LayoutElement
 	float x, y;			// normalized coordinates [0, 1]
 	float w, h;			// normalized coordinates [0, 1], scaled with uiScale
 	float scale;		// user scale
+	int transparency = 0;	// per-unit transparency [0, 100]
+	int touchSize = 0;		// extra hitbox padding [0, 100]
 
 	void load()
 	{
@@ -466,12 +498,16 @@ struct LayoutElement
 		scale = std::isfinite(loadedScale)
 				? std::clamp(loadedScale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE)
 				: 1.f;
+		transparency = std::clamp(config::loadInt(CFG_SECTION, name + "_transparency", transparency), 0, MAX_PERCENT);
+		touchSize = std::clamp(config::loadInt(CFG_SECTION, name + "_touch_size", touchSize), 0, MAX_PERCENT);
 	}
 	void save() const
 	{
 		config::saveFloat(CFG_SECTION, name + "_x", x);
 		config::saveFloat(CFG_SECTION, name + "_y", y);
 		config::saveFloat(CFG_SECTION, name + "_scale", scale);
+		config::saveInt(CFG_SECTION, name + "_transparency", transparency);
+		config::saveInt(CFG_SECTION, name + "_touch_size", touchSize);
 	}
 
 	bool hitTest(float nx, float ny) const {
@@ -491,6 +527,8 @@ struct LayoutElement
 	{
 		applyUiScale();
 		scale = 1.f;
+		transparency = 0;
+		touchSize = 0;
 		const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
 		const float uiscale = getUIScale();
 		if (dx == 0)
@@ -505,6 +543,11 @@ struct LayoutElement
 			y = dy / REFERENCE_HEIGHT * uiscale;
 		else
 			y = 1.f - h + dy / REFERENCE_HEIGHT * uiscale;
+	}
+
+	float touchPadding() const
+	{
+		return MAX_TOUCH_PADDING * touchSize / MAX_PERCENT;
 	}
 };
 static LayoutElement Layout[] {
@@ -525,6 +568,66 @@ static LayoutElement Layout[] {
 static bool isValidElement(Element element)
 {
 	return element >= Elem_DPad && element < Elem_Count;
+}
+
+static Element controlToElement(ControlId control)
+{
+	switch (control)
+	{
+	case Left:
+	case Up:
+	case Right:
+	case Down:
+	case LeftUp:
+	case RightUp:
+	case LeftDown:
+	case RightDown:
+		return Elem_DPad;
+	case X:
+	case Y:
+	case B:
+	case A:
+		return Elem_Buttons;
+	case Start:
+		return Elem_Start;
+	case LeftTrigger:
+		return Elem_LT;
+	case RightTrigger:
+		return Elem_RT;
+	case AnalogArea:
+	case AnalogStick:
+		return Elem_Analog;
+	case FastForward:
+		return Elem_FForward;
+	case Btn4:
+		return Elem_Btn4;
+	case Btn5:
+		return Elem_Btn5;
+	case ServiceMode:
+		return Elem_ServiceMode;
+	case InsertCard:
+		return Elem_InsertCard;
+	default:
+		return Elem_None;
+	}
+}
+
+static int getControlTransparency(ControlId control)
+{
+	const Element element = controlToElement(control);
+	return isValidElement(element) ? Layout[element].transparency : 0;
+}
+
+static float getControlHitPadding(ControlId control)
+{
+	const Element element = controlToElement(control);
+	return isValidElement(element) ? Layout[element].touchPadding() : 0.f;
+}
+
+static float getFingerHitPadding()
+{
+	return MAX_TOUCH_PADDING * std::clamp(static_cast<int>(config::VirtualGamepadFingerSize), 0, MAX_PERCENT)
+			/ MAX_PERCENT;
 }
 
 static void applyLayout()
