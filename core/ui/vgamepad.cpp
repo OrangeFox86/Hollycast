@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -59,6 +60,8 @@ static bool Visible = true;
 static bool serviceMode;
 static float AlphaTrans = 1.f;
 static ImVec2 StickPos;	// analog stick position [-1, 1]
+constexpr float REFERENCE_WIDTH = 640.f;
+constexpr float REFERENCE_HEIGHT = 480.f;
 constexpr char const *BTN_PATH = "picture/buttons.png";
 constexpr char const *BTN_PATH_ARCADE = "picture/buttons-arcade.png";
 constexpr char const *CFG_SECTION = "vgamepad";
@@ -354,8 +357,8 @@ static void drawButtonDim(ImDrawList *drawList, const Control& control, int stat
 {
 	if (control.disabled)
 		return;
-	float scale_h = settings.display.height / 480.f;
-	float offs_x = (settings.display.width - scale_h * 640.f) / 2.f;
+	float scale_h = settings.display.height / REFERENCE_HEIGHT;
+	float offs_x = (settings.display.width - scale_h * REFERENCE_WIDTH) / 2.f;
 	ImVec2 pos = control.pos * scale_h;
 	ImVec2 size = control.size * scale_h;
 	pos.x += offs_x;
@@ -471,17 +474,17 @@ struct LayoutElement
 
 	void applyUiScale()
 	{
-		const float dcw = 480.f * (float)settings.display.width / settings.display.height;
+		const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
 		const float uiscale = getUIScale();
 		w = dw / dcw * uiscale;
-		h = dh / 480.f * uiscale;
+		h = dh / REFERENCE_HEIGHT * uiscale;
 	}
 
 	void reset()
 	{
 		applyUiScale();
 		scale = 1.f;
-		const float dcw = 480.f * (float)settings.display.width / settings.display.height;
+		const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
 		const float uiscale = getUIScale();
 		if (dx == 0)
 			x = 0.5f - w / 2;
@@ -492,9 +495,9 @@ struct LayoutElement
 		if (dy == 0)
 			y = 0.5f - h / 2;
 		else if (dy > 0)
-			y = dy / 480.f * uiscale;
+			y = dy / REFERENCE_HEIGHT * uiscale;
 		else
-			y = 1.f - h + dy / 480.f * uiscale;
+			y = 1.f - h + dy / REFERENCE_HEIGHT * uiscale;
 	}
 };
 static LayoutElement Layout[] {
@@ -514,14 +517,14 @@ static LayoutElement Layout[] {
 
 static void applyLayout()
 {
-	const float dcw = 480.f * (float)settings.display.width / settings.display.height;
-	const float dx = (dcw - 640.f) / 2;
+	const float dcw = REFERENCE_HEIGHT * (float)settings.display.width / settings.display.height;
+	const float dx = (dcw - REFERENCE_WIDTH) / 2;
 	const float uiscale = getUIScale();
 	float x, y, scale;
 
 	// DPad
 	x = Layout[Elem_DPad].x * dcw - dx;
-	y = Layout[Elem_DPad].y * 480.f;
+	y = Layout[Elem_DPad].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_DPad].scale * uiscale;
 	Controls[Left].pos =   { x + 0.f * scale, y + 64.f * scale };
 	Controls[Up].pos =     { x + 64.f * scale, y + 0.f * scale };
@@ -539,7 +542,7 @@ static void applyLayout()
 
 	// Buttons
 	x = Layout[Elem_Buttons].x * dcw - dx;
-	y = Layout[Elem_Buttons].y * 480.f;
+	y = Layout[Elem_Buttons].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_Buttons].scale * uiscale;
 	Controls[X].pos =  { x + 0.f * scale, y + 64.f * scale };
 	Controls[Y].pos =  { x + 64.f * scale, y + 0.f * scale };
@@ -550,22 +553,22 @@ static void applyLayout()
 
 	// Start
 	scale = Layout[Elem_Start].scale * uiscale;
-	Controls[Start].pos =   { Layout[Elem_Start].x * dcw - dx, Layout[Elem_Start].y * 480.f };
+	Controls[Start].pos =   { Layout[Elem_Start].x * dcw - dx, Layout[Elem_Start].y * REFERENCE_HEIGHT };
 	Controls[Start].size =  { Layout[Elem_Start].dw * scale, Layout[Elem_Start].dh * scale };
 
 	// Left trigger
 	scale = Layout[Elem_LT].scale * uiscale;
-	Controls[LeftTrigger].pos = { Layout[Elem_LT].x * dcw - dx, Layout[Elem_LT].y * 480.f };
+	Controls[LeftTrigger].pos = { Layout[Elem_LT].x * dcw - dx, Layout[Elem_LT].y * REFERENCE_HEIGHT };
 	Controls[LeftTrigger].size = { Layout[Elem_LT].dw * scale, Layout[Elem_LT].dh * scale };
 
 	// Right trigger
 	scale = Layout[Elem_RT].scale * uiscale;
-	Controls[RightTrigger].pos =  { Layout[Elem_RT].x * dcw - dx, Layout[Elem_RT].y * 480.f };
+	Controls[RightTrigger].pos =  { Layout[Elem_RT].x * dcw - dx, Layout[Elem_RT].y * REFERENCE_HEIGHT };
 	Controls[RightTrigger].size = { Layout[Elem_RT].dw * scale, Layout[Elem_RT].dh * scale };
 
 	// Analog
 	x = Layout[Elem_Analog].x * dcw - dx;
-	y = Layout[Elem_Analog].y * 480.f;
+	y = Layout[Elem_Analog].y * REFERENCE_HEIGHT;
 	scale = Layout[Elem_Analog].scale * uiscale;
 	Controls[AnalogArea].pos =   { x, y };
 	Controls[AnalogArea].size =  { Layout[Elem_Analog].dw * scale, Layout[Elem_Analog].dh * scale };
@@ -574,27 +577,27 @@ static void applyLayout()
 
 	// Fast forward
 	scale = Layout[Elem_FForward].scale * uiscale;
-	Controls[FastForward].pos =  { Layout[Elem_FForward].x * dcw - dx, Layout[Elem_FForward].y * 480.f };
+	Controls[FastForward].pos =  { Layout[Elem_FForward].x * dcw - dx, Layout[Elem_FForward].y * REFERENCE_HEIGHT };
 	Controls[FastForward].size = { Layout[Elem_FForward].dw * scale, Layout[Elem_FForward].dh * scale };
 
 	// ARCADE
 	// Button 4
 	scale = Layout[Elem_Btn4].scale * uiscale;
-	Controls[Btn4].pos =  { Layout[Elem_Btn4].x * dcw - dx, Layout[Elem_Btn4].y * 480.f };
+	Controls[Btn4].pos =  { Layout[Elem_Btn4].x * dcw - dx, Layout[Elem_Btn4].y * REFERENCE_HEIGHT };
 	Controls[Btn4].size = { Layout[Elem_Btn4].dw * scale, Layout[Elem_Btn4].dh * scale };
 	// Button 5
 	scale = Layout[Elem_Btn5].scale * uiscale;
-	Controls[Btn5].pos =  { Layout[Elem_Btn5].x * dcw - dx, Layout[Elem_Btn5].y * 480.f };
+	Controls[Btn5].pos =  { Layout[Elem_Btn5].x * dcw - dx, Layout[Elem_Btn5].y * REFERENCE_HEIGHT };
 	Controls[Btn5].size = { Layout[Elem_Btn5].dw * scale, Layout[Elem_Btn5].dh * scale };
 
 	// Service Mode
 	scale = Layout[Elem_ServiceMode].scale * uiscale;
-	Controls[ServiceMode].pos =  { Layout[Elem_ServiceMode].x * dcw - dx, Layout[Elem_ServiceMode].y * 480.f };
+	Controls[ServiceMode].pos =  { Layout[Elem_ServiceMode].x * dcw - dx, Layout[Elem_ServiceMode].y * REFERENCE_HEIGHT };
 	Controls[ServiceMode].size = { Layout[Elem_ServiceMode].dw * scale, Layout[Elem_ServiceMode].dh * scale };
 
 	// Insert Card
 	scale = Layout[Elem_InsertCard].scale * uiscale;
-	Controls[InsertCard].pos =  { Layout[Elem_InsertCard].x * dcw - dx, Layout[Elem_InsertCard].y * 480.f };
+	Controls[InsertCard].pos =  { Layout[Elem_InsertCard].x * dcw - dx, Layout[Elem_InsertCard].y * REFERENCE_HEIGHT };
 	Controls[InsertCard].size = { Layout[Elem_InsertCard].dw * scale, Layout[Elem_InsertCard].dh * scale };
 }
 
