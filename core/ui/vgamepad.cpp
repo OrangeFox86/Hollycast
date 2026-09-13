@@ -84,6 +84,9 @@ constexpr float MIN_ELEMENT_SCALE = 0.5f;
 constexpr float MAX_ELEMENT_SCALE = 1.8f;
 constexpr float MAX_TOUCH_PADDING = 24.f;
 constexpr int MAX_PERCENT = 100;
+constexpr s64 MAX_BUTTON_IMAGE_FILE_SIZE = 4 * 1024 * 1024;
+constexpr int MAX_BUTTON_IMAGE_WIDTH = 4096;
+constexpr int MAX_BUTTON_IMAGE_HEIGHT = 2048;
 constexpr char const *BTN_PATH = "picture/buttons.png";
 constexpr char const *BTN_PATH_ARCADE = "picture/buttons-arcade.png";
 constexpr char const *CFG_SECTION = "vgamepad";
@@ -102,28 +105,69 @@ static const char *getButtonsCfgName() {
 	return settings.platform.isConsole() ? "image" : "image_arcade";
 }
 
+static bool isValidButtonImage(int width, int height)
+{
+	return width > 0 && height > 0
+			&& width <= MAX_BUTTON_IMAGE_WIDTH && height <= MAX_BUTTON_IMAGE_HEIGHT
+			&& width == height * 2;
+}
+
+static bool updateOSDButtons(const u8 *imageData, int width, int height, ImTextureID *textureId = nullptr)
+{
+	if (!isValidButtonImage(width, height))
+		return false;
+	try {
+		const ImTextureID id = imguiDriver->updateTexture(getButtonsResPath(), imageData, width, height, false);
+		if (textureId != nullptr)
+			*textureId = id;
+		return true;
+	} catch (...) {
+		// Vulkan can throw while the surface is resizing.
+		return false;
+	}
+}
+
+static bool loadOSDButtonsResource(const char *path, ImTextureID *textureId = nullptr)
+{
+	size_t size;
+	std::unique_ptr<u8[]> data = resource::load(path, size);
+	if (data == nullptr || size > static_cast<size_t>(std::numeric_limits<int>::max()))
+		return false;
+
+	stbi_set_flip_vertically_on_load_thread(1);
+	int width, height, channels;
+	u8 *imageData = stbi_load_from_memory(data.get(), static_cast<int>(size), &width, &height, &channels,
+			STBI_rgb_alpha);
+	if (imageData == nullptr)
+		return false;
+	const bool loaded = updateOSDButtons(imageData, width, height, textureId);
+	stbi_image_free(imageData);
+	return loaded;
+}
+
 static bool loadOSDButtons(const std::string& path)
 {
 	if (path.empty())
 		return false;
-	hostfs::File *file = hostfs::storage().openFile(path, "rb");
+	std::unique_ptr<hostfs::File> file(hostfs::storage().openFile(path, "rb"));
 	if (file == nullptr)
+		return false;
+	const s64 fileSize = file->size();
+	if (fileSize <= 0 || fileSize > MAX_BUTTON_IMAGE_FILE_SIZE)
 		return false;
 
 	stbi_set_flip_vertically_on_load_thread(1);
-    int width, height, n;
-	u8 *image_data = stbi_load_from_file(file, &width, &height, &n, STBI_rgb_alpha);
-	delete file;
-	if (image_data == nullptr)
+	int width, height, channels;
+	if (!stbi_info_from_callbacks(&STBI::callbacks, file.get(), &width, &height, &channels)
+			|| !isValidButtonImage(width, height) || file->seek(0, SEEK_SET) != 0)
 		return false;
-    try {
-        imguiDriver->updateTexture(getButtonsResPath(), image_data, width, height, false);
-    } catch (...) {
-        // vulkan can throw during resizing
-    }
-    free(image_data);
 
-    return true;
+	u8 *imageData = stbi_load_from_file(file.get(), &width, &height, &channels, STBI_rgb_alpha);
+	if (imageData == nullptr)
+		return false;
+	const bool loaded = updateOSDButtons(imageData, width, height);
+	stbi_image_free(imageData);
+	return loaded;
 }
 
 static ImTextureID loadDefaultOSDButtons()
@@ -138,22 +182,8 @@ static ImTextureID loadDefaultOSDButtons()
 		if (loadOSDButtons(get_readonly_config_path("buttons.png")))
 			return id;
 	}
-	// default in resource
-	size_t size;
-	std::unique_ptr<u8[]> data = resource::load(getButtonsResPath(), size);
-	stbi_set_flip_vertically_on_load_thread(1);
-	int width, height, n;
-	u8 *image_data = stbi_load_from_memory(data.get(), (int)size, &width, &height, &n, STBI_rgb_alpha);
-    if (image_data != nullptr)
-    {
-        try {
-            id = imguiDriver->updateTexture(getButtonsResPath(), image_data, width, height, false);
-        } catch (...) {
-            // vulkan can throw during resizing
-        }
-        free(image_data);
-    }
-    return id;
+	loadOSDButtonsResource(getButtonsResPath(), &id);
+	return id;
 }
 
 static ImTextureID loadOSDButtons()
@@ -553,8 +583,9 @@ static LayoutElement Layout[Elem_Count] {
 	{ "dpad",     Tnop("D-pad"),        32.f, -24.f, 192.f, 192.f },
 	{ "buttons",  Tnop("Face Buttons"),-24.f, -24.f, 192.f, 192.f },
 	{ "start",    Tnop("Start"),         0.f, -24.f,  64.f,  64.f },
-	{ "LT",       Tnop("LT"),         -134.f,-240.f,  90.f,  64.f },
-	{ "RT",       Tnop("RT"),          -32.f,-240.f,  90.f,  64.f },
+	// The shared default keeps the triggers clear of buttons 4 and 5 in arcade games.
+	{ "LT",       Tnop("LT"),         -134.f,-288.f,  90.f,  64.f },
+	{ "RT",       Tnop("RT"),          -32.f,-288.f,  90.f,  64.f },
 	{ "analog",   Tnop("Analog Stick"), 40.f,-320.f, 128.f, 128.f },
 	{ "fforward", Tnop("Fast Forward"),-24.f,  24.f,  64.f,  64.f },
 
