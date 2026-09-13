@@ -31,6 +31,7 @@
 #include "oslib/resources.h"
 #include "oslib/i18n.h"
 #include "cfg/cfg.h"
+#include "cfg/option.h"
 #include "input/mouse.h"
 #include "hw/naomi/naomi_cart.h"
 #include "hw/naomi/card_reader.h"
@@ -38,6 +39,7 @@
 #include "stbi.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -64,6 +66,7 @@ struct Control
 };
 static Control Controls[_Count];
 static bool Visible = true;
+static bool Editing;
 static bool serviceMode;
 static float AlphaTrans = 1.f;
 static ImVec2 StickPos;	// analog stick position [-1, 1]
@@ -281,6 +284,9 @@ void hide() {
 
 ControlId hitTest(float x, float y)
 {
+	if (!config::VirtualGamepadEnabled && !Editing)
+		return None;
+
 	ControlId closestControl = None;
 	float closestDistanceSquared = std::numeric_limits<float>::max();
 	const float fingerPadding = getFingerHitPadding();
@@ -388,6 +394,8 @@ static void drawButtonDim(ImDrawList *drawList, const Control& control, int stat
 {
 	if (control.disabled)
 		return;
+	if (!config::VirtualGamepadVisualFeedback)
+		state = 0;
 	float scale_h = settings.display.height / REFERENCE_HEIGHT;
 	float offs_x = (settings.display.width - scale_h * REFERENCE_WIDTH) / 2.f;
 	ImVec2 pos = control.pos * scale_h;
@@ -442,6 +450,8 @@ void draw()
 			// mark done
 			Controls[Left].pos.x = 1e-12f;
 	}
+	if (!config::VirtualGamepadEnabled && !Editing)
+		return;
 		
 	ImDrawList *drawList = ImGui::GetBackgroundDrawList();
 	drawButton(drawList, Controls[Left], kcode[0] & buttonMap[Left]);
@@ -564,6 +574,29 @@ static LayoutElement Layout[] {
 	{ "service",  -24.f,  96.f,  64.f,  64.f },
 	{ "inscard",   40.f,-250.f,  64.f,  64.f },
 };
+
+struct LayoutState
+{
+	float x;
+	float y;
+	float scale;
+	int transparency;
+	int touchSize;
+};
+
+struct EditSessionState
+{
+	std::array<LayoutState, Elem_Count> layout;
+	bool enabled;
+	bool hapticFeedback;
+	bool visualFeedback;
+	int vibration;
+	int transparency;
+	int idleTimeout;
+	int fingerSize;
+	std::string imagePath;
+};
+static EditSessionState EditSession;
 
 static bool isValidElement(Element element)
 {
@@ -730,11 +763,19 @@ static void loadLayout()
 	applyLayout();
 }
 
-static void saveLayout()
+static void saveCustomization(const std::string& imagePath)
 {
 	config::setAutoSave(false);
 	for (auto& element : Layout)
 		element.save();
+	config::VirtualGamepadEnabled.save();
+	config::VirtualGamepadHapticFeedback.save();
+	config::VirtualGamepadVisualFeedback.save();
+	config::VirtualGamepadVibration.save();
+	config::VirtualGamepadTransparency.save();
+	config::VirtualGamepadIdleTimeout.save();
+	config::VirtualGamepadFingerSize.save();
+	config::saveStr(CFG_SECTION, getButtonsCfgName(), imagePath);
 	config::setAutoSave(true);
 }
 
@@ -742,6 +783,59 @@ static void resetLayout()
 {
 	for (auto& element : Layout)
 		element.reset();
+	applyLayout();
+}
+
+static void captureEditSession()
+{
+	for (int i = 0; i < Elem_Count; i++)
+	{
+		const LayoutElement& element = Layout[i];
+		EditSession.layout[i] = {
+			element.x,
+			element.y,
+			element.scale,
+			element.transparency,
+			element.touchSize,
+		};
+	}
+	EditSession.enabled = static_cast<bool>(config::VirtualGamepadEnabled);
+	EditSession.hapticFeedback = static_cast<bool>(config::VirtualGamepadHapticFeedback);
+	EditSession.visualFeedback = static_cast<bool>(config::VirtualGamepadVisualFeedback);
+	EditSession.vibration = static_cast<int>(config::VirtualGamepadVibration);
+	EditSession.transparency = static_cast<int>(config::VirtualGamepadTransparency);
+	EditSession.idleTimeout = static_cast<int>(config::VirtualGamepadIdleTimeout);
+	EditSession.fingerSize = static_cast<int>(config::VirtualGamepadFingerSize);
+	EditSession.imagePath = config::loadStr(CFG_SECTION, getButtonsCfgName(), "");
+}
+
+static void restoreEditSession()
+{
+	const bool imageChanged = config::loadStr(CFG_SECTION, getButtonsCfgName(), "") != EditSession.imagePath;
+	for (int i = 0; i < Elem_Count; i++)
+	{
+		LayoutElement& element = Layout[i];
+		const LayoutState& state = EditSession.layout[i];
+		element.x = state.x;
+		element.y = state.y;
+		element.scale = state.scale;
+		element.transparency = state.transparency;
+		element.touchSize = state.touchSize;
+	}
+	config::VirtualGamepadEnabled = EditSession.enabled;
+	config::VirtualGamepadHapticFeedback = EditSession.hapticFeedback;
+	config::VirtualGamepadVisualFeedback = EditSession.visualFeedback;
+	config::VirtualGamepadVibration = EditSession.vibration;
+	config::VirtualGamepadTransparency = EditSession.transparency;
+	config::VirtualGamepadIdleTimeout = EditSession.idleTimeout;
+	config::VirtualGamepadFingerSize = EditSession.fingerSize;
+	saveCustomization(EditSession.imagePath);
+	if (imageChanged)
+	{
+		// The saved path is restored first so an unavailable custom image falls
+		// back to the default artwork instead of leaving the replacement active.
+		loadOSDButtons();
+	}
 	applyLayout();
 }
 
@@ -1059,8 +1153,14 @@ void resetEditing() {
 
 void startEditing()
 {
+	if (!Editing)
+	{
+		loadLayout();
+		captureEditSession();
+	}
 	enableAllControls();
 	show();
+	Editing = true;
 	setEditMode(true);
 }
 
@@ -1072,9 +1172,10 @@ static void stopEditing(bool canceled)
 {
 	setEditMode(false);
 	if (canceled)
-		loadLayout();
+		restoreEditSession();
 	else
-		saveLayout();
+		saveCustomization(config::loadStr(CFG_SECTION, getButtonsCfgName(), ""));
+	Editing = false;
 }
 
 }	// namespace vgamepad
