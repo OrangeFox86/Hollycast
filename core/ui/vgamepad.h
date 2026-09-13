@@ -72,6 +72,8 @@ enum Element
 	Elem_Count,
 };
 
+constexpr int MAX_IDLE_TIMEOUT_SECONDS = 30;
+
 class ImguiVGamepadTexture : public ImguiTexture
 {
 public:

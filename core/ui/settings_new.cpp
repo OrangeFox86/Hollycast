@@ -1047,8 +1047,8 @@ static void RenderGeneralTextInputSettingRow(const char* id, const char* icon, c
 	ImGui::PopID();
 }
 
-// Gamepad Settings Popup (ported from settings_controls.cpp)
-// Handles rumble, deadzone, saturation, and virtual gamepad settings
+// Physical gamepad settings popup (ported from settings_controls.cpp)
+// Handles rumble, deadzone, and saturation.
 static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 {
 	centerNextWindow();
@@ -1061,9 +1061,6 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 		static int openingRumble = 0;
 		static float openingDeadzone = 0.0f;
 		static float openingSaturation = 1.0f;
-		static int openingVibration = 0;
-		static int openingTransparency = 0;
-		static std::string openingImage;
 		if (ImGui::IsWindowAppearing())
 		{
 			openingRumble = gamepad->get_rumble_power();
@@ -1072,10 +1069,6 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 				openingDeadzone = gamepad->get_dead_zone();
 				openingSaturation = gamepad->get_saturation();
 			}
-			openingVibration = config::VirtualGamepadVibration;
-			openingTransparency = config::VirtualGamepadTransparency;
-			// These are the platform-specific custom image keys used by vgamepad.
-			openingImage = config::loadStr("vgamepad", settings.platform.isConsole() ? "image" : "image_arcade");
 		}
 		if (ControllerPopupCancelPressed())
 		{
@@ -1084,12 +1077,6 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 			{
 				gamepad->set_dead_zone(openingDeadzone);
 				gamepad->set_saturation(openingSaturation);
-			}
-			if (gamepad->is_virtual_gamepad())
-			{
-				config::VirtualGamepadVibration = openingVibration;
-				config::VirtualGamepadTransparency = openingTransparency;
-				vgamepad::loadImage(openingImage);
 			}
 			ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
@@ -1134,50 +1121,7 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 			return;
 		}
 		ImGui::NewLine();
-		if (gamepad->is_virtual_gamepad())
-		{
-			if (gamepad->is_rumble_enabled()) {
-				header(T("Haptic"));
-				OptionSlider(T("Power"), config::VirtualGamepadVibration, 0, 100, T("Haptic feedback power"), "%d%%");
-			}
-			header(T("View"));
-			OptionSlider(T("Transparency"), config::VirtualGamepadTransparency, 0, 100, T("Virtual gamepad buttons transparency"), "%d%%");
-
-#if defined(__ANDROID__) || defined(TARGET_IPHONE)
-			vgamepad::ImguiVGamepadTexture tex;
-			ImGui::Image(tex.getId(), ScaledVec2(300.f, 150.f), ImVec2(0, 1), ImVec2(1, 0));
-#endif
-			const char *gamepadPngTitle = T("Select a PNG file");
-			if (ImGui::Button(T("Choose Image..."), ScaledVec2(150, 30)))
-#ifdef __ANDROID__
-			{
-				if (!hostfs::addStorage(false, false, gamepadPngTitle, [](bool cancelled, std::string path) {
-					if (!cancelled)
-						gui_runOnUiThread([path]() {
-							vgamepad::loadImage(path);
-						});
-				}, Tnop("image/png")))
-					ImGui::OpenPopup(gamepadPngTitle);
-			}
-#else
-			{
-				ImGui::OpenPopup(gamepadPngTitle);
-			}
-#endif
-			ImGui::SameLine();
-			if (ImGui::Button(T("Use Default"), ScaledVec2(150, 30)))
-				vgamepad::loadImage(Tnop(""));
-
-			select_file_popup(gamepadPngTitle, [](bool cancelled, std::string selection)
-				{
-					if (!cancelled)
-						gui_runOnUiThread([selection]() {
-							vgamepad::loadImage(selection);
-						});
-					return true;
-				}, true, Tnop("png"));
-		}
-		else if (gamepad->is_rumble_enabled())
+		if (gamepad->is_rumble_enabled())
 		{
 			header(T("Rumble"));
 			int power = gamepad->get_rumble_power();
@@ -6011,14 +5955,25 @@ void renderControlsTab()
 					ImGui::OpenPopup(T("Controller Mapping"));
 				}
 
-				// Settings button for rumble/deadzone/saturation
+				// Virtual controllers open the live editor; physical controllers keep
+				// the rumble, deadzone, and saturation popup.
 				if (gamepad->is_rumble_enabled() || gamepad->has_analog_stick() || gamepad->is_virtual_gamepad())
 				{
 					ImGui::SameLine(0, SettingsLayoutScaled(16.0f));
 					if (ImGui::Button(T("Settings"), deviceButtonSize))
 					{
-						g_currentGamepadForSettings = gamepad;
-						ImGui::OpenPopup(T("Gamepad Settings"));
+						if (gamepad->is_virtual_gamepad())
+						{
+							g_currentGamepadForSettings.reset();
+							vgamepad::startEditing();
+							vgamepad::pauseEditing();
+							gui_setState(GuiState::VJoyEditCommands);
+						}
+						else
+						{
+							g_currentGamepadForSettings = gamepad;
+							ImGui::OpenPopup(T("Gamepad Settings"));
+						}
 					}
 				}
 
