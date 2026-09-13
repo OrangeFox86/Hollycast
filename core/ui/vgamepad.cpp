@@ -77,6 +77,7 @@ static ImVec2 StickPos;	// analog stick position [-1, 1]
 static Element SelectedElement = Elem_DPad;
 static Element DraggedElement = Elem_None;
 static ImVec2 LastDragMousePos;
+static std::string PendingImagePath;
 constexpr float REFERENCE_WIDTH = 640.f;
 constexpr float REFERENCE_HEIGHT = 480.f;
 constexpr float MIN_ELEMENT_SCALE = 0.5f;
@@ -125,13 +126,9 @@ static bool loadOSDButtons(const std::string& path)
     return true;
 }
 
-static ImTextureID loadOSDButtons()
+static ImTextureID loadDefaultOSDButtons()
 {
 	ImTextureID id{};
-	// custom image
-	std::string path = config::loadStr(CFG_SECTION, getButtonsCfgName());
-	if (loadOSDButtons(path))
-		return id;
 	if (settings.platform.isConsole())
 	{
 		// legacy buttons.png in data folder
@@ -157,6 +154,14 @@ static ImTextureID loadOSDButtons()
         free(image_data);
     }
     return id;
+}
+
+static ImTextureID loadOSDButtons()
+{
+	const std::string path = config::loadStr(CFG_SECTION, getButtonsCfgName());
+	if (loadOSDButtons(path))
+		return {};
+	return loadDefaultOSDButtons();
 }
 
 ImTextureID ImguiVGamepadTexture::getId()
@@ -544,7 +549,7 @@ struct LayoutElement
 		return MAX_TOUCH_PADDING * touchSize / MAX_PERCENT;
 	}
 };
-static LayoutElement Layout[] {
+static LayoutElement Layout[Elem_Count] {
 	{ "dpad",     Tnop("D-pad"),        32.f, -24.f, 192.f, 192.f },
 	{ "buttons",  Tnop("Face Buttons"),-24.f, -24.f, 192.f, 192.f },
 	{ "start",    Tnop("Start"),         0.f, -24.f,  64.f,  64.f },
@@ -808,7 +813,7 @@ static void captureEditSession()
 
 static void restoreEditSession()
 {
-	const bool imageChanged = config::loadStr(CFG_SECTION, getButtonsCfgName(), "") != EditSession.imagePath;
+	const bool imageChanged = PendingImagePath != EditSession.imagePath;
 	for (int i = 0; i < Elem_Count; i++)
 	{
 		LayoutElement& element = Layout[i];
@@ -833,6 +838,7 @@ static void restoreEditSession()
 		// back to the default artwork instead of leaving the replacement active.
 		loadOSDButtons();
 	}
+	PendingImagePath = EditSession.imagePath;
 	applyLayout();
 }
 
@@ -1172,12 +1178,17 @@ void scaleElement(Element element, float factor)
 
 void loadImage(const std::string& path)
 {
-	if (path.empty()) {
-		config::saveStr(CFG_SECTION, getButtonsCfgName(), "");
-		loadOSDButtons();
+	if (!Editing)
+		return;
+
+	if (path.empty())
+	{
+		loadDefaultOSDButtons();
+		PendingImagePath.clear();
 	}
-	else if (loadOSDButtons(path)) {
-		config::saveStr(CFG_SECTION, getButtonsCfgName(), path);
+	else if (loadOSDButtons(path))
+	{
+		PendingImagePath = path;
 	}
 }
 
@@ -1452,6 +1463,7 @@ void startEditing()
 	{
 		loadLayout();
 		captureEditSession();
+		PendingImagePath = EditSession.imagePath;
 	}
 	enableAllControls();
 	show();
@@ -1470,7 +1482,7 @@ static void stopEditing(bool canceled)
 	if (canceled)
 		restoreEditSession();
 	else
-		saveCustomization(config::loadStr(CFG_SECTION, getButtonsCfgName(), ""));
+		saveCustomization(PendingImagePath);
 	Editing = false;
 }
 
