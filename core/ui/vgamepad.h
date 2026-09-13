@@ -1,5 +1,6 @@
 /*
 	Copyright 2019 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -68,6 +69,7 @@ enum Element
 	Elem_Btn5,
 	Elem_ServiceMode,
 	Elem_InsertCard,
+	Elem_Count,
 };
 
 class ImguiVGamepadTexture : public ImguiTexture

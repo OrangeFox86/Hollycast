@@ -31,12 +31,14 @@
 #include "oslib/resources.h"
 #include "oslib/i18n.h"
 #include "cfg/cfg.h"
-#include "input/gamepad.h"
 #include "input/mouse.h"
 #include "hw/naomi/naomi_cart.h"
 #include "hw/naomi/card_reader.h"
 #include "hw/maple/maple_devs.h"
 #include "stbi.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace vgamepad
 {
@@ -62,6 +64,8 @@ static float AlphaTrans = 1.f;
 static ImVec2 StickPos;	// analog stick position [-1, 1]
 constexpr float REFERENCE_WIDTH = 640.f;
 constexpr float REFERENCE_HEIGHT = 480.f;
+constexpr float MIN_ELEMENT_SCALE = 0.5f;
+constexpr float MAX_ELEMENT_SCALE = 1.8f;
 constexpr char const *BTN_PATH = "picture/buttons.png";
 constexpr char const *BTN_PATH_ARCADE = "picture/buttons-arcade.png";
 constexpr char const *CFG_SECTION = "vgamepad";
@@ -458,7 +462,10 @@ struct LayoutElement
 	{
 		x = config::loadFloat(CFG_SECTION, name + "_x", x);
 		y = config::loadFloat(CFG_SECTION, name + "_y", y);
-		scale = config::loadFloat(CFG_SECTION, name + "_scale", scale);
+		const float loadedScale = config::loadFloat(CFG_SECTION, name + "_scale", scale);
+		scale = std::isfinite(loadedScale)
+				? std::clamp(loadedScale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE)
+				: 1.f;
 	}
 	void save() const
 	{
@@ -514,6 +521,11 @@ static LayoutElement Layout[] {
 	{ "service",  -24.f,  96.f,  64.f,  64.f },
 	{ "inscard",   40.f,-250.f,  64.f,  64.f },
 };
+
+static bool isValidElement(Element element)
+{
+	return element >= Elem_DPad && element < Elem_Count;
+}
 
 static void applyLayout()
 {
@@ -640,6 +652,9 @@ Element layoutHitTest(float x, float y)
 
 void translateElement(Element element, float dx, float dy)
 {
+	if (!isValidElement(element) || !std::isfinite(dx) || !std::isfinite(dy))
+		return;
+
 	LayoutElement& e = Layout[element];
 	e.x += dx;
 	e.y += dy;
@@ -648,12 +663,19 @@ void translateElement(Element element, float dx, float dy)
 
 void scaleElement(Element element, float factor)
 {
+	if (!isValidElement(element) || !std::isfinite(factor) || factor <= 0.f)
+		return;
+
 	LayoutElement& e = Layout[element];
-	float dx = e.w * e.scale * (factor - 1.f) / 2.f;
-	float dy = e.h * e.scale * (factor - 1.f) / 2.f;
-	e.scale *= factor;
-	// keep centered
-	translateElement(element, -dx, -dy);
+	const float newScale = std::clamp(e.scale * factor, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE);
+	if (newScale == e.scale)
+		return;
+
+	// Keep the unit centered using the actual clamped scale change.
+	e.x += e.w * (e.scale - newScale) / 2.f;
+	e.y += e.h * (e.scale - newScale) / 2.f;
+	e.scale = newScale;
+	applyLayout();
 }
 
 void loadImage(const std::string& path)
