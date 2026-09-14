@@ -53,7 +53,7 @@ static void drawTouchIndicator(bool pointerOverUi);
 static void handleCustomizeDrag(bool pointerOverUi);
 static Element controlToElement(ControlId control);
 static int getControlTransparency(ControlId control);
-static float getControlHitPadding(ControlId control);
+static ImVec2 getControlHitPadding(ControlId control);
 static float getFingerHitPadding();
 
 struct Control
@@ -84,6 +84,7 @@ constexpr float MIN_ELEMENT_SCALE = 0.5f;
 constexpr float MAX_ELEMENT_SCALE = 1.8f;
 constexpr float MAX_TOUCH_PADDING = 24.f;
 constexpr int MAX_PERCENT = 100;
+constexpr int MIN_TOUCH_SIZE = -50;
 constexpr s64 MAX_BUTTON_IMAGE_FILE_SIZE = 4 * 1024 * 1024;
 constexpr int MAX_BUTTON_IMAGE_WIDTH = 4096;
 constexpr int MAX_BUTTON_IMAGE_HEIGHT = 2048;
@@ -312,16 +313,17 @@ ControlId hitTest(float x, float y)
 	for (const auto& control : Controls)
 	{
 		const ControlId controlId = static_cast<ControlId>(&control - &Controls[0]);
-		const float padding = getControlHitPadding(controlId) + fingerPadding;
+		const ImVec2 unitPadding = getControlHitPadding(controlId);
+		const ImVec2 padding = unitPadding + ImVec2(fingerPadding, fingerPadding);
 		if (control.disabled
-				|| x < control.pos.x - padding || x >= control.pos.x + control.size.x + padding
-				|| y < control.pos.y - padding || y >= control.pos.y + control.size.y + padding)
+				|| x < control.pos.x - padding.x || x >= control.pos.x + control.size.x + padding.x
+				|| y < control.pos.y - padding.y || y >= control.pos.y + control.size.y + padding.y)
 			continue;
 
-		// Expanded targets can overlap. Prefer the control whose original bounds
-		// are nearest to the touch instead of relying on enum order.
-		const float nearestX = std::clamp(x, control.pos.x, control.pos.x + control.size.x);
-		const float nearestY = std::clamp(y, control.pos.y, control.pos.y + control.size.y);
+		// Rank overlaps against the unexpanded target, including any user shrinkage.
+		const ImVec2 inset(-std::min(unitPadding.x, 0.f), -std::min(unitPadding.y, 0.f));
+		const float nearestX = std::clamp(x, control.pos.x + inset.x, control.pos.x + control.size.x - inset.x);
+		const float nearestY = std::clamp(y, control.pos.y + inset.y, control.pos.y + control.size.y - inset.y);
 		const float dx = x - nearestX;
 		const float dy = y - nearestY;
 		const float distanceSquared = dx * dx + dy * dy;
@@ -516,7 +518,7 @@ struct LayoutElement
 	float w, h;			// normalized coordinates [0, 1], scaled with uiScale
 	float scale;		// user scale
 	int transparency = 0;	// per-unit transparency [0, 100]
-	int touchSize = 0;		// extra hitbox padding [0, 100]
+	int touchSize = 0;		// target shrinkage [-50, 0] or extra padding [0, 100]
 
 	void load()
 	{
@@ -528,7 +530,7 @@ struct LayoutElement
 				: 1.f;
 		const int legacyTransparency = std::clamp(static_cast<int>(config::VirtualGamepadTransparency), 0, MAX_PERCENT);
 		transparency = std::clamp(config::loadInt(CFG_SECTION, name + "_transparency", legacyTransparency), 0, MAX_PERCENT);
-		touchSize = std::clamp(config::loadInt(CFG_SECTION, name + "_touch_size", touchSize), 0, MAX_PERCENT);
+		touchSize = std::clamp(config::loadInt(CFG_SECTION, name + "_touch_size", touchSize), MIN_TOUCH_SIZE, MAX_PERCENT);
 	}
 	void save() const
 	{
@@ -572,11 +574,6 @@ struct LayoutElement
 			y = dy / REFERENCE_HEIGHT * uiscale;
 		else
 			y = 1.f - h + dy / REFERENCE_HEIGHT * uiscale;
-	}
-
-	float touchPadding() const
-	{
-		return MAX_TOUCH_PADDING * touchSize / MAX_PERCENT;
 	}
 };
 static LayoutElement Layout[Elem_Count] {
@@ -676,10 +673,20 @@ static int getControlTransparency(ControlId control)
 	return isValidElement(element) ? Layout[element].transparency : 0;
 }
 
-static float getControlHitPadding(ControlId control)
+static ImVec2 getControlHitPadding(ControlId control)
 {
 	const Element element = controlToElement(control);
-	return isValidElement(element) ? Layout[element].touchPadding() : 0.f;
+	if (!isValidElement(element))
+		return ImVec2(0.f, 0.f);
+	const int touchSize = Layout[element].touchSize;
+	if (touchSize < 0)
+	{
+		// Contract each axis around the center, following the unit's visual scale.
+		// Keep the existing zero and positive settings unchanged for saved layouts.
+		return Controls[control].size * (0.5f * touchSize / MAX_PERCENT);
+	}
+	const float padding = MAX_TOUCH_PADDING * touchSize / MAX_PERCENT;
+	return ImVec2(padding, padding);
 }
 
 static float getFingerHitPadding()
@@ -892,7 +899,7 @@ static bool getElementScreenBounds(Element element, ImVec2& min, ImVec2& max)
 	return true;
 }
 
-static bool getControlScreenBounds(ControlId controlId, ImVec2& min, ImVec2& max, bool includeInputPadding)
+static bool getControlScreenBounds(ControlId controlId, ImVec2& min, ImVec2& max)
 {
 	if (controlId < Left || controlId >= _Count || Controls[controlId].disabled)
 		return false;
@@ -904,14 +911,12 @@ static bool getControlScreenBounds(ControlId controlId, ImVec2& min, ImVec2& max
 	min.x += screenOffsetX;
 	max = (control.pos + control.size) * screenScale;
 	max.x += screenOffsetX;
-	if (includeInputPadding)
-	{
-		// Keep this calculation identical to hitTest(): blue outlines represent
-		// the actual target after unit and finger expansion are combined.
-		const float padding = (getControlHitPadding(controlId) + getFingerHitPadding()) * screenScale;
-		min -= ImVec2(padding, padding);
-		max += ImVec2(padding, padding);
-	}
+	// Keep this calculation identical to hitTest(): blue outlines represent
+	// the actual target after unit resizing and finger expansion are combined.
+	const float fingerPadding = getFingerHitPadding();
+	const ImVec2 padding = (getControlHitPadding(controlId) + ImVec2(fingerPadding, fingerPadding)) * screenScale;
+	min -= padding;
+	max += padding;
 	return true;
 }
 
@@ -931,9 +936,6 @@ static void drawSelectedElement()
 	ImDrawList *drawList = ImGui::GetBackgroundDrawList();
 	drawList->AddRect(min, max, IM_COL32(34, 161, 110, 230), uiScaled(8.f), 0, uiScaled(2.f));
 
-	if (Layout[SelectedElement].touchSize <= 0 && getFingerHitPadding() <= 0.f)
-		return;
-
 	for (int control = Left; control < _Count; control++)
 	{
 		const ControlId controlId = static_cast<ControlId>(control);
@@ -942,7 +944,7 @@ static void drawSelectedElement()
 
 		ImVec2 touchMin;
 		ImVec2 touchMax;
-		if (getControlScreenBounds(controlId, touchMin, touchMax, true))
+		if (getControlScreenBounds(controlId, touchMin, touchMax))
 			drawList->AddRect(touchMin, touchMax, IM_COL32(64, 196, 255, 210), uiScaled(8.f), 0, uiScaled(2.f));
 	}
 }
@@ -1079,8 +1081,8 @@ static void drawCustomizePanel()
 		selected.transparency = std::clamp(unitTransparency, 0, MAX_PERCENT);
 
 	int touchSize = selected.touchSize;
-	if (drawCustomizeSlider("VirtualControllerTouchSize", i18n::T("Touch Size"), touchSize, 0, MAX_PERCENT))
-		selected.touchSize = std::clamp(touchSize, 0, MAX_PERCENT);
+	if (drawCustomizeSlider("VirtualControllerTouchSize", i18n::T("Touch Size"), touchSize, MIN_TOUCH_SIZE, MAX_PERCENT))
+		selected.touchSize = std::clamp(touchSize, MIN_TOUCH_SIZE, MAX_PERCENT);
 
 	int scale = getElementScalePercent(SelectedElement);
 	if (drawCustomizeSlider("VirtualControllerScale", i18n::T("Scaling"), scale,
