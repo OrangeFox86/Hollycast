@@ -282,13 +282,13 @@ static void RenderToggleSwitchVisual(bool value)
 
 	// Detect light vs dark theme based on window background luminance
 	ImGuiStyle& guiStyle = ImGui::GetStyle();
-	float bgLuminance
-		= (guiStyle.Colors[ImGuiCol_WindowBg].x + guiStyle.Colors[ImGuiCol_WindowBg].y + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
+	float bgLuminance =
+		(guiStyle.Colors[ImGuiCol_WindowBg].x + guiStyle.Colors[ImGuiCol_WindowBg].y + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
 	bool isLightTheme = bgLuminance > 0.5f;
 
 	// Use CheckMark color for knob (theme's accent color) or contrasting color
 	ImU32 knobColor = isLightTheme ? ImGui::GetColorU32(ImGuiCol_Text) // Dark text color for light themes
-								   : IM_COL32(255, 255, 255, 255);	   // White for dark themes
+								   : IM_COL32(255, 255, 255, 255); // White for dark themes
 	draw_list->AddCircleFilled(knob_pos, radius - 1.0f, knobColor);
 }
 
@@ -493,8 +493,8 @@ static void RenderSettingsFooterBar()
 		ImDrawFlags_RoundCornersTop
 	);
 
-	const char* footerText
-		= g_settingsFooterText.empty() ? T("Highlight or select a setting to see details here.") : g_settingsFooterText.c_str();
+	const char* footerText =
+		g_settingsFooterText.empty() ? T("Highlight or select a setting to see details here.") : g_settingsFooterText.c_str();
 	const ImVec2 clipMin(textBoxMin.x + textPadX, textBoxMin.y + textPadY);
 	const ImVec2 clipMax(textBoxMax.x - textPadX, textBoxMax.y - textPadY);
 	const ImVec2 bodyPos(clipMin.x, clipMin.y);
@@ -621,8 +621,8 @@ static void RenderSettingsFooterBar()
 	ImVec2 textPos(std::floor(bodyPos.x), std::floor(bodyPos.y));
 	drawList->PushClipRect(clipMin, clipMax, true);
 	if (!displayTitle.empty()) {
-		const ImVec4 titleColor2
-			= ImVec4(std::min(bodyColor.x + 0.15f, 1.0f), std::min(bodyColor.y + 0.15f, 1.0f), std::min(bodyColor.z + 0.15f, 1.0f), 1.0f);
+		const ImVec4 titleColor2 =
+			ImVec4(std::min(bodyColor.x + 0.15f, 1.0f), std::min(bodyColor.y + 0.15f, 1.0f), std::min(bodyColor.z + 0.15f, 1.0f), 1.0f);
 		AddWeightedFooterText(drawList, titleFont, finalTitleSize, textPos, titleColor2, displayTitle.c_str(), wrapWidth);
 		textPos.y = std::floor(textPos.y + finalTitleSize + titleSpacing);
 	}
@@ -638,9 +638,10 @@ static void RenderSettingsFooterBar()
 class ScopedTwoLineRowStyle
 {
 public:
-	ScopedTwoLineRowStyle(float rowHeightExtraPx, bool drawSeparators, float separatorAlpha = 0.5f)
-		: m_prevRowHeightExtraPx(g_twoLineRowExtraHeightPx), m_prevDrawSeparators(g_twoLineRowSeparatorsEnabled),
-		  m_prevSeparatorAlpha(g_twoLineRowSeparatorAlpha)
+	ScopedTwoLineRowStyle(float rowHeightExtraPx, bool drawSeparators, float separatorAlpha = 0.5f) :
+		m_prevRowHeightExtraPx(g_twoLineRowExtraHeightPx),
+		m_prevDrawSeparators(g_twoLineRowSeparatorsEnabled),
+		m_prevSeparatorAlpha(g_twoLineRowSeparatorAlpha)
 	{
 		g_twoLineRowExtraHeightPx = rowHeightExtraPx;
 		g_twoLineRowSeparatorsEnabled = drawSeparators;
@@ -744,8 +745,8 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 
 	// Determine if we're on a light or dark theme
 	ImGuiStyle& guiStyle = ImGui::GetStyle();
-	float bgLuminance
-		= (guiStyle.Colors[ImGuiCol_WindowBg].x + guiStyle.Colors[ImGuiCol_WindowBg].y + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
+	float bgLuminance =
+		(guiStyle.Colors[ImGuiCol_WindowBg].x + guiStyle.Colors[ImGuiCol_WindowBg].y + guiStyle.Colors[ImGuiCol_WindowBg].z) / 3.0f;
 	bool isLightTheme = bgLuminance > 0.5f;
 
 	// For dark themes: use solid white text
@@ -763,8 +764,8 @@ static void RenderTwoLineSettingDescription(const ImVec2& line1Start, const char
 		textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	ImGui::PushStyleColor(ImGuiCol_Text, textColor);
-	const float wrapWidth
-		= std::max(SettingsLayoutScaled(80.0f), g_twoLineRowEndScreenX - ImGui::GetCursorScreenPos().x - SettingsLayoutScaled(16.0f));
+	const float wrapWidth =
+		std::max(SettingsLayoutScaled(80.0f), g_twoLineRowEndScreenX - ImGui::GetCursorScreenPos().x - SettingsLayoutScaled(16.0f));
 	const ImVec2 textMin = ImGui::GetCursorScreenPos();
 	ImGui::PushClipRect(
 		textMin,
@@ -1096,121 +1097,123 @@ struct MappingEntry
 	const char* name;
 };
 
-static constexpr MappingEntry dcButtons_src[]
-	= {{EMU_BTN_NONE, Tnop("Directions")},
-		{DC_DPAD_UP, Tnop("Up")},
-		{DC_DPAD_DOWN, Tnop("Down")},
-		{DC_DPAD_LEFT, Tnop("Left")},
-		{DC_DPAD_RIGHT, Tnop("Right")},
+static constexpr MappingEntry dcButtons_src[] = {
+	{EMU_BTN_NONE, Tnop("Directions")},
+	{DC_DPAD_UP, Tnop("Up")},
+	{DC_DPAD_DOWN, Tnop("Down")},
+	{DC_DPAD_LEFT, Tnop("Left")},
+	{DC_DPAD_RIGHT, Tnop("Right")},
 
-		{DC_AXIS_UP, Tnop("Thumbstick Up")},
-		{DC_AXIS_DOWN, Tnop("Thumbstick Down")},
-		{DC_AXIS_LEFT, Tnop("Thumbstick Left")},
-		{DC_AXIS_RIGHT, Tnop("Thumbstick Right")},
+	{DC_AXIS_UP, Tnop("Thumbstick Up")},
+	{DC_AXIS_DOWN, Tnop("Thumbstick Down")},
+	{DC_AXIS_LEFT, Tnop("Thumbstick Left")},
+	{DC_AXIS_RIGHT, Tnop("Thumbstick Right")},
 
-		{DC_AXIS2_UP, Tnop("R.Thumbstick Up")},
-		{DC_AXIS2_DOWN, Tnop("R.Thumbstick Down")},
-		{DC_AXIS2_LEFT, Tnop("R.Thumbstick Left")},
-		{DC_AXIS2_RIGHT, Tnop("R.Thumbstick Right")},
+	{DC_AXIS2_UP, Tnop("R.Thumbstick Up")},
+	{DC_AXIS2_DOWN, Tnop("R.Thumbstick Down")},
+	{DC_AXIS2_LEFT, Tnop("R.Thumbstick Left")},
+	{DC_AXIS2_RIGHT, Tnop("R.Thumbstick Right")},
 
-		{DC_AXIS3_UP, Tnop("Axis 3 Up")},
-		{DC_AXIS3_DOWN, Tnop("Axis 3 Down")},
-		{DC_AXIS3_LEFT, Tnop("Axis 3 Left")},
-		{DC_AXIS3_RIGHT, Tnop("Axis 3 Right")},
+	{DC_AXIS3_UP, Tnop("Axis 3 Up")},
+	{DC_AXIS3_DOWN, Tnop("Axis 3 Down")},
+	{DC_AXIS3_LEFT, Tnop("Axis 3 Left")},
+	{DC_AXIS3_RIGHT, Tnop("Axis 3 Right")},
 
-		{DC_DPAD2_UP, Tnop("DPad2 Up")},
-		{DC_DPAD2_DOWN, Tnop("DPad2 Down")},
-		{DC_DPAD2_LEFT, Tnop("DPad2 Left")},
-		{DC_DPAD2_RIGHT, Tnop("DPad2 Right")},
+	{DC_DPAD2_UP, Tnop("DPad2 Up")},
+	{DC_DPAD2_DOWN, Tnop("DPad2 Down")},
+	{DC_DPAD2_LEFT, Tnop("DPad2 Left")},
+	{DC_DPAD2_RIGHT, Tnop("DPad2 Right")},
 
-		{EMU_BTN_NONE, Tnop("Buttons")},
-		{DC_BTN_A, "A"},
-		{DC_BTN_B, "B"},
-		{DC_BTN_X, "X"},
-		{DC_BTN_Y, "Y"},
-		{DC_BTN_C, "C"},
-		{DC_BTN_D, "D"},
-		{DC_BTN_Z, "Z"},
+	{EMU_BTN_NONE, Tnop("Buttons")},
+	{DC_BTN_A, "A"},
+	{DC_BTN_B, "B"},
+	{DC_BTN_X, "X"},
+	{DC_BTN_Y, "Y"},
+	{DC_BTN_C, "C"},
+	{DC_BTN_D, "D"},
+	{DC_BTN_Z, "Z"},
 
-		{EMU_BTN_NONE, Tnop("Triggers")},
-		{DC_AXIS_LT, Tnop("Left Trigger")},
-		{DC_AXIS_RT, Tnop("Right Trigger")},
-		{DC_AXIS_LT2, Tnop("Left Trigger 2")},
-		{DC_AXIS_RT2, Tnop("Right Trigger 2")},
+	{EMU_BTN_NONE, Tnop("Triggers")},
+	{DC_AXIS_LT, Tnop("Left Trigger")},
+	{DC_AXIS_RT, Tnop("Right Trigger")},
+	{DC_AXIS_LT2, Tnop("Left Trigger 2")},
+	{DC_AXIS_RT2, Tnop("Right Trigger 2")},
 
-		{EMU_BTN_NONE, Tnop("System Buttons")},
-		{DC_BTN_START, Tnop("Start")},
-		{DC_BTN_RELOAD, Tnop("Reload")},
+	{EMU_BTN_NONE, Tnop("System Buttons")},
+	{DC_BTN_START, Tnop("Start")},
+	{DC_BTN_RELOAD, Tnop("Reload")},
 
-		{EMU_BTN_NONE, Tnop("Emulator")},
-		{EMU_BTN_MENU, Tnop("Menu")},
-		{EMU_BTN_ESCAPE, Tnop("Exit")},
-		{EMU_BTN_PAUSE, Tnop("Pause")},
-		{EMU_BTN_FFORWARD, Tnop("Fast-forward")},
-		{EMU_BTN_LOADSTATE, Tnop("Load State")},
-		{EMU_BTN_SAVESTATE, Tnop("Save State")},
-		{EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM")},
-		{EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM")},
-		{EMU_BTN_BYPASS_KB, Tnop("Bypass Emulated Keyboard")},
-		{EMU_BTN_SCREENSHOT, Tnop("Save Screenshot")},
+	{EMU_BTN_NONE, Tnop("Emulator")},
+	{EMU_BTN_MENU, Tnop("Menu")},
+	{EMU_BTN_ESCAPE, Tnop("Exit")},
+	{EMU_BTN_PAUSE, Tnop("Pause")},
+	{EMU_BTN_FFORWARD, Tnop("Fast-forward")},
+	{EMU_BTN_LOADSTATE, Tnop("Load State")},
+	{EMU_BTN_SAVESTATE, Tnop("Save State")},
+	{EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM")},
+	{EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM")},
+	{EMU_BTN_BYPASS_KB, Tnop("Bypass Emulated Keyboard")},
+	{EMU_BTN_SCREENSHOT, Tnop("Save Screenshot")},
 
-		{EMU_BTN_NONE, nullptr}};
+	{EMU_BTN_NONE, nullptr}
+};
 static MappingEntry dcButtons[std::size(dcButtons_src)];
 
-static constexpr MappingEntry arcadeButtons_src[]
-	= {{EMU_BTN_NONE, Tnop("Directions")},
-		{DC_DPAD_UP, Tnop("Up")},
-		{DC_DPAD_DOWN, Tnop("Down")},
-		{DC_DPAD_LEFT, Tnop("Left")},
-		{DC_DPAD_RIGHT, Tnop("Right")},
+static constexpr MappingEntry arcadeButtons_src[] = {
+	{EMU_BTN_NONE, Tnop("Directions")},
+	{DC_DPAD_UP, Tnop("Up")},
+	{DC_DPAD_DOWN, Tnop("Down")},
+	{DC_DPAD_LEFT, Tnop("Left")},
+	{DC_DPAD_RIGHT, Tnop("Right")},
 
-		{DC_AXIS_UP, Tnop("Thumbstick Up")},
-		{DC_AXIS_DOWN, Tnop("Thumbstick Down")},
-		{DC_AXIS_LEFT, Tnop("Thumbstick Left")},
-		{DC_AXIS_RIGHT, Tnop("Thumbstick Right")},
+	{DC_AXIS_UP, Tnop("Thumbstick Up")},
+	{DC_AXIS_DOWN, Tnop("Thumbstick Down")},
+	{DC_AXIS_LEFT, Tnop("Thumbstick Left")},
+	{DC_AXIS_RIGHT, Tnop("Thumbstick Right")},
 
-		{DC_AXIS2_UP, Tnop("R.Thumbstick Up")},
-		{DC_AXIS2_DOWN, Tnop("R.Thumbstick Down")},
-		{DC_AXIS2_LEFT, Tnop("R.Thumbstick Left")},
-		{DC_AXIS2_RIGHT, Tnop("R.Thumbstick Right")},
+	{DC_AXIS2_UP, Tnop("R.Thumbstick Up")},
+	{DC_AXIS2_DOWN, Tnop("R.Thumbstick Down")},
+	{DC_AXIS2_LEFT, Tnop("R.Thumbstick Left")},
+	{DC_AXIS2_RIGHT, Tnop("R.Thumbstick Right")},
 
-		{EMU_BTN_NONE, Tnop("Buttons")},
-		{DC_BTN_A, Tnop("Button 1")},
-		{DC_BTN_B, Tnop("Button 2")},
-		{DC_BTN_C, Tnop("Button 3")},
-		{DC_BTN_X, Tnop("Button 4")},
-		{DC_BTN_Y, Tnop("Button 5")},
-		{DC_BTN_Z, Tnop("Button 6")},
-		{DC_DPAD2_LEFT, Tnop("Button 7")},
-		{DC_DPAD2_RIGHT, Tnop("Button 8")},
+	{EMU_BTN_NONE, Tnop("Buttons")},
+	{DC_BTN_A, Tnop("Button 1")},
+	{DC_BTN_B, Tnop("Button 2")},
+	{DC_BTN_C, Tnop("Button 3")},
+	{DC_BTN_X, Tnop("Button 4")},
+	{DC_BTN_Y, Tnop("Button 5")},
+	{DC_BTN_Z, Tnop("Button 6")},
+	{DC_DPAD2_LEFT, Tnop("Button 7")},
+	{DC_DPAD2_RIGHT, Tnop("Button 8")},
 
-		{EMU_BTN_NONE, Tnop("Triggers")},
-		{DC_AXIS_LT, Tnop("Left Trigger")},
-		{DC_AXIS_RT, Tnop("Right Trigger")},
-		{DC_AXIS_LT2, Tnop("Left Trigger 2")},
-		{DC_AXIS_RT2, Tnop("Right Trigger 2")},
+	{EMU_BTN_NONE, Tnop("Triggers")},
+	{DC_AXIS_LT, Tnop("Left Trigger")},
+	{DC_AXIS_RT, Tnop("Right Trigger")},
+	{DC_AXIS_LT2, Tnop("Left Trigger 2")},
+	{DC_AXIS_RT2, Tnop("Right Trigger 2")},
 
-		{EMU_BTN_NONE, Tnop("System Buttons")},
-		{DC_BTN_START, Tnop("Start")},
-		{DC_BTN_RELOAD, Tnop("Reload")},
-		{DC_BTN_D, Tnop("Coin")},
-		{DC_DPAD2_UP, Tnop("Service")},
-		{DC_DPAD2_DOWN, Tnop("Test")},
-		{DC_BTN_INSERT_CARD, Tnop("Insert Card")},
+	{EMU_BTN_NONE, Tnop("System Buttons")},
+	{DC_BTN_START, Tnop("Start")},
+	{DC_BTN_RELOAD, Tnop("Reload")},
+	{DC_BTN_D, Tnop("Coin")},
+	{DC_DPAD2_UP, Tnop("Service")},
+	{DC_DPAD2_DOWN, Tnop("Test")},
+	{DC_BTN_INSERT_CARD, Tnop("Insert Card")},
 
-		{EMU_BTN_NONE, Tnop("Emulator")},
-		{EMU_BTN_MENU, Tnop("Menu")},
-		{EMU_BTN_ESCAPE, Tnop("Exit")},
-		{EMU_BTN_PAUSE, Tnop("Pause")},
-		{EMU_BTN_FFORWARD, Tnop("Fast-forward")},
-		{EMU_BTN_LOADSTATE, Tnop("Load State")},
-		{EMU_BTN_SAVESTATE, Tnop("Save State")},
-		{EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM")},
-		{EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM")},
-		{EMU_BTN_BYPASS_KB, Tnop("Bypass Emulated Keyboard")},
-		{EMU_BTN_SCREENSHOT, Tnop("Save Screenshot")},
+	{EMU_BTN_NONE, Tnop("Emulator")},
+	{EMU_BTN_MENU, Tnop("Menu")},
+	{EMU_BTN_ESCAPE, Tnop("Exit")},
+	{EMU_BTN_PAUSE, Tnop("Pause")},
+	{EMU_BTN_FFORWARD, Tnop("Fast-forward")},
+	{EMU_BTN_LOADSTATE, Tnop("Load State")},
+	{EMU_BTN_SAVESTATE, Tnop("Save State")},
+	{EMU_BTN_LOADSTATE_RAM, Tnop("Load State in RAM")},
+	{EMU_BTN_SAVESTATE_RAM, Tnop("Save State in RAM")},
+	{EMU_BTN_BYPASS_KB, Tnop("Bypass Emulated Keyboard")},
+	{EMU_BTN_SCREENSHOT, Tnop("Save Screenshot")},
 
-		{EMU_BTN_NONE, nullptr}};
+	{EMU_BTN_NONE, nullptr}
+};
 static MappingEntry arcadeButtons[std::size(arcadeButtons_src)];
 
 // Device type arrays for dropdowns
@@ -1964,14 +1967,14 @@ static void managePathList(const char* label, const std::string& singularLabel, 
 	});
 #ifdef __ANDROID__
 	if (openPopup) {
-		const StoragePopupResult storageResult
-			= select_storage_popup(true, false, popupTitle, [pathsPtr](bool cancelled, const std::string& selection) {
-				  if (!cancelled) {
-					  pathsPtr->push_back(selection);
-					  SaveSettings();
-				  }
-				  return true;
-			  });
+		const StoragePopupResult storageResult =
+			select_storage_popup(true, false, popupTitle, [pathsPtr](bool cancelled, const std::string& selection) {
+				if (!cancelled) {
+					pathsPtr->push_back(selection);
+					SaveSettings();
+				}
+				return true;
+			});
 		if (storageResult == StoragePopupResult::Unsupported)
 			ImGui::OpenPopup(popupTitle.c_str());
 	}
@@ -2497,8 +2500,8 @@ static void renderSettingsContentTab(SettingsTab tab)
 				ImGui::SameLine(RightColumnX(refreshButtonWidth));
 				ImVec2 refreshButtonPos = ImGui::GetCursorPos();
 				ImGui::SetCursorPos(ImVec2(refreshButtonPos.x, refreshButtonPos.y + refreshVerticalOffset));
-				const bool refreshPressed
-					= SettingsIconButton("##RescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
+				const bool refreshPressed =
+					SettingsIconButton("##RescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
 				if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 					SetSettingsFooterText(T("Refresh the current content library view."));
 
@@ -2605,8 +2608,8 @@ static void renderSettingsContentTab(SettingsTab tab)
 			ImGui::SameLine(RightColumnX(refreshButtonWidth));
 			ImVec2 refreshButtonPos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(refreshButtonPos.x, refreshButtonPos.y + refreshVerticalOffset));
-			const bool refreshPressed
-				= SettingsIconButton("##IphoneRescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
+			const bool refreshPressed =
+				SettingsIconButton("##IphoneRescanContentBtn", ICON_FA_ARROWS_ROTATE, ImVec2(refreshButtonWidth, refreshButtonHeight));
 			if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
 				SetSettingsFooterText(T("Refresh the current content library view."));
 
@@ -2841,8 +2844,9 @@ static void renderSettingsContentTab(SettingsTab tab)
 
 				const std::string popupName = T("Select Custom Boxart Folder");
 #ifdef __ANDROID__
-				const auto isRawAndroidStoragePath
-					= [](const std::string& path) { return path.find("/storage/") == 0 || path.find("/sdcard/") == 0; };
+				const auto isRawAndroidStoragePath = [](const std::string& path) {
+					return path.find("/storage/") == 0 || path.find("/sdcard/") == 0;
+				};
 				if (refreshPressed && isRawAndroidStoragePath(config::BoxartPath.get())) {
 					openPopup = true;
 					refreshPressed = false;
@@ -2861,14 +2865,14 @@ static void renderSettingsContentTab(SettingsTab tab)
 #endif
 #ifdef __ANDROID__
 				if (openPopup) {
-					const StoragePopupResult storageResult
-						= select_storage_popup(true, false, popupName, [](bool cancelled, const std::string& selection) {
-							  if (!cancelled) {
-								  config::BoxartPath.get() = selection;
-								  SaveSettings();
-							  }
-							  return true;
-						  });
+					const StoragePopupResult storageResult =
+						select_storage_popup(true, false, popupName, [](bool cancelled, const std::string& selection) {
+							if (!cancelled) {
+								config::BoxartPath.get() = selection;
+								SaveSettings();
+							}
+							return true;
+						});
 					if (storageResult == StoragePopupResult::Unsupported)
 						ImGui::OpenPopup(popupName.c_str());
 				}
@@ -3345,8 +3349,8 @@ void renderVideoTab()
 		}
 
 		// Build preset labels
-		const char* presetLabels[]
-			= {T("Potato (Max Performance)"), T("Low"), T("Medium (Balanced)"), T("High"), T("God Mode (Max Quality)"), T("Custom")};
+		const char* presetLabels[] =
+			{T("Potato (Max Performance)"), T("Low"), T("Medium (Balanced)"), T("High"), T("God Mode (Max Quality)"), T("Custom")};
 
 		// Preset dropdown (custom so we can drive footer text per option)
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
@@ -3714,8 +3718,8 @@ void renderVideoTab()
 
 			for (size_t i = 0; i < scalings.size(); i++) {
 				verticalRes[i] = static_cast<int>(scalings[i] * 480.0f);
-				const int horizontalRes
-					= !config::Widescreen ? static_cast<int>(scalings[i] * 640.0f) : static_cast<int>(scalings[i] * 480.0f * 16.0f / 9.0f);
+				const int horizontalRes =
+					!config::Widescreen ? static_cast<int>(scalings[i] * 640.0f) : static_cast<int>(scalings[i] * 480.0f * 16.0f / 9.0f);
 
 				if (verticalRes[i] == config::RenderResolution.get())
 					internalResSelection = static_cast<int>(i);
@@ -4054,10 +4058,10 @@ void renderVideoTab()
 		perPixelLayersCfg.label = T("Maximum Layers");
 		perPixelLayersCfg.icon = ICON_FA_LAYER_GROUP;
 		perPixelLayersCfg.popupID = Tnop("PerPixelMaximumLayersPopup");
-		perPixelLayersCfg.description
-			= T("Controls how many transparent layers can be resolved per pixel in complex scenes.\n"
-				"Increase this if you see missing transparency or incorrect layering.\n"
-				"Lower values reduce memory pressure and can improve performance.");
+		perPixelLayersCfg.description =
+			T("Controls how many transparent layers can be resolved per pixel in complex scenes.\n"
+			  "Increase this if you see missing transparency or incorrect layering.\n"
+			  "Lower values reduce memory pressure and can improve performance.");
 		perPixelLayersCfg.currentValue = &perPixelLayersTemp;
 		perPixelLayersCfg.minValue = 8;
 		perPixelLayersCfg.maxValue = 128;
@@ -4542,8 +4546,8 @@ void renderAudioTab()
 		}
 	}
 
-	const bool showAudioLatency
-		= RenderCollapsingHeader("AudioLatencySection", ICON_FA_CLOCK, T("Audio Latency"), ImGuiTreeNodeFlags_DefaultOpen);
+	const bool showAudioLatency =
+		RenderCollapsingHeader("AudioLatencySection", ICON_FA_CLOCK, T("Audio Latency"), ImGuiTreeNodeFlags_DefaultOpen);
 	if (showAudioLatency) {
 		// Audio Latency Section
 #ifdef __ANDROID__
@@ -4572,9 +4576,9 @@ void renderAudioTab()
 			latencyConfig.icon = ICON_FA_STOPWATCH;
 			latencyConfig.tooltip = T("Buffer size in milliseconds");
 			latencyConfig.popupID = Tnop("AudioLatencyPopup");
-			latencyConfig.description
-				= T("Lower values reduce audio lag but may cause audio issues. "
-					"Higher values are more stable but increase latency.");
+			latencyConfig.description =
+				T("Lower values reduce audio lag but may cause audio issues. "
+				  "Higher values are more stable but increase latency.");
 			latencyConfig.currentValue = &latencyTemp;
 			latencyConfig.minValue = 12;
 			latencyConfig.maxValue = 512;
@@ -4811,8 +4815,8 @@ static std::string normalizeVmuFileName(std::string name)
 
 	std::string lower = name;
 	string_tolower(lower);
-	const bool hasVmuExtension
-		= lower.size() >= 4 && (lower.compare(lower.size() - 4, 4, ".bin") == 0 || lower.compare(lower.size() - 4, 4, ".vmu") == 0);
+	const bool hasVmuExtension =
+		lower.size() >= 4 && (lower.compare(lower.size() - 4, 4, ".bin") == 0 || lower.compare(lower.size() - 4, 4, ".vmu") == 0);
 	if (!hasVmuExtension)
 		name += ".bin";
 	return name;
@@ -5501,9 +5505,9 @@ void renderControlsTab()
 			sensitivityConfig.icon = ICON_FA_BULLSEYE;
 			sensitivityConfig.tooltip = T("Mouse sensitivity for light gun and mouse emulation");
 			sensitivityConfig.popupID = Tnop("SensitivityPopup");
-			sensitivityConfig.description
-				= T("Adjust the mouse sensitivity for light gun and mouse emulation. "
-					"Higher values make the cursor move faster.");
+			sensitivityConfig.description =
+				T("Adjust the mouse sensitivity for light gun and mouse emulation. "
+				  "Higher values make the cursor move faster.");
 			sensitivityConfig.currentValue = &sensitivityTemp;
 			sensitivityConfig.minValue = 1;
 			sensitivityConfig.maxValue = 500;
@@ -5863,9 +5867,9 @@ void renderControlsTab()
 			crosshairConfig.icon = ICON_FA_CROSSHAIRS;
 			crosshairConfig.tooltip = T("Adjust the size of the on-screen crosshair");
 			crosshairConfig.popupID = Tnop("CrosshairSizePopup");
-			crosshairConfig.description
-				= T("Adjust the size of the on-screen crosshair for light guns. "
-					"Only available when a light gun device is connected.");
+			crosshairConfig.description =
+				T("Adjust the size of the on-screen crosshair for light guns. "
+				  "Only available when a light gun device is connected.");
 			crosshairConfig.currentValue = &crosshairSizeTemp;
 			crosshairConfig.minValue = 10;
 			crosshairConfig.maxValue = 100;
@@ -6612,10 +6616,10 @@ void renderAdvancedTab()
 			sh4ClockCfg.label = T("SH4 Clock");
 			sh4ClockCfg.icon = ICON_FA_GAUGE_HIGH;
 			sh4ClockCfg.popupID = Tnop("Sh4ClockPopup");
-			sh4ClockCfg.description
-				= T("Adjusts the emulated SH4 CPU clock. Default is 200 MHz.\n"
-					"Higher values may reduce CPU-side frame drops in some games, but can also break timing.\n"
-					"Lower values can reduce CPU load, but may cause slowdowns or audio/video instability.");
+			sh4ClockCfg.description =
+				T("Adjusts the emulated SH4 CPU clock. Default is 200 MHz.\n"
+				  "Higher values may reduce CPU-side frame drops in some games, but can also break timing.\n"
+				  "Lower values can reduce CPU load, but may cause slowdowns or audio/video instability.");
 			sh4ClockCfg.currentValue = &sh4ClockTemp;
 			sh4ClockCfg.minValue = 100;
 			sh4ClockCfg.maxValue = 300;
@@ -6650,10 +6654,10 @@ void renderAdvancedTab()
 			fastForwardLimitCfg.label = T("Fast-Forward Speed");
 			fastForwardLimitCfg.icon = ICON_FA_FORWARD_FAST;
 			fastForwardLimitCfg.popupID = Tnop("FastForwardSpeedLimitPopup");
-			fastForwardLimitCfg.description
-				= T("Sets a cap for Fast-Forward speed.\n"
-					"Values below Infinite apply frame pacing while Fast-Forward is active.\n"
-					"Infinite preserves the current uncapped behavior.");
+			fastForwardLimitCfg.description =
+				T("Sets a cap for Fast-Forward speed.\n"
+				  "Values below Infinite apply frame pacing while Fast-Forward is active.\n"
+				  "Infinite preserves the current uncapped behavior.");
 			fastForwardLimitCfg.currentValue = &fastForwardLimitTemp;
 			fastForwardLimitCfg.minValue = 2;
 			fastForwardLimitCfg.maxValue = 300;
@@ -6874,22 +6878,23 @@ void renderAdvancedTab()
 			logVerbosityCfg.options.currentValue = &logVerbositySelection;
 			logVerbosityCfg.options.valueWidth = 220.0f;
 			logVerbosityCfg.options.onOptionHighlight = [](int idx, const char*) {
-				const char* kHelp[]
-					= {T("Log Verbosity: Notice\n"
-						 "Minimal information.\n"
-						 "Best for normal usage when you only want important notices."),
-						T("Log Verbosity: Error\n"
-						  "Only errors.\n"
-						  "Useful when you want to reduce log noise and focus on failures."),
-						T("Log Verbosity: Warning\n"
-						  "Errors and warnings.\n"
-						  "A good balance for general troubleshooting with moderate verbosity."),
-						T("Log Verbosity: Info\n"
-						  "Adds informational messages.\n"
-						  "Helpful when investigating subsystems without going full debug spam."),
-						T("Log Verbosity: Debug\n"
-						  "Most verbose.\n"
-						  "Can be very noisy and may impact performance; use temporarily when debugging.")};
+				const char* kHelp[] = {
+					T("Log Verbosity: Notice\n"
+					  "Minimal information.\n"
+					  "Best for normal usage when you only want important notices."),
+					T("Log Verbosity: Error\n"
+					  "Only errors.\n"
+					  "Useful when you want to reduce log noise and focus on failures."),
+					T("Log Verbosity: Warning\n"
+					  "Errors and warnings.\n"
+					  "A good balance for general troubleshooting with moderate verbosity."),
+					T("Log Verbosity: Info\n"
+					  "Adds informational messages.\n"
+					  "Helpful when investigating subsystems without going full debug spam."),
+					T("Log Verbosity: Debug\n"
+					  "Most verbose.\n"
+					  "Can be very noisy and may impact performance; use temporarily when debugging.")
+				};
 				if (idx >= 0 && idx < (int)std::size(kHelp))
 					SetSettingsFooterText(kHelp[idx]);
 			};
