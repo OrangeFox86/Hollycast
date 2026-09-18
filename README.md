@@ -6,8 +6,6 @@
 
 Hollycast is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator, derived from [Flycast](https://github.com/flyinghead/flycast), the open-source Sega Dreamcast emulator.
 
-Our mission is simple: follow upstream core emulation code while delivering a modern UI, more front-end features, and power-user controls.
-
 ## Mission & Philosophy
 
 Hollycast tracks the Flycast core while providing a home for features and experiments that fall outside the upstream scope. The main reasons for this fork are to:
@@ -23,19 +21,11 @@ We are committed to maintaining the high bar for speed and precision set by the 
 - Verified accuracy: We use the core codebase's internal test suite alongside our own growing collection of tests to prevent regressions.
 - Core integrity: New features are built on a rock-solid foundation, ensuring that fun never comes at the cost of stability.
 
-## Key Differences
-
-- Modern interface: A reimagined UI designed for clarity.
-- Out-of-the-box optimization: Sane defaults allow new users to grab and go, while keeping advanced controls accessible for power users.
-- Quality of life: Frequent updates to aged components and new features requested specifically by the daily-player community.
-- Pro gamer ready: Already playing many titles better than original hardware, you can aim for a vanilla experience or enjoy the extra enhancements that help you get the most out of your sessions.
-- Continued development updates: As Hollycast grows, bringing in updates from Flycast will get harder. The goal is to carry forward the performance improvements, enhancements, and features that fit Hollycast without introducing regressions.
-
 ## Compatibility & Contribution
 
 Hollycast aims to support every platform and release offered by Flycast. If Flycast can do it, Hollycast will too, ideally with a newer looking and more feature rich environment while keeping the performance you have come to know and love from Flyinghead's hard work and dedication on Flycast.
 
-> **Note:** Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/pYVqGqvFJW) and open a Feature Request to discuss your plans before submitting code.
+> **Note:** Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/erSUx3v4YH) and open a Feature Request to discuss your plans before submitting code.
 
 ### Build Prerequisites for Windows
 
@@ -103,17 +93,23 @@ cmake --preset <PRESET>
 cmake --build --preset <PRESET>
 ```
 
-### Development Instructions for Android
+### Build Instructions for Android
 
-- Install [Android Studio](https://developer.android.com/studio/install).
-- Open directory `shell/android-studio` in Android Studio.
+The Android image may be built from Windows, Linux, and macOS systems. [Android Studio](https://developer.android.com/studio/install) must be installed to build this package.
+
+#### Build from Android Studio
+
+Developing within Android Studio enables debug tools, streamlines the build process, and provides other useful features built into the IDE.
+
+- Run Android Studio.
+- Open directory `shell/android-studio` of this repo.
 - The Hollycast project should be picked up automatically, with "Android" sidebar on the left, and devices and run configurations in the top right.
 - `debug` build variant is used by default. If you want to build in release mode for better performance, then open **View > Tool Windows > Build Variants**, and select Active Build Variant `developerRelease`.
    - Note that `release` variant does production code signing. It's only intended for store publishing.
 
-### Build Instructions for Android
+#### Build from Command Line
 
-Ensure Android Studio is installed, and then execute the following.
+Ensure that `JAVA_HOME` and `ANDROID_HOME` are set in your environment before trying to build from command line.
 
 ```bash
 # Your working directory must be changed to shell/android-studio before building.
