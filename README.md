@@ -97,6 +97,8 @@ cmake --build --preset <PRESET>
 
 The Android image may be built from Windows, Linux, and macOS systems. [Android Studio](https://developer.android.com/studio/install) must be installed to build this package.
 
+Ensure that `JAVA_HOME` and `ANDROID_HOME` are set in your environment before trying to build.
+
 #### Build from Android Studio
 
 Developing within Android Studio enables debug tools, streamlines the build process, and provides other useful features built into the IDE.
@@ -108,8 +110,6 @@ Developing within Android Studio enables debug tools, streamlines the build proc
    - Note that `release` variant does production code signing. It's only intended for store publishing.
 
 #### Build from Command Line
-
-Ensure that `JAVA_HOME` and `ANDROID_HOME` are set in your environment before trying to build from command line.
 
 ```bash
 # Your working directory must be changed to shell/android-studio before building.
