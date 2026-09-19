@@ -146,7 +146,6 @@ public class VirtualJoystickDelegate implements TouchEventHandler
     @Override
     public boolean onTouchEvent(MotionEvent event, int width, int height)
     {
-        // TODO2: decide if we actually want to revert this file changes
         if (JNIdc.guiIsOpen())
             return touchMouseEvent(event);
         show();
