@@ -1250,9 +1250,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				if (ImGui::BeginCombo(device_name, selected_name, ImGuiComboFlags_None))
 				{
 #if defined(__ANDROID__)
-					// TODO2: double check if change is still needed
-					// BeginCombo has no window-flags argument. Opt this popup into
-					// the existing touch-drag handling before submitting its rows.
+					// Use touch to scroll combo box contents
 					ImGui::GetCurrentWindow()->Flags |= ImGuiWindowFlags_DragScrolling;
 #endif
 					for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
@@ -1315,7 +1313,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 					if (ImGui::BeginCombo(device_name, selectedDevIter->name, ImGuiComboFlags_None))
 					{
 #if defined(__ANDROID__)
-						// Expansion-device lists use the same vertical touch scrolling.
+						// Use touch to scroll combo box contents
 						ImGui::GetCurrentWindow()->Flags |= ImGuiWindowFlags_DragScrolling;
 #endif
 						for (const auto& devIter : maple_expansion_device_types)
