@@ -329,6 +329,7 @@ void gui_display_settings()
 {
 	static std::array<bool, 4> mapleDevicesChanges;
 	static std::array<std::array<bool, 2>, 4> expDevicesChanges;
+	static VerticalTabBar settingsTabBar;
 
 	fullScreenWindow(false);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
@@ -343,70 +344,69 @@ void gui_display_settings()
 		// low width
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(4, 6));
 
-	static VerticalTabBar SettingsTabBar;
-    if (SettingsTabBar.BeginTabBar("settings"))
+    if (settingsTabBar.BeginTabBar("settings"))
     {
 		gui_display_settings_header(normal_padding, mapleDevicesChanges, expDevicesChanges);
 
-		if (SettingsTabBar.BeginTab(ICON_FA_TOOLBOX, "General"))
+		if (settingsTabBar.BeginTab(ICON_FA_TOOLBOX, "General"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_general();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		if (SettingsTabBar.BeginTab(ICON_FA_GAMEPAD, "Controls"))
+		if (settingsTabBar.BeginTab(ICON_FA_GAMEPAD, "Controls"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_controls(mapleDevicesChanges, expDevicesChanges);
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		if (SettingsTabBar.BeginTab(ICON_FA_DISPLAY, "Video"))
+		if (settingsTabBar.BeginTab(ICON_FA_DISPLAY, "Video"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_video();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		if (SettingsTabBar.BeginTab(ICON_FA_MUSIC, "Audio"))
+		if (settingsTabBar.BeginTab(ICON_FA_MUSIC, "Audio"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_audio();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		if (SettingsTabBar.BeginTab(ICON_FA_WIFI, "Network"))
+		if (settingsTabBar.BeginTab(ICON_FA_WIFI, "Network"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_network();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		if (SettingsTabBar.BeginTab(ICON_FA_MICROCHIP, "Advanced"))
+		if (settingsTabBar.BeginTab(ICON_FA_MICROCHIP, "Advanced"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_advanced();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
 #if !defined(NDEBUG) || defined(DEBUGFAST) || FC_PROFILER
-		if (SettingsTabBar.BeginTab(ICON_FA_BUG, "Debug"))
+		if (settingsTabBar.BeginTab(ICON_FA_BUG, "Debug"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_debug_tab();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
 #endif
-		if (SettingsTabBar.BeginTab(ICON_FA_CIRCLE_INFO, "About"))
+		if (settingsTabBar.BeginTab(ICON_FA_CIRCLE_INFO, "About"))
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normal_padding);
 			gui_settings_about();
 			ImGui::PopStyleVar();
-			SettingsTabBar.EndTab();
+			settingsTabBar.EndTab();
 		}
-		SettingsTabBar.EndTabBar();
+		settingsTabBar.EndTabBar();
     }
 	ImGui::PopStyleVar();
 
