@@ -39,6 +39,7 @@
 #include <future>
 #include <string>
 #include <vector>
+#include "IconsFontAwesome6.h"
 
 using namespace i18n;
 
@@ -352,12 +353,13 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	// └──────────────────┘
 
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-	float availableWidth = ImGui::GetContentRegionAvail().x;
+	float selectableWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(400.0f));
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	// Render 'name'
-	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ScaledVec2(0, 48))) {
+	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f))))
+	{
 		ImGui::OpenPopup(name);
 	}
 	scrollWhenDraggingOnVoid();
@@ -366,21 +368,41 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
-	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
-	ImGui::Separator(); // Render 'separator'
+	// Render 'separator'
+	ImVec2 separatorPos = finalScreenPos - ImGui::GetStyle().FramePadding;
+	ImGui::GetWindowDrawList()->AddLine(separatorPos, ImVec2(separatorPos.x + selectableWidth, separatorPos.y), ImGui::GetColorU32(ImGuiCol_Separator));
 
+	ImVec2 tooltipSize = ImVec2(0, 0);
 	if (help != nullptr)
 	{
-		ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-		ImGui::SetCursorScreenPos(helpPos);
 		ImGui::PushFont(settingsTitleFont, 0.0f);
-		ImGui::TextUnformatted(help); // Render 'help'
+
+		bool useTooltipIcon = true || ImGui::CalcTextSize(help).x + ImGui::GetStyle().ItemSpacing.x > selectableWidth;
+		if (useTooltipIcon)
+		{
+			const char* icon = ICON_FA_CIRCLE_INFO;
+			ImVec2 tooltipInnerSize = ImGui::CalcTextSize(icon);
+			tooltipSize = tooltipInnerSize + ImGui::GetStyle().ItemSpacing;
+			ImVec2 iconPos(initialScreenPos.x + selectableWidth - tooltipSize.x, (finalScreenPos.y + initialScreenPos.y - tooltipSize.y) / 2);
+			ImGui::SetCursorScreenPos(iconPos);
+			ImGui::Text(icon, tooltipInnerSize);
+			ImGui::SetItemTooltip(help);
+		}
+		else
+		{
+			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
+			ImGui::SetCursorScreenPos(helpPos);
+			ImGui::PushTextWrapPos(selectableWidth);
+			ImGui::TextUnformatted(help); // Render 'help'
+			ImGui::PopTextWrapPos();
+		}
+
 		ImGui::PopFont();
 	}
 
 	ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-	ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+	ImVec2 valuePos(initialScreenPos.x + selectableWidth - valueTextSize.x  - tooltipSize.x  - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 	ImGui::SetCursorScreenPos(valuePos);
 	ImGui::TextUnformatted(value); // Render 'value'
 	ImGui::PopFont();

@@ -131,6 +131,11 @@ static inline float uiLargeFontSize()
 	return uiScaled(22.f);
 }
 
+static inline float uiTabBarWidth()
+{
+	return uiScaled(155.0f);
+}
+
 struct ScaledVec2 : public ImVec2
 {
 	ScaledVec2()

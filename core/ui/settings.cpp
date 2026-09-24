@@ -213,7 +213,7 @@ public:
 		ImGui::PushID(id);
 
 		// Setup tab bar structure: tab list on the left, active tab content on the right.
-		ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
+		ImGui::BeginChild("##verticalTabBar", ImVec2(uiTabBarWidth(), 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
 		ImGui::EndChild();
 		ImGui::SameLine();
 		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
