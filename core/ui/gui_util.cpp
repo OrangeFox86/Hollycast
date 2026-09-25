@@ -360,8 +360,6 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ScaledVec2(0, 48))) {
 		ImGui::OpenPopup(name);
 	}
-	scrollWhenDraggingOnVoid();
-	windowDragScroll();
 
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
