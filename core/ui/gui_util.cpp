@@ -383,6 +383,7 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 			const char* icon = ICON_FA_CIRCLE_INFO;
 			ImVec2 tooltipInnerSize = ImGui::CalcTextSize(icon);
 			tooltipSize = tooltipInnerSize + ImGui::GetStyle().ItemSpacing;
+			// TODO2: needs to be inline with whatever is showing on the RHS. Otherwise it looks bad
 			ImVec2 iconPos(initialScreenPos.x + selectableWidth - tooltipSize.x, (finalScreenPos.y + initialScreenPos.y - tooltipSize.y) / 2);
 			ImGui::SetCursorScreenPos(iconPos);
 			ImGui::Text(icon, tooltipInnerSize);
