@@ -352,12 +352,12 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	// └──────────────────┘
 
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-	float selectableWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(400.0f));
+	float availableWidth = ImGui::GetContentRegionAvail().x;
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	// Render 'name'
-	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f)))) {
+	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(availableWidth, uiScaled(48.0f)))) {
 		ImGui::OpenPopup(name);
 	}
 
@@ -367,7 +367,7 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	ImVec2 separatorPos(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y);
 	ImGui::GetWindowDrawList()->AddLine( // Render 'separator'
 		separatorPos,
-		ImVec2(separatorPos.x + selectableWidth, separatorPos.y),
+		ImVec2(separatorPos.x + availableWidth, separatorPos.y),
 		ImGui::GetColorU32(ImGuiCol_Separator));
 
 	if (help != nullptr)
@@ -381,7 +381,7 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 
 	ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-	ImVec2 valuePos(initialScreenPos.x + selectableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+	ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 	ImGui::SetCursorScreenPos(valuePos);
 	ImGui::TextUnformatted(value); // Render 'value'
 	ImGui::PopFont();

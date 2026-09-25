@@ -216,7 +216,8 @@ public:
 		ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
 		ImGui::EndChild();
 		ImGui::SameLine();
-		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
+		float contentWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(600.0f));
+		ImGui::BeginChild("##activeTabContent", ImVec2(contentWidth, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
 		ImGui::EndChild();
 
 		return ImGui::BeginChild("##verticalTabBar");
