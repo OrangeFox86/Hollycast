@@ -207,6 +207,7 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 			entryCfg.GlyphOffset.y = e.size * e.offsetY;
 			static ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 			entryCfg.GlyphExcludeRanges = faRanges;
+			entryCfg.FontDataOwnedByAtlas = true;
 			
 			ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), e.size, &entryCfg, nullptr);
 			if (font)
@@ -484,7 +485,6 @@ void gui_loadFonts()
 	size_t dataSize;
 	std::unique_ptr<u8[]> data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
 	verify(data != nullptr);
-	
 	verify(!fontConfig.FontDataOwnedByAtlas);
 	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &fontConfig);
 	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &boldFontConfig);
