@@ -254,11 +254,13 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 ImFontConfig beginLoadOneFont(ImGuiIO& io, const char* debugName, const std::string& path, float fontSize, ImFont*& dstFont)
 {
 	size_t dataSize;
-	std::unique_ptr<u8[]> data = resource::load(path, dataSize);
+	// Note: We don't care about freeing the font data as it lives for the entire process lifetime
+	u8* data = resource::load(path, dataSize).release();
 	verify(data != nullptr);
 	ImFontConfig fontConfig;
+	fontConfig.FontDataOwnedByAtlas = false;
 	std::strcpy(fontConfig.Name, debugName);
-	dstFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &fontConfig, nullptr);
+	dstFont = io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &fontConfig, nullptr);
 	fontConfig.MergeMode = true;
 	fontConfig.DstFont = dstFont;
 
@@ -476,6 +478,7 @@ void gui_loadFonts()
 	loadFonts(boldFonts, settingsValueFontConfig);
 	
 	// Font Awesome symbols
+	// Note: We don't care about freeing the font data as it lives for the entire process lifetime
 	size_t dataSize;
 	u8* data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize).release();
 	verify(data != nullptr);
@@ -483,13 +486,8 @@ void gui_loadFonts()
 	ImFontConfig faFontConfig = fontConfig;
 	faFontConfig.FontDataOwnedByAtlas = false;
 	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &faFontConfig);
-	boldFontConfig.FontDataOwnedByAtlas = false;
 	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &boldFontConfig);
-	settingsTitleFontConfig.FontDataOwnedByAtlas = false;
 	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &settingsTitleFontConfig);
-
-	// Only the last call can take ownership (avoid deleting data multiple times)
-	settingsValueFontConfig.FontDataOwnedByAtlas = true;
 	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &settingsValueFontConfig);
 
 	// AddFont() may sync the active ImGui font stack using the previous size.
