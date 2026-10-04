@@ -180,6 +180,12 @@ void addContentPath(bool start)
 #endif
 }
 
+void gui_ManageFolders();
+void gui_Appearance();
+void gui_Misc();
+void gui_Achievements();
+void gui_CustomPaths();
+
 void gui_settings_general()
 {
 	struct
@@ -267,6 +273,15 @@ void gui_settings_general()
 		}
 	}
 
+	gui_ManageFolders();
+	gui_Appearance();
+	gui_Misc();
+	gui_Achievements();
+	gui_CustomPaths();
+}
+
+void gui_ManageFolders()
+{
 #if !defined(TARGET_IPHONE)
     ImVec2 size;
     size.x = 0.0f;
@@ -364,6 +379,10 @@ void gui_settings_general()
     }
 #endif
     ImGui::Spacing();
+}
+
+void gui_Appearance()
+{
 	OptionCheckbox(T("Box Art Game List"), config::BoxartDisplayMode,
 			T("Display game cover art in the game list."));
 	OptionCheckbox(T("Fetch Box Art"), config::FetchBoxart,
@@ -389,7 +408,10 @@ void gui_settings_general()
 	if (previousUITheme != config::UITheme) {
 		applyCurrentTheme();
 	}
+}
 
+void gui_Misc()
+{
 	if (OptionCheckbox(T("Hide Legacy Naomi Roms"), config::HideLegacyNaomiRoms,
 			T("Hide .bin, .dat and .lst files from the content browser")))
 		scanner.refresh();
@@ -409,6 +431,9 @@ void gui_settings_general()
 #if USE_DISCORD
 	OptionCheckbox(T("Discord Presence"), config::DiscordPresence, T("Show which game you are playing on Discord"));
 #endif
+
+void gui_Achievements()
+{
 #ifdef USE_RACHIEVEMENTS
 	OptionCheckbox(T("Enable RetroAchievements"), config::EnableAchievements, T("Track your game achievements using RetroAchievements.org"));
 	{
@@ -461,7 +486,10 @@ void gui_settings_general()
 		ImGui::Unindent();
 	}
 #endif
+}
 
+void gui_CustomPaths()
+{
 // Custom Paths section - hidden on Android and iOS
 #if !defined(TARGET_IPHONE)
     ImGui::Spacing();
