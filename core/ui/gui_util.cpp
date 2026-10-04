@@ -1051,8 +1051,19 @@ bool Toast::draw()
 	return true;
 }
 
-std::string middleEllipsis(const std::string& s, float width)
+std::string middleEllipsis(std::string s, float width)
 {
+#ifdef _WIN32
+	const char* home = std::getenv("USERPROFILE");
+#else
+	const char* home = std::getenv("HOME");
+#endif
+
+	if (home != nullptr && s.rfind(home, 0) == 0)
+	{
+		s.replace(0, strlen(home), "~");
+	}
+
 	float tw = ImGui::CalcTextSize(s.c_str()).x;
 	if (tw <= width)
 		return s;

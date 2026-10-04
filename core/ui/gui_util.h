@@ -367,7 +367,7 @@ private:
 	std::mutex mutex;
 };
 
-std::string middleEllipsis(const std::string& s, float width);
+std::string middleEllipsis(std::string s, float width);
 
 bool beginFrame(const char *label, const ImVec2& size_arg = ImVec2(0, 0), ImVec2 *out_size = nullptr);
 void endFrame();
