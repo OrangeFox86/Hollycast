@@ -241,14 +241,22 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
+float gui_indentDepth;
+
 void gui_Indent(float depth)
 {
+	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Indent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth += depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 void gui_Unindent(float depth)
 {
+	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Unindent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth -= depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 float gui_centerIn(float containerSize, float itemSize)
@@ -320,9 +328,9 @@ float gui_SelectableWidth()
 			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
 				- gui_RowHeight()
 				- ImGui::GetStyle().ItemSpacing.x
-				// Note: this is a dependency on ImGui implementation details.
-				// If we needed to, we could track changes in the indent depth ourselves instead.
-				- ImGui::GetCurrentWindowRead()->DC.Indent.x);
+				// Note: this is based on a simplistic helper which doesn't account for e.g. child windows.
+				// If this starts failing to scale to new use sites, we may want to invest in replacing this with a SetNextItemWidth()...CalcItemWidth()... based solution.
+				- gui_indentDepth);
 	return selectableWidth;
 }
 
