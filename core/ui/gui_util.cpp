@@ -241,22 +241,14 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
-float gui_indentDepth;
-
 void gui_Indent(float depth)
 {
-	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Indent(depth);
-	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
 }
 
 void gui_Unindent(float depth)
 {
-	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Unindent(depth);
-	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
 }
 
 float gui_centerIn(float containerSize, float itemSize)
@@ -328,7 +320,9 @@ float gui_SelectableWidth()
 			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
 				- gui_RowHeight()
 				- ImGui::GetStyle().ItemSpacing.x
-				- gui_indentDepth);
+				// Note: this is a dependency on ImGui implementation details.
+				// If we needed to, we could track changes in the indent depth ourselves instead.
+				- ImGui::GetCurrentWindowRead()->DC.Indent.x);
 	return selectableWidth;
 }
 
