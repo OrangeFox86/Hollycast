@@ -369,6 +369,7 @@ void renderRowTooltip(const char* help, float rowHeight)
 	ImGui::PushFont(nullptr, uiScaled(21.0f));
 	ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
 	ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(tooltipSize, tooltipSize), tooltipTextSize));
+	ImGui::AlignTextToFramePadding();
 	ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 	ImGui::PopFont();
 }
@@ -510,6 +511,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
+	ImGui::AlignTextToFramePadding();
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
