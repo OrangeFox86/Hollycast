@@ -248,7 +248,7 @@ void gui_Indent(float depth)
 	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Indent(depth);
 	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
+	gui_indentDepth += depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 void gui_Unindent(float depth)
@@ -256,7 +256,7 @@ void gui_Unindent(float depth)
 	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Unindent(depth);
 	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
+	gui_indentDepth -= depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 float gui_centerIn(float containerSize, float itemSize)
@@ -328,6 +328,8 @@ float gui_SelectableWidth()
 			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
 				- gui_RowHeight()
 				- ImGui::GetStyle().ItemSpacing.x
+				// Note: this is based on a simplistic helper which doesn't account for e.g. child windows.
+				// If this starts failing to scale to new use sites, we may want to invest in replacing this with a SetNextItemWidth()...CalcItemWidth()... based solution.
 				- gui_indentDepth);
 	return selectableWidth;
 }
@@ -375,6 +377,7 @@ void renderRowTooltip(const char* help, float rowHeight)
 	ImGui::PushFont(nullptr, uiScaled(21.0f));
 	ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
 	ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(tooltipSize, tooltipSize), tooltipTextSize));
+	ImGui::AlignTextToFramePadding();
 	ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 	ImGui::PopFont();
 }
@@ -516,6 +519,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
+	ImGui::AlignTextToFramePadding();
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
