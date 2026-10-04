@@ -896,9 +896,9 @@ static void gui_display_content()
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(20, 8));
     ImGui::AlignTextToFramePadding();
-    gui_Indent(uiScaled(10));
+    ImGui::Indent(uiScaled(10));
     ImGui::Text("%s", T("GAMES"));
-    gui_Unindent(uiScaled(10));
+    ImGui::Unindent(uiScaled(10));
 
     static TextFilter filter;
     IconButton settingsBtn(ICON_FA_GEAR, T("Settings"));
@@ -1525,9 +1525,9 @@ void gui_display_profiler()
 			std::snprintf(text, 256, "%.3f : Thread %s", (float)profileThread->cachedTime, profileThread->threadName.c_str());
 			ImGui::TreeNode(text);
 
-			gui_Indent();
+			ImGui::Indent();
 			fc_profiler::drawGUI(profileThread->cachedResultTree);
-			gui_Unindent();
+			ImGui::Unindent();
 		}
 	}
 

@@ -107,7 +107,7 @@ static void gui_settings_advanced()
 		}
         OptionCheckbox(T("Dump Textures"), config::DumpTextures,
         		T("Dump all textures into data/texdump/<game id>"));
-		gui_Indent();
+		ImGui::Indent();
 		{
 			DisabledScope scope(!config::DumpTextures.get());
 			OptionCheckbox(T("Dump Replaced Textures"), config::DumpReplacedTextures,
@@ -115,7 +115,7 @@ static void gui_settings_advanced()
 			OptionCheckbox(T("Discard Video and Animated Textures"), config::DumpUniqueTextures,
 					T("Skip dumping video (YUV) and already updated textures"));
 		}
-		gui_Unindent();
+		ImGui::Unindent();
         bool logToFile = config::loadBool("log", "LogToFile", false);
 		if (CheckboxRow(T("Log to File"), &logToFile, T("Log debug information to flycast.log")))
 			config::saveBool("log", "LogToFile", logToFile);

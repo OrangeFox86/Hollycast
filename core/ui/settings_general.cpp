@@ -399,12 +399,12 @@ void gui_settings_general()
 #endif
 
 	ImGui::Text("%s", T("Automatic State:"));
-	gui_Indent();
+	ImGui::Indent();
 	OptionCheckbox(T("Load"), config::AutoLoadState,
 			T("Load the last saved state of the game when starting"));
 	OptionCheckbox(T("Save"), config::AutoSaveState,
 			T("Save the state of the game when stopping"));
-	gui_Unindent();
+	ImGui::Unindent();
 	OptionCheckbox(T("Naomi Free Play"), config::ForceFreePlay, T("Configure Naomi games in Free Play mode."));
 #if USE_DISCORD
 	OptionCheckbox(T("Discord Presence"), config::DiscordPresence, T("Show which game you are playing on Discord"));
@@ -413,7 +413,7 @@ void gui_settings_general()
 	OptionCheckbox(T("Enable RetroAchievements"), config::EnableAchievements, T("Track your game achievements using RetroAchievements.org"));
 	{
 		DisabledScope _(!config::EnableAchievements);
-		gui_Indent();
+		ImGui::Indent();
 		OptionCheckbox(T("Hardcore Mode"), config::AchievementsHardcoreMode,
 				T("Enable RetroAchievements hardcore mode. Using cheats and loading a state are not allowed in this mode."));
 		InputText(T("Username"), &config::AchievementsUserName.get(),
@@ -458,7 +458,7 @@ void gui_settings_general()
 				}
 			}
 		}
-		gui_Unindent();
+		ImGui::Unindent();
 	}
 #endif
 

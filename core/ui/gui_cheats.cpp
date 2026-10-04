@@ -41,7 +41,7 @@ static void addCheat()
     	{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 8));
 			ImGui::AlignTextToFramePadding();
-			gui_Indent(uiScaled(10));
+			ImGui::Indent(uiScaled(10));
 			ImGui::Text("%s", T("ADD CHEAT"));
 
 			const char *cancelLbl = T("Cancel");
@@ -63,7 +63,7 @@ static void addCheat()
 				}
 			}
 
-			gui_Unindent(uiScaled(10));
+			ImGui::Unindent(uiScaled(10));
 		}
 
 		ImGui::BeginChild(ImGui::GetID("input"), ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiChildFlags_NavFlattened);
@@ -96,7 +96,7 @@ void gui_cheats()
     {
 		ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 8));
 		ImGui::AlignTextToFramePadding();
-		gui_Indent(uiScaled(10));
+		ImGui::Indent(uiScaled(10));
 		ImGui::Text("%s", (std::string(ICON_FA_MASK "  ") + T("CHEATS")).c_str());
 
 		const char *addLbl = T("Add");
@@ -123,7 +123,7 @@ void gui_cheats()
 		if (ImGui::Button(closeLbl))
 			gui_setState(GuiState::Commands);
 
-		gui_Unindent(uiScaled(10));
+		ImGui::Unindent(uiScaled(10));
     }
 	select_file_popup(title, [](bool cancelled, std::string selection)
 		{

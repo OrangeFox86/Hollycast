@@ -241,24 +241,6 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
-float gui_indentDepth;
-
-void gui_Indent(float depth)
-{
-	float xBefore = ImGui::GetCursorScreenPos().x;
-	ImGui::Indent(depth);
-	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
-}
-
-void gui_Unindent(float depth)
-{
-	float xBefore = ImGui::GetCursorScreenPos().x;
-	ImGui::Unindent(depth);
-	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth -= depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
-}
-
 float gui_centerIn(float containerSize, float itemSize)
 {
 	return (containerSize - itemSize) / 2;
@@ -323,14 +305,24 @@ float gui_SelectableWidth()
 	// (This check doesn't catch all such situations but works as a starting point)
 	verify((ImGui::GetCurrentWindowRead()->Flags & ImGuiWindowFlags_AlwaysAutoResize) == 0);
 
-	const float selectableWidth =
-		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
-				- gui_RowHeight()
-				- ImGui::GetStyle().ItemSpacing.x
-				// Note: this is based on a simplistic helper which doesn't account for e.g. child windows.
-				// If this starts failing to scale to new use sites, we may want to invest in replacing this with a SetNextItemWidth()...CalcItemWidth()... based solution.
-				- gui_indentDepth);
+	// Calculate a width such that values and tooltips are aligned even for indented rows.
+	//    ┌─────────────────────────────────────────────────┐
+	//    │ ┌────────────────────────┐ ┌───┐                │
+	//    │ │ name             value │ │ i │                │
+	//    │ └────────────────────────┘ └───┘                │
+	//    │    ┌─────────────────────┐ ┌───┐                │
+	//    │    │ name          value │ │ i │                │
+	//    │    └─────────────────────┘ └───┘                │
+	//    └─────────────────────────────────────────────────┘
+	//    ▲                          ▲     ▲                ▲
+	//    │                          │     │                │
+	// startX            selectableEndX   rowEndX         endX
+	float startX = ImGui::GetWindowPos().x + ImGui::GetCursorStartPos().x;
+	float endX = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+
+	float rowEndX = startX + ImMin(endX - startX, gui_RowMaxWidth());
+	float selectableEndX = rowEndX - gui_RowHeight() - ImGui::GetStyle().ItemSpacing.x;
+	float selectableWidth = selectableEndX - ImGui::GetCursorScreenPos().x;
 	return selectableWidth;
 }
 

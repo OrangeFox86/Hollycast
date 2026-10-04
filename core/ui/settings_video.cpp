@@ -184,7 +184,7 @@ void gui_settings_video()
 		OptionCheckbox(T("Linear Interpolation"), config::LinearInterpolation, T("Scales the output with linear interpolation. Will use nearest neighbor interpolation otherwise. Disable with integer scaling."));
 #ifndef TARGET_IPHONE
 		OptionCheckbox(T("VSync"), config::VSync, T("Synchronizes the frame rate with the screen refresh rate. Recommended"));
-		gui_Indent();
+		ImGui::Indent();
 		{
 			DisabledScope scope(!config::VSync);
 #ifdef __ANDROID__
@@ -195,7 +195,7 @@ void gui_settings_video()
 				OptionCheckbox(T("Duplicate frames"), config::DupeFrames, T("Duplicate frames on high refresh rate monitors (120 Hz and higher)"));
 #endif
 		}
-		gui_Unindent();
+		ImGui::Unindent();
 #endif
     	OptionCheckbox(T("Show VMU In-game"), config::FloatVMUs, T("Show the VMU LCD screens while in-game"));
     	OptionCheckbox(T("Full Framebuffer Emulation"), config::EmulateFramebuffer,
@@ -203,7 +203,7 @@ void gui_settings_video()
     			"Very slow and incompatible with upscaling and wide screen."));
 		OptionCheckbox(T("Load Custom Textures"), config::CustomTextures,
 				T("Load custom/high-res textures from data/textures/<game id>. Supports KTX2/XUBC7, KTX2/XUASTC, KTX2/ETC1S, DDS/BC7, PNG, and JPEG."));
-		gui_Indent();
+		ImGui::Indent();
 		{
 			DisabledScope customTexturesScope(!config::CustomTextures.get());
 			const bool gpuPreloadSupported = rend_supports_gpu_texture_preload();
@@ -234,7 +234,7 @@ void gui_settings_video()
 			if (selectedMode != configuredMode)
 				config::PreloadCustomTextures = selectedMode;
 		}
-		gui_Unindent();
+		ImGui::Unindent();
     }
 	ImGui::Spacing();
     header(T("Aspect Ratio"));
@@ -244,10 +244,10 @@ void gui_settings_video()
 		{
 			DisabledScope scope(!config::Widescreen || config::IntegerScale);
 
-			gui_Indent();
+			ImGui::Indent();
 			OptionCheckbox(T("Super Widescreen"), config::SuperWidescreen,
 					T("Use the full width of the screen or window when its aspect ratio is greater than 16:9.\nAspect Fill and remove black bars. Not compatible with integer scaling."));
-			gui_Unindent();
+			ImGui::Unindent();
     	}
     	OptionCheckbox(T("Widescreen Game Cheats"), config::WidescreenGameHacks,
     			T("Modify the game so that it displays in 16:9 anamorphic format and use horizontal screen stretching. Only some games are supported."));

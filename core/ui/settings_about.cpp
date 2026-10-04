@@ -118,10 +118,10 @@ void gui_settings_about()
 				if (getCustomGpuDriverInfo(name, description, vendor, version))
 				{
 					ImGui::Text("%s", T("Custom Driver:"));
-					gui_Indent();
+					ImGui::Indent();
 					ImGui::Text("%s - %s", name.c_str(), description.c_str());
 					ImGui::Text("%s - %s", vendor.c_str(), version.c_str());
-					gui_Unindent();
+					ImGui::Unindent();
 				}
 
 				if (ImGui::Button(T("Use Default Driver"))) {
