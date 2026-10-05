@@ -681,6 +681,76 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
+void FolderList::BeginHeader(const char *name)
+{
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(name);
+	ImGui::PopFont();
+}
+
+void FolderList::EndHeader()
+{
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::Spacing();
+	ImGui::PopFont();
+	renderRowSeparator();
+}
+
+float FolderList::ButtonSpacing(int nButtons)
+{
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	float spacing = ImGui::GetFrameHeight() * nButtons
+		+ ImGui::GetStyle().ItemSpacing.x * (nButtons + 1);
+	ImGui::PopFont();
+
+	return gui_SelectableWidth() - spacing;
+}
+
+bool FolderList::ButtonAdd()
+{
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	bool pressed = ImGui::Button((std::string(ICON_FA_FOLDER_PLUS) + " " + T("Add")).c_str());
+	ImGui::PopFont();
+    return pressed;
+}
+
+bool FolderList::ButtonRescan()
+{
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	bool pressed = ImGui::Button((std::string(ICON_FA_ARROWS_ROTATE) + " " + T("Rescan Content")).c_str());
+	ImGui::PopFont();
+    return false;
+}
+
+void FolderList::Tooltip(const char *help)
+{
+	ImGui::PushFont(settingsValueFont, uiSettingTitleFontSize());
+	renderRowTooltip(help, ImGui::GetFrameHeight());
+	ImGui::PopFont();
+}
+
+void FolderList::BeginFolderList()
+{
+}
+
+bool FolderList::Folder(const char *path)
+{
+    return false;
+}
+
+bool FolderList::ButtonDelete()
+{
+    return false;
+}
+
+void FolderList::EndFolderList()
+{
+	ImGui::Spacing();
+	renderRowSeparator();
+}
+
 void fullScreenWindow(bool modal)
 {
 	if (!modal)

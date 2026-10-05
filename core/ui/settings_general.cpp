@@ -282,6 +282,26 @@ void gui_settings_general()
 
 void gui_ManageFolders()
 {
+	FolderList::BeginHeader(T("Content Location"));
+
+	ImGui::SameLine(FolderList::ButtonSpacing(2));
+	if (FolderList::ButtonAdd())
+	{
+	}
+
+	ImGui::SameLine();
+	if (FolderList::ButtonRescan())
+	{
+	}
+
+	ImGui::SameLine();
+	FolderList::Tooltip(T("The folders where your games are stored"));
+
+	FolderList::EndFolderList();
+}
+
+void gui_ManageFolders0()
+{
 #if !defined(TARGET_IPHONE)
     ImVec2 size;
     size.x = 0.0f;
@@ -431,6 +451,7 @@ void gui_Misc()
 #if USE_DISCORD
 	OptionCheckbox(T("Discord Presence"), config::DiscordPresence, T("Show which game you are playing on Discord"));
 #endif
+}
 
 void gui_Achievements()
 {

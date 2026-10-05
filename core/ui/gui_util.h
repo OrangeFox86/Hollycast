@@ -94,6 +94,25 @@ static inline void centerNextWindow()
 	ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x / 2.f, ImGui::GetIO().DisplaySize.y / 2.f),
 			ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 }
+class FolderList
+{
+public:
+	static void BeginHeader(const char* name);
+	static void EndHeader();
+	// Get the x offset to pass to SameLine in order to render n buttons on the line.
+	static float ButtonSpacing(int nButtons);
+
+	static bool ButtonAdd();
+	static bool ButtonRescan();
+
+	static void Tooltip(const char* help);
+
+	static void BeginFolderList();
+	static bool Folder(const char* path);
+	static bool ButtonDelete();
+
+	static void EndFolderList();
+};
 
 void fullScreenWindow(bool modal);
 void windowDragScroll();
