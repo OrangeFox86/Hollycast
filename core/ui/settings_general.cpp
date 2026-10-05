@@ -282,6 +282,7 @@ void gui_settings_general()
 
 void gui_ManageFolders()
 {
+	// TODO2: probably try deabstracting first, and getting the appearance right
 	FolderList::BeginHeader(T("Content Location"));
 
 	ImGui::SameLine(FolderList::ButtonSpacing(2));
