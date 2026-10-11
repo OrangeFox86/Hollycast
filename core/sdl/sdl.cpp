@@ -565,11 +565,11 @@ void input_sdl_handle()
 				break;
 
 			case SDL_MOUSEWHEEL:
-				gui_set_mouse_wheel(-event.wheel.y * 35);
+				gui_set_mouse_wheel(-event.wheel.preciseY);
 				checkRawInput();
 				if (!config::UseRawInput) {
 					auto mouse = getMouse(event.wheel.which);
-					mouse->setWheel(-event.wheel.y);
+					mouse->setWheel(-event.wheel.preciseY);
 				}
 				break;
 

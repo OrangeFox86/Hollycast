@@ -322,7 +322,7 @@ static void gui_newFrame()
 		io.AddMousePosEvent(mouseX, mouseY);
 	if (io.WantCaptureMouse)
 	{
-		io.AddMouseWheelEvent(0, -mouseWheel / 16);
+		io.AddMouseWheelEvent(0, -mouseWheel);
 		mouseWheel = 0;
 	}
 	io.AddMouseButtonEvent(ImGuiMouseButton_Left, (mouseButtons & (1 << 0)) != 0);
