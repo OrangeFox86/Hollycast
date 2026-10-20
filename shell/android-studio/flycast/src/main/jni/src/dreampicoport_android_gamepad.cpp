@@ -85,6 +85,7 @@ public:
 			std::shared_ptr<UsbDeviceConnection> ptr = iter->second.lock();
 			if (ptr) {
 				// Reuse existing connection from lookup
+				NOTICE_LOG(INPUT, "Reusing existing UsbDeviceConnection (fd %d) for %s", (int)ptr->sys_dev, serial.c_str());
 				return ptr;
 			}
 			// Weak pointer no longer valid; remove it
@@ -121,6 +122,8 @@ public:
 		// libusb will use the fd beyond the lifetime of this native call frame
 		newConnection->connection_obj = connection.globalRef<jni::Object>();
 		newConnection->sys_dev = (intptr_t)fd;
+
+		NOTICE_LOG(INPUT, "Opened new UsbDeviceConnection (fd %d) for %s", (int)fd, serial.c_str());
 
 		// Save to lookup for future use
 		lookup[serial] = newConnection;
@@ -204,8 +207,17 @@ static jni::Object find_usb_device_by_vid_pid_serial(
 	jni::Object deviceMap(env->CallObjectMethod(usbManager, getDeviceListMethod));
 
 	if (deviceMap.isNull()) {
+		NOTICE_LOG(INPUT, "UsbManager.getDeviceList() returned null while looking for %s", targetSerial.c_str());
 		return nullptr;
 	}
+
+	jmethodID hasPermissionMethod = env->GetMethodID(
+		usbManagerClass,
+		"hasPermission",
+		"(Landroid/hardware/usb/UsbDevice;)Z"
+	);
+	int totalDevices = 0;
+	int candidates = 0;
 
 	jni::Class mapClass(env->GetObjectClass(deviceMap));
 	jmethodID valuesMethod = env->GetMethodID(mapClass, "values", "()Ljava/util/Collection;");
@@ -226,6 +238,7 @@ static jni::Object find_usb_device_by_vid_pid_serial(
 
 	while (env->CallBooleanMethod(iterator, hasNextMethod)) {
 		jni::Object device(env->CallObjectMethod(iterator, nextMethod));
+		++totalDevices;
 
 		jint vid = env->CallIntMethod(device, getVendorIdMethod);
 		jint pid = env->CallIntMethod(device, getProductIdMethod);
@@ -233,18 +246,48 @@ static jni::Object find_usb_device_by_vid_pid_serial(
 		bool matches = (vid == targetVid && pid == targetPid);
 
 		if (matches) {
+			++candidates;
+			bool hasPermission = false;
+			if (hasPermissionMethod) {
+				hasPermission = env->CallBooleanMethod(usbManager, hasPermissionMethod, (jobject)device);
+				if (env->ExceptionCheck()) {
+					env->ExceptionClear();
+				}
+			}
+
 			jni::String deviceSerial(env->CallObjectMethod(device, getSerialNumberMethod));
 
 			jni::Throwable throwable(env->ExceptionOccurred());
 			if (!throwable.isNull()) {
 				env->ExceptionClear();
-				ERROR_LOG(INPUT, "getSerialNumber() exception: '%s'", throwable.getMessage().c_str());
+				ERROR_LOG(
+					INPUT,
+					"getSerialNumber() exception for DreamPicoPort candidate (hasPermission=%d): '%s'",
+					(int)hasPermission,
+					throwable.getMessage().c_str()
+				);
 				matches = false;
 			} else if (deviceSerial.isNull()) {
 				// Permission not yet granted, or device has no serial — can't match
+				NOTICE_LOG(
+					INPUT,
+					"DreamPicoPort candidate has null serial (hasPermission=%d) while looking for %s",
+					(int)hasPermission,
+					targetSerial.c_str()
+				);
 				matches = false;
 			} else {
-				matches = (deviceSerial.to_string() == targetSerial);
+				const std::string serial = deviceSerial.to_string();
+				matches = (serial == targetSerial);
+				if (!matches) {
+					NOTICE_LOG(
+						INPUT,
+						"DreamPicoPort candidate serial %s (hasPermission=%d) doesn't match target %s",
+						serial.c_str(),
+						(int)hasPermission,
+						targetSerial.c_str()
+					);
+				}
 			}
 		}
 
@@ -252,6 +295,14 @@ static jni::Object find_usb_device_by_vid_pid_serial(
 			return device;
 		}
 	}
+
+	NOTICE_LOG(
+		INPUT,
+		"UsbDevice for %s not found: %d USB device(s) listed, %d with DreamPicoPort VID/PID",
+		targetSerial.c_str(),
+		totalDevices,
+		candidates
+	);
 
 	return jni::Object(); // null
 }
@@ -400,7 +451,13 @@ static std::optional<AndroidDreamPicoPort::ExtendedHardwareInfo> parse_hw_info(
 	if (usbDev.isNull())
 	{
 		// Probably don't have permission yet
-		NOTICE_LOG(INPUT, "Failed to retrieve DreamPicoPort UsbDevice for %s", hwInfo.base_info.serial_number.c_str());
+		NOTICE_LOG(
+			INPUT,
+			"Failed to retrieve DreamPicoPort UsbDevice for %s (InputDevice id %d, name '%s')",
+			hwInfo.base_info.serial_number.c_str(),
+			id,
+			name.c_str()
+		);
 		return std::nullopt;
 	}
 
