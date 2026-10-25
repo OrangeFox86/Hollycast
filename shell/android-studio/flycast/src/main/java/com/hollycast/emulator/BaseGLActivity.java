@@ -60,6 +60,23 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
     private boolean hasKeyboard = false;
     private AndroidStorage storage;
 
+    protected void handleIncomingIntent(@Nullable Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return;
+        }
+
+        Uri gameUri = intent.getData();
+        // Flush the URI to prevent loading the same item multiple times.
+        intent.setData(null);
+
+        if (gameUri != null) {
+            if (storagePermissionGranted)
+                JNIdc.setGameUri(gameUri.toString());
+            else
+                pendingIntentUrl = gameUri.toString();
+        }
+    }
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -143,21 +160,16 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
             });
         }
 
-        // When viewing a resource, pass its URI to the native code for opening
-        Intent intent = getIntent();
-        if (Intent.ACTION_VIEW.equals(intent.getAction())) {
-            Uri gameUri = intent.getData();
-            // Flush the intent to prevent multiple calls
-            getIntent().setData(null);
-            setIntent(null);
-            if (gameUri != null) {
-                if (storagePermissionGranted)
-                    JNIdc.setGameUri(gameUri.toString());
-                else
-                    pendingIntentUrl = gameUri.toString();
-            }
-        }
+        // When viewing a resource, pass its URI to the native code for opening.
+        handleIncomingIntent(getIntent());
         Log.i("hollycast", "BaseGLActivity.onCreate done");
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
     }
 
 	// Called from native code

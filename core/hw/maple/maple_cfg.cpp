@@ -1,3 +1,6 @@
+/*
+	Portions Copyright 2026 The Hollycast Authors
+ */
 #include "maple_cfg.h"
 #include "maple_helper.h"
 #include "maple_if.h"
@@ -8,7 +11,7 @@
 #include "cfg/option.h"
 #include "stdclass.h"
 #include "serialize.h"
-#include "input/maplelinkregistry.h"
+#include "input/dreamlink/maplelinkregistry.h"
 #include "input/mouse.h"
 
 #include <initializer_list>

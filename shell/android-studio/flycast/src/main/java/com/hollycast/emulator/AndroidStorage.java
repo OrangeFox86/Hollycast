@@ -33,6 +33,7 @@ import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.util.Log;
 
 import androidx.documentfile.provider.DocumentFile;
@@ -108,6 +109,24 @@ public class AndroidStorage {
     public InputStream openInputStream(String uri) throws FileNotFoundException {
         return activity.getContentResolver().openInputStream(Uri.parse(uri));
     }
+
+    private boolean isDocumentOrTreeUri(Uri uri) {
+        if (DocumentsContract.isDocumentUri(activity, uri))
+            return true;
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && DocumentsContract.isTreeUri(uri);
+    }
+
+    private boolean isContentUri(Uri uri) {
+        return "content".equalsIgnoreCase(uri.getScheme());
+    }
+
+    private boolean canOpenContentUri(Uri uri, String mode) {
+        try (ParcelFileDescriptor pfd = activity.getContentResolver().openFileDescriptor(uri, mode)) {
+            return pfd != null;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
     public OutputStream openOutputStream(String parent, String name) throws FileNotFoundException {
         Uri uri = Uri.parse(parent);
         String subpath = getSubPath(parent, name);
@@ -176,14 +195,20 @@ public class AndroidStorage {
     public String getParentUri(String uriString) throws FileNotFoundException {
         if (uriString.isEmpty())
             return "";
+
+        Uri uri = Uri.parse(uriString);
+        if (isContentUri(uri) && !isDocumentOrTreeUri(uri)) {
+            // Generic content:// providers often don't support DocumentsContract path APIs.
+            return "";
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                Uri uri = Uri.parse(uriString);
                 DocumentsContract.Path path = DocumentsContract.findDocumentPath(activity.getContentResolver(), uri);
                 List<String> comps = path.getPath();
                 if (comps.size() > 1)
                     return DocumentsContract.buildDocumentUriUsingTree(uri, comps.get(comps.size() - 2)).toString();
-            } catch (IllegalArgumentException e) {
+            } catch (Exception e) {
                 // Happens for root storage uri:
                 // DocumentsContract: Failed to find path: Invalid URI: content://com.android.externalstorage.documents/tree/primary%3AFlycast
                 return "";
@@ -199,7 +224,17 @@ public class AndroidStorage {
 
     public String getSubPath(String reference, String relative)
     {
+        if (reference == null || reference.isEmpty() || relative == null || relative.isEmpty())
+            return "";
+
         Uri refUri = Uri.parse(reference);
+        if (!isDocumentOrTreeUri(refUri)) {
+            if (!isContentUri(refUri))
+                return "";
+            // Best-effort fallback for non-SAF providers.
+            return refUri.buildUpon().appendPath(relative).build().toString();
+        }
+
         String docId;
         if (DocumentsContract.isDocumentUri(activity, refUri))
             docId = DocumentsContract.getDocumentId(refUri);
@@ -211,6 +246,39 @@ public class AndroidStorage {
     public FileInfo getFileInfo(String uriString) throws FileNotFoundException
     {
         Uri uri = Uri.parse(uriString);
+        if (isContentUri(uri) && !isDocumentOrTreeUri(uri)) {
+            FileInfo info = new FileInfo();
+            info.setPath(uriString);
+            info.setDirectory(false);
+            info.setWritable(canOpenContentUri(uri, "rw"));
+            info.setUpdateTime(0);
+
+            Cursor cursor = null;
+            try {
+                cursor = activity.getContentResolver().query(uri,
+                        new String[] { OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE },
+                        null, null, null);
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                    info.setName(nameIndex >= 0 ? cursor.getString(nameIndex) : uri.getLastPathSegment());
+                    info.setSize(sizeIndex >= 0 ? cursor.getLong(sizeIndex) : 0);
+                    return info;
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (cursor != null)
+                    cursor.close();
+            }
+
+            if (!canOpenContentUri(uri, "r"))
+                throw new FileNotFoundException(uriString);
+
+            info.setName(uri.getLastPathSegment());
+            info.setSize(0);
+            return info;
+        }
+
         DocumentFile docFile = null;
         if (DocumentsContract.isDocumentUri(activity, uri))
             docFile = DocumentFile.fromSingleUri(activity, uri);
@@ -232,10 +300,16 @@ public class AndroidStorage {
     public boolean exists(String uriString)
     {
         Uri uri = Uri.parse(uriString);
-        if (!DocumentsContract.isDocumentUri(activity, uri))
-        {
-            String documentId = DocumentsContract.getTreeDocumentId(uri);
-            uri = DocumentsContract.buildDocumentUriUsingTree(uri, documentId);
+        if (isContentUri(uri) && !isDocumentOrTreeUri(uri)) {
+            return canOpenContentUri(uri, "r");
+        }
+        if (!DocumentsContract.isDocumentUri(activity, uri)) {
+            try {
+                String documentId = DocumentsContract.getTreeDocumentId(uri);
+                uri = DocumentsContract.buildDocumentUriUsingTree(uri, documentId);
+            } catch (Exception e) {
+                return false;
+            }
         }
         Cursor cursor = null;
         try {

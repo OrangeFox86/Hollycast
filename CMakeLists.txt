@@ -130,7 +130,7 @@ if(WEBOS)
 	set(USE_VULKAN OFF CACHE BOOL "Force vulkan off" FORCE)
 endif()
 
-if(ANDROID OR IOS OR NINTENDO_SWITCH OR LIBRETRO)
+if(IOS OR NINTENDO_SWITCH OR LIBRETRO)
 	# DreamLink only available for non-mobile Linux, MacOS, and Windows
 	set(USE_DREAMLINK_DEVICES OFF CACHE BOOL "Force DreamLink devices off" FORCE)
 endif()

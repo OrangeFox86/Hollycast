@@ -21,15 +21,11 @@
 #include "IconsFontAwesome6.h"
 #include "input/gamepad_device.h"
 #include "input/keyboard_device.h"
-#include "input/maplelinkregistry.h"
+#include "input/dreamlink/maplelinkregistry.h"
 #include "input/mouse.h"
 #include "hw/maple/maple_devs.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
-
-#ifdef USE_DREAMLINK_DEVICES
-#include "sdl/dreamlink/dreamlinkgamepad.h"
-#endif
 
 static float calcComboWidth(const char *labels[], size_t size)
 {
@@ -1046,13 +1042,8 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				ImGui::TableSetColumnIndex(1);
 				ImGui::Text("%s", gamepad->name().c_str());
 
-#if defined(USE_DREAMLINK_DEVICES)
 				ImGui::TableSetColumnIndex(2);
-				DreamLinkGamepad* dreamLinkGamepad = dynamic_cast<DreamLinkGamepad*>(gamepad.get());
-				if (dreamLinkGamepad != nullptr) {
-					ImGui::Text("%s", dreamLinkGamepad->dreamLinkStatus());
-				}
-#endif
+				ImGui::Text("%s", gamepad->status());
 
 				ImGui::TableSetColumnIndex(4);
 				char port_name[32];

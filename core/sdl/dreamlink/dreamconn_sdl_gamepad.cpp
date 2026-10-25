@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -18,7 +19,7 @@
  */
 
 #include <asio.hpp> // Must be included first to avoid winsock issues on Windows
-#include "dreamconn.h"
+#include "dreamconn_sdl_gamepad.h"
 #include "hw/maple/maple_devs.h"
 #include "oslib/oslib.h"
 #include "ui/gui.h"
@@ -62,7 +63,7 @@ static bool receiveMsg(MapleMsg& msg, std::istream& stream)
 
 //! DreamConn implementation class
 //! This is here mainly so asio.hpp can be included in this source file instead of the header.
-class DreamConn : public SDLDreamLink
+class DreamConn : public GamepadDreamLink
 {
 	int bus = -1;
 	bool maple_io_connected = false;
@@ -73,7 +74,7 @@ class DreamConn : public SDLDreamLink
 
 public:
 	DreamConn(int bus)
-		: SDLDreamLink(false), bus(bus)
+		: GamepadDreamLink(false), bus(bus)
 	{
 	}
 
@@ -209,7 +210,7 @@ public:
 	}
 };
 
-bool DreamConnGamepad::identify(int deviceIndex)
+bool DreamConnSDLGamepad::identify(int deviceIndex)
 {
 	char guid_str[33] {};
 	SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(deviceIndex), guid_str, sizeof(guid_str));
@@ -221,8 +222,8 @@ bool DreamConnGamepad::identify(int deviceIndex)
 	return false;
 }
 
-DreamConnGamepad::DreamConnGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
-	: DreamLinkGamepad(std::make_shared<DreamConn>(maple_port), maple_port, joystick_idx, sdl_joystick)
+DreamConnSDLGamepad::DreamConnSDLGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
+	: DreamLinkSDLGamepad(std::make_shared<DreamConn>(maple_port), maple_port, joystick_idx, sdl_joystick)
 {
 	_name = "DreamConn+ / DreamConn S Controller";
 }

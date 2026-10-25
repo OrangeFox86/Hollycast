@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -23,12 +24,12 @@
 #if defined(_WIN32) && !defined(TARGET_UWP)
 #define USE_DREAMCONN 1
 
-#include "dreamlinkgamepad.h"
+#include "dreamlink_sdl_gamepad.h"
 
-class DreamConnGamepad : public DreamLinkGamepad
+class DreamConnSDLGamepad : public DreamLinkSDLGamepad
 {
 public:
-	DreamConnGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
+	DreamConnSDLGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick);
 
 	static bool identify(int deviceIndex);
 

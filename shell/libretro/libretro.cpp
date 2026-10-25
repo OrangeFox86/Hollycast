@@ -69,7 +69,7 @@
 #include "oslib/oslib.h"
 #include "rend/CustomTexture.h"
 #include "oslib/i18n.h"
-#include "input/dreampotato.h"
+#include "input/dreamlink/dreampotato.h"
 #include "storage.h"
 
 // SMB support does not work when the path contains a back-slash, so just stick to using the portable forward-slash instead.
@@ -95,7 +95,7 @@ constexpr char slash = '/';
 
 #define RETRO_ENVIRONMENT_POLL_TYPE_OVERRIDE (4 | RETRO_ENVIRONMENT_RETROARCH_START_BLOCK)
                                             /* unsigned * --
-                                            * Tells the frontend to override the poll type behavior. 
+                                            * Tells the frontend to override the poll type behavior.
                                             * Allows the frontend to influence the polling behavior of the
                                             * frontend.
                                             *
@@ -365,7 +365,7 @@ void retro_init()
 {
 	first_run = true;
 	memset(device_type, -1, sizeof(device_type));
-	
+
 	static bool emuInited;
 
 	// Logging
@@ -435,7 +435,7 @@ void retro_deinit()
 		std::lock_guard<std::mutex> lock(mtx_serialization);
 	}
 	os_UninstallFaultHandler();
-	
+
 #if defined(__APPLE__) || (defined(__GNUC__) && defined(__linux__) && !defined(__ANDROID__))
 	addrspace::release();
 #else
@@ -2536,7 +2536,7 @@ bool retro_serialize(void *data, size_t size)
 		result = true;
 	} catch (const Serializer::Exception& e) {
 		ERROR_LOG(SAVESTATE, "Saving state failed: %s", e.what());
-	} 
+	}
 
 	if (!first_run)
 		emu.start();
@@ -3272,9 +3272,9 @@ static void UpdateInputState(u32 port)
 			setDeviceButtonStateDirect(ret, port, RETRO_DEVICE_ID_JOYPAD_A, DC_BTN_B );
 			setDeviceButtonStateDirect(ret, port, RETRO_DEVICE_ID_JOYPAD_Y, DC_BTN_X );
 			setDeviceButtonStateDirect(ret, port, RETRO_DEVICE_ID_JOYPAD_X, DC_BTN_Y );
-			setDeviceButtonStateDirect2(ret, port, RETRO_DEVICE_ID_JOYPAD_L, 
+			setDeviceButtonStateDirect2(ret, port, RETRO_DEVICE_ID_JOYPAD_L,
 			                                       RETRO_DEVICE_ID_JOYPAD_L2, DC_BTN_Z );
-			setDeviceButtonStateDirect2(ret, port, RETRO_DEVICE_ID_JOYPAD_R, 
+			setDeviceButtonStateDirect2(ret, port, RETRO_DEVICE_ID_JOYPAD_R,
 			                                       RETRO_DEVICE_ID_JOYPAD_R2, DC_BTN_C );
 			setDeviceButtonStateDirect(ret, port, RETRO_DEVICE_ID_JOYPAD_START, DC_BTN_START );
 
@@ -3290,7 +3290,7 @@ static void UpdateInputState(u32 port)
 		{
 			int16_t ret = 0;
 			kcode[port] = 0xFFFF; // active-low
-			
+
 			if ( device_type[port] == RETRO_DEVICE_TWINSTICK_SATURN )
 			{
 				// NOTE: This is a remapping of the RetroPad layout in the block below to make using a real

@@ -26,6 +26,7 @@
 #include "oslib/i18n.h"
 #include <algorithm>
 #include <android/input.h>
+#include <string>
 
 extern jobject inputDeviceManager;
 extern jmethodID inputDeviceManager_rumble;
@@ -59,14 +60,42 @@ public:
 class AndroidGamepadDevice : public GamepadDevice
 {
 public:
-	AndroidGamepadDevice(int maple_port, int id, const char *name, const char *unique_id,
-			const std::vector<int>& fullAxes, const std::vector<int>& halfAxes)
-		: GamepadDevice(maple_port, "Android"), android_id(id),
-		  fullAxes(fullAxes), halfAxes(halfAxes)
+	//! Contains all pertinent joystick data from Android
+	struct AndroidJoystickData
 	{
-		_name = name;
-		_unique_id = unique_id;
-		INFO_LOG(INPUT, "Android: Opened joystick %d on port %d: '%s' descriptor '%s'", id, maple_port, _name.c_str(), _unique_id.c_str());
+		//! The android input device ID
+		int id = -1;
+		//! The device's vendor ID
+		int vid = -1;
+		//! The device's product ID
+		int pid = -1;
+		//! The device's name as reported by Android
+		std::string joyname = {};
+		//! The device's unique identifier as reported by Android
+		std::string uniqueId = {};
+		//! The device's full axes
+		std::vector<int> fullAxes = {};
+		//! The device's half axes
+		std::vector<int> halfAxes = {};
+		//! True iff the device has rumble capability
+		bool hasRumble = false;
+	};
+
+public:
+	AndroidGamepadDevice(int maple_port, const AndroidJoystickData& joystickData)
+		: GamepadDevice(maple_port, "Android"), android_id(joystickData.id),
+		  fullAxes(joystickData.fullAxes), halfAxes(joystickData.halfAxes)
+	{
+		_name = joystickData.joyname;
+		_unique_id = joystickData.uniqueId;
+		INFO_LOG(
+			INPUT,
+			"Android: Opened joystick %d on port %d: '%s' descriptor '%s'",
+			joystickData.id,
+			maple_port,
+			_name.c_str(),
+			_unique_id.c_str()
+		);
 
 		loadMapping();
 		for (int axis : halfAxes)
@@ -75,10 +104,15 @@ public:
 			input_mapper->deleteTrigger(axis);
 		save_mapping();
 		hasAnalogStick = !fullAxes.empty();
+
+		setRumbleEnabled(joystickData.hasRumble);
 	}
 	~AndroidGamepadDevice() override {
 		INFO_LOG(INPUT, "Android: Joystick '%s' on port %d disconnected", _name.c_str(), maple_port());
 	}
+
+	//! Called just before destruction in order to do cleanup
+	virtual void close(JNIEnv *env) {}
 
 	std::shared_ptr<InputMapping> getDefaultMapping() override {
 		if (_name == "SHIELD Remote")
@@ -197,16 +231,19 @@ public:
 		GamepadDevice::Register(gamepad);
 	};
 
-	static void RemoveAndroidGamepad(std::shared_ptr<AndroidGamepadDevice> gamepad)
+	static void RemoveAndroidGamepad(JNIEnv *env, std::shared_ptr<AndroidGamepadDevice> gamepad)
 	{
+		gamepad->close(env);
 		android_gamepads.erase(gamepad->android_id);
 		GamepadDevice::Unregister(gamepad);
 	};
 
-	static void RemoveAll()
+	static void RemoveAll(JNIEnv *env)
 	{
-		for (auto [id, gamepad] : android_gamepads)
+		for (auto [id, gamepad] : android_gamepads) {
+			gamepad->close(env);
 			GamepadDevice::Unregister(gamepad);
+		}
 		android_gamepads.clear();
 	}
 
@@ -243,8 +280,6 @@ private:
 	std::vector<int> fullAxes;
 	std::vector<int> halfAxes;
 };
-
-std::map<int, std::shared_ptr<AndroidGamepadDevice>> AndroidGamepadDevice::android_gamepads;
 
 template<bool Arcade, bool Gamepad>
 inline DefaultInputMapping<Arcade, Gamepad>::DefaultInputMapping(const AndroidGamepadDevice& gamepad)
