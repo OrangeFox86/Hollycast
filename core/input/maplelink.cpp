@@ -22,7 +22,21 @@
 #include "oslib/i18n.h"
 #include "oslib/oslib.h"
 
+<<<<<<< HEAD
 #include <memory>
+=======
+std::mutex& MapleLink::mutex()
+{
+	static std::mutex *m = new std::mutex();
+	return *m;
+}
+
+MapleLink::LinkTable& MapleLink::links()
+{
+	static LinkTable *l = new LinkTable();
+	return *l;
+}
+>>>>>>> flycast/dev
 
 MapleLink::MapleLink(const DreamLink::Ptr& dreamlink, u32 bus, u32 port) :
 	dreamlink(dreamlink),
@@ -43,6 +57,7 @@ bool MapleLink::send(const MapleMsg& msg)
 
 bool MapleLink::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 {
+<<<<<<< HEAD
 	return dreamlink->sendReceive(txMsg, rxMsg);
 }
 
@@ -137,9 +152,19 @@ void MapleLinkDevice::deserializeVmu(
 					}
 				}
 			}
+=======
+	std::size_t count = 0;
+	if (bus >= 0 && bus < (int)links().size())
+	{
+		std::lock_guard<std::mutex> _(mutex());
+		for (const std::list<MapleLink::Ptr>& list : links()[bus]) {
+			if (!list.empty() && list.front().get() == this)
+				++count;
+>>>>>>> flycast/dev
 		}
 	}
 
+<<<<<<< HEAD
 	if (dataMatches) {
 		mirrorLcd(link, dev, vmu);
 	} else {
@@ -148,11 +173,46 @@ void MapleLinkDevice::deserializeVmu(
 		vmu.accessed_blocks_valid = true;
 		memset(&vmu.flash_data[0], 0, sizeof(vmu.flash_data));
 		memset(&vmu.accessed_blocks[0], 0, sizeof(vmu.accessed_blocks));
+=======
+bool MapleLink::isGameStarted() const {
+	return GameState::started;
+}
+
+void MapleLink::registerLink(int bus, int port)
+{
+	if (bus >= 0 && bus < (int)links().size()
+			&& port >= 0 && port < (int)links()[0].size())
+	{
+		if (this->bus != bus) {
+			this->bus = bus;
+			this->ports = 0;
+		}
+		this->ports |= 1 << port;
+		std::lock_guard<std::mutex> _(mutex());
+		links()[bus][port].push_front(shared_from_this());
+	}
+}
+void MapleLink::unregisterLink(int bus, int port)
+{
+	if (bus >= 0 && bus < (int)links().size()
+			&& port >= 0 && port < (int)links()[0].size())
+	{
+		if (this->bus != bus) {
+			this->bus = -1;
+			this->ports = 0;
+		}
+		else {
+			this->ports &= ~(1 << port);
+		}
+		std::lock_guard<std::mutex> _(mutex());
+		links()[bus][port].remove_if([this](const Ptr& item) { return item.get() == this; });
+>>>>>>> flycast/dev
 	}
 }
 
 std::optional<MapleMsg> MapleLinkDevice::sendRead(MapleLink& link, u8 dest, u8 origin, u8 block)
 {
+<<<<<<< HEAD
 	MapleMsg msg{};
 	msg.command = MDCF_BlockRead;
 	msg.destAP = dest;
@@ -164,6 +224,14 @@ std::optional<MapleMsg> MapleLinkDevice::sendRead(MapleLink& link, u8 dest, u8 o
 	MapleMsg rxMsg;
 	if (!link.sendReceive(msg, rxMsg)) {
 		return std::nullopt;
+=======
+	std::lock_guard<std::mutex> _(mutex());
+	for (const auto& ports : links())
+	{
+		for (const std::list<MapleLink::Ptr>& list : ports)
+			if (!list.empty() && list.front()->storageEnabled())
+				return true;
+>>>>>>> flycast/dev
 	}
 
 	return rxMsg;

@@ -51,11 +51,12 @@ extern "C" {
 #include "oslib/oslib.h"
 #include "util/tsqueue.h"
 #include "util/shared_this.h"
-#include "hw/bba/bba.h"
 
 #include <unordered_map>
+#include <deque>
 #include <mutex>
 #include <future>
+#include <vector>
 
 #define RESOLVER1_OPENDNS_COM "208.67.222.222"
 #define AFO_ORIG_IP 0x83f2fb3f		// 63.251.242.131 in network order
@@ -66,6 +67,8 @@ static pico_device *pico_dev;
 
 static TsQueue<u8> in_buffer;
 static TsQueue<u8> out_buffer;
+
+static TsQueue<std::vector<u8>> bbaBuffer;
 
 static pico_ip4 dcaddr;
 static pico_ip4 dnsaddr;
@@ -280,8 +283,10 @@ public:
 		return socket;
 	}
 
-	void close() {
+	void close()
+	{
 		closeAll();
+		detachPicoSocket();
 		directPlay.reset();
 	}
 
@@ -1176,6 +1181,8 @@ static void closeDumpFile()
 		pcapngDump = nullptr;
 	}
 }
+
+// BBA -> pico stack
 static void pico_receive_eth_frame(const u8 *frame, u32 size)
 {
 	if (pico_dev == nullptr) {
@@ -1187,9 +1194,15 @@ static void pico_receive_eth_frame(const u8 *frame, u32 size)
 	}
 }
 
-static int send_eth_frame(pico_device *dev, void *data, int len) {
+// pico stack -> BBA
+static int send_eth_frame(pico_device *dev, void *data, int len)
+{
 	dumpFrame((const u8 *)data, len);
-	return bba_recv_frame((const u8 *)data, len);
+	if (len < 6 || len > 1514)
+		// discard
+		return len;
+	bbaBuffer.push(std::vector<u8>((const u8 *)data, (const u8 *)data + len));
+	return len;
 }
 
 static void picoTick(const std::error_code& ec, asio::steady_timer *timer)
@@ -1283,6 +1296,7 @@ void PicoThread::run()
 	// Empty queues
 	in_buffer.clear();
 	out_buffer.clear();
+	bbaBuffer.clear();
 
     // Find DNS ip address
 	{
@@ -1504,6 +1518,15 @@ int PicoTcpService::modemAvailable() {
 
 void PicoTcpService::receiveEthFrame(const u8 *frame, u32 size) {
 	pico_receive_eth_frame(frame, size);
+}
+
+u32 PicoTcpService::sendEthFrame(u8 *frame)
+{
+	if (bbaBuffer.empty())
+		return 0;
+	const std::vector<u8> v = bbaBuffer.pop();
+	memcpy(frame, v.data(), v.size());
+	return v.size();
 }
 
 }

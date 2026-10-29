@@ -224,6 +224,10 @@ elseif(LIBRETRO)
 		if(NOT CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 			set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
 		endif()
+		if(NOT WIN32)
+			# keep bundled libs like glslang from binding to the frontend's copies
+			target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/shell/libretro/link.T")
+		endif()
 	endif()
 	set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Hollycast_libretro"
 	  XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
@@ -291,6 +295,7 @@ elseif(WIN32)
 		set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 	endif()
 elseif(APPLE)
+	set(USE_OPENMP OFF CACHE BOOL "Force openmp off" FORCE)
 	add_executable(${PROJECT_NAME} MACOSX_BUNDLE core/emulator.cpp)
 else()
 	add_executable(${PROJECT_NAME} core/emulator.cpp)
@@ -467,10 +472,6 @@ if(USE_BREAKPAD AND NOT LIBRETRO)
 endif()
 
 if(USE_OPENMP)
-	if(APPLE AND IS_DIRECTORY "/opt/homebrew/opt/libomp")
-		list(PREPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/libomp")
-		message(STATUS "Found and using Homebrew libomp hint.")
-	endif()
 	find_package(OpenMP)
 	if(OpenMP_CXX_FOUND)
 		if(MINGW)
@@ -892,6 +893,13 @@ endif()
 # tinygettext
 set(TINYGETTEXT_WO_ICONV ON)
 add_subdirectory(core/deps/tinygettext EXCLUDE_FROM_ALL)
+if(MSVC)
+	# language.cpp holds the native language names as non-ASCII literals. MSVC
+	# decodes sources without a BOM using the active code page, so on a non-UTF-8
+	# system locale those literals break the build (C2001/C2064). The main target
+	# already passes /utf-8; this dependency needs it too.
+	target_compile_options(tinygettext PRIVATE /utf-8)
+endif()
 target_include_directories(${PROJECT_NAME} PRIVATE core/deps/tinygettext/include)
 target_link_libraries(${PROJECT_NAME} PRIVATE tinygettext::tinygettext)
 
@@ -1440,6 +1448,7 @@ if(NOT LIBRETRO)
 				COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.ipa" --format=zip ${CMAKE_CURRENT_BINARY_DIR}/Payload)
 		else()
 
+<<<<<<< HEAD
 			add_subdirectory(core/deps/Syphon)
 			target_link_libraries(${PROJECT_NAME} PRIVATE Syphon)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -1447,12 +1456,26 @@ if(NOT LIBRETRO)
 				$<TARGET_FILE_DIR:Hollycast>/../Resources/)
 			target_compile_definitions(${PROJECT_NAME} PRIVATE VIDEO_ROUTING)
 
+=======
+>>>>>>> flycast/dev
 			target_sources(${PROJECT_NAME} PRIVATE
 					shell/apple/common/http_client.mm
-					shell/apple/common/util.mm
-					shell/apple/emulator-osx/emulator-osx/SDLApplicationDelegate.h
-					shell/apple/emulator-osx/emulator-osx/SDLApplicationDelegate.mm
-					shell/apple/emulator-osx/emulator-osx/osx-main.mm)
+					shell/apple/common/util.mm)
+			# The app's main() lives in SDLApplicationDelegate.mm; the test binary
+			# gets its main() from gtest_main and stubs the rest (tests/src/test_stubs.cpp).
+			if(NOT BUILD_TESTING)
+				add_subdirectory(core/deps/Syphon)
+				target_link_libraries(${PROJECT_NAME} PRIVATE Syphon)
+				add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E copy ${SYPHON_METALLIB}
+					$<TARGET_FILE_DIR:flycast>/../Resources/)
+				target_compile_definitions(${PROJECT_NAME} PRIVATE VIDEO_ROUTING)
+
+				target_sources(${PROJECT_NAME} PRIVATE
+						shell/apple/emulator-osx/emulator-osx/SDLApplicationDelegate.h
+						shell/apple/emulator-osx/emulator-osx/SDLApplicationDelegate.mm
+						shell/apple/emulator-osx/emulator-osx/osx-main.mm)
+			endif()
 			set(ASSETS shell/apple/emulator-osx/emulator-osx/Images.xcassets)
 			target_sources(${PROJECT_NAME} PRIVATE ${ASSETS})
 			source_group("Resources" FILES ${ASSETS})
@@ -1571,7 +1594,7 @@ if(NINTENDO_SWITCH)
 			COMMAND ${CMAKE_COMMAND} -E make_directory
 				combined-objs/xxhash combined-objs/chdr combined-objs/zip
 				combined-objs/zstd combined-objs/elf combined-objs/tinygettext
-				combined-objs/res
+				combined-objs/res combined-objs/libjuice
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/xxhash
 				${CMAKE_AR} -x $<TARGET_FILE:xxHash::xxhash>
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/chdr
@@ -1585,8 +1608,15 @@ if(NINTENDO_SWITCH)
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/tinygettext
 				${CMAKE_AR} -x $<TARGET_FILE:tinygettext::tinygettext>
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/res
+<<<<<<< HEAD
 				${CMAKE_AR} -x $<TARGET_FILE:Hollycast::res>
 			COMMAND ${CMAKE_AR} -rs Hollycast_libretro_libnx.a combined-objs/*/*.o
+=======
+				${CMAKE_AR} -x $<TARGET_FILE:flycast::res>
+			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/libjuice
+				${CMAKE_AR} -x $<TARGET_FILE:LibJuice::LibJuiceStatic>
+			COMMAND ${CMAKE_AR} -rs flycast_libretro_libnx.a combined-objs/*/*.o
+>>>>>>> flycast/dev
 			COMMAND ${CMAKE_COMMAND} -E rm -rf combined-objs
 			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 			DEPENDS xxHash::xxhash chdr-static zip libzstd_static
