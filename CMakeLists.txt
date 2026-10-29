@@ -1448,16 +1448,6 @@ if(NOT LIBRETRO)
 				COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>-${CMAKE_OSX_SYSROOT}/Hollycast.ipa" --format=zip ${CMAKE_CURRENT_BINARY_DIR}/Payload)
 		else()
 
-<<<<<<< HEAD
-			add_subdirectory(core/deps/Syphon)
-			target_link_libraries(${PROJECT_NAME} PRIVATE Syphon)
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy ${SYPHON_METALLIB}
-				$<TARGET_FILE_DIR:Hollycast>/../Resources/)
-			target_compile_definitions(${PROJECT_NAME} PRIVATE VIDEO_ROUTING)
-
-=======
->>>>>>> flycast/dev
 			target_sources(${PROJECT_NAME} PRIVATE
 					shell/apple/common/http_client.mm
 					shell/apple/common/util.mm)
@@ -1468,7 +1458,7 @@ if(NOT LIBRETRO)
 				target_link_libraries(${PROJECT_NAME} PRIVATE Syphon)
 				add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy ${SYPHON_METALLIB}
-					$<TARGET_FILE_DIR:flycast>/../Resources/)
+					$<TARGET_FILE_DIR:Hollycast>/../Resources/)
 				target_compile_definitions(${PROJECT_NAME} PRIVATE VIDEO_ROUTING)
 
 				target_sources(${PROJECT_NAME} PRIVATE
@@ -1608,15 +1598,10 @@ if(NINTENDO_SWITCH)
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/tinygettext
 				${CMAKE_AR} -x $<TARGET_FILE:tinygettext::tinygettext>
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/res
-<<<<<<< HEAD
 				${CMAKE_AR} -x $<TARGET_FILE:Hollycast::res>
-			COMMAND ${CMAKE_AR} -rs Hollycast_libretro_libnx.a combined-objs/*/*.o
-=======
-				${CMAKE_AR} -x $<TARGET_FILE:flycast::res>
 			COMMAND ${CMAKE_COMMAND} -E chdir combined-objs/libjuice
 				${CMAKE_AR} -x $<TARGET_FILE:LibJuice::LibJuiceStatic>
-			COMMAND ${CMAKE_AR} -rs flycast_libretro_libnx.a combined-objs/*/*.o
->>>>>>> flycast/dev
+			COMMAND ${CMAKE_AR} -rs Hollycast_libretro_libnx.a combined-objs/*/*.o
 			COMMAND ${CMAKE_COMMAND} -E rm -rf combined-objs
 			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 			DEPENDS xxHash::xxhash chdr-static zip libzstd_static

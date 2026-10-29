@@ -64,44 +64,18 @@ public:
 	//! True if the link is operational
 	bool isConnected();
 
-<<<<<<< HEAD
 	//! @return the function code for this MapleLink
 	u32 getFunctionCodesMask() const;
-=======
-	//! Returns the maple link at the given location if any
-	static Ptr GetMapleLink(int bus, int port) {
-		std::lock_guard<std::mutex> _(mutex());
-		std::list<MapleLink::Ptr>& list = links()[bus][port];
-		if (list.empty())
-			return nullptr;
-		return list.front();
-	}
-	//! True if any maple link currently has storage enabled
-	static bool StorageEnabled();
->>>>>>> flycast/dev
 
 	//! Create the maple device needed to interface this device to the emulator
 	std::shared_ptr<maple_device> createMapleDevice();
 
-<<<<<<< HEAD
 	//! The associated dreamlink
 	const DreamLink::Ptr dreamlink;
 	//! The linked bus
 	const u32 bus;
 	//! The linked port
 	const u32 port;
-=======
-private:
-	using LinkTable = std::array<std::array<std::list<Ptr>, 2>, 4>;
-	// Never destroyed: ~maple_sega_vmu() reaches GetMapleLink() from the
-	// static destructor of MapleDevices[][] at process exit, after objects
-	// with static storage in other translation units may already be gone.
-	// Locking a destroyed std::mutex throws (libc++: "mutex lock failed").
-	static std::mutex& mutex();
-	//! Indexed by [bus][extension port][priority idx]
-	//! Multiple links may be registered for a bus/port, and the last added to front takes precedence
-	static LinkTable& links();
->>>>>>> flycast/dev
 };
 
 /*
