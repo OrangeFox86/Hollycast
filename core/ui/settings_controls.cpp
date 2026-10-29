@@ -1000,6 +1000,34 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
+static struct
+{
+	std::array<char, 3> logicalPort;
+} vmuManagerPopupState;
+
+static void vmuManagerPopup()
+{
+	centerNextWindow();
+	ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)));
+	if (!ImGui::BeginPopupModal(T("VMU Manager")))
+		return;
+
+	if (ImGui::BeginChild("##left", ScaledVec2(150, 0)))
+	{
+		ImGui::TextUnformatted("left");
+	}
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+	if (ImGui::BeginChild("##right", ImVec2(0, 0)))
+	{
+		ImGui::TextUnformatted("right");
+	}
+	ImGui::EndChild();
+
+	ImGui::EndPopup();
+}
+
 void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
 	uiLanguageHandler.init();
@@ -1307,6 +1335,15 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 #endif
 						ImGui::EndCombo();
 					}
+
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamLink)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button(ICON_FA_ELLIPSIS))
+							ImGui::OpenPopup(T("VMU Manager"));
+					}
+
+					vmuManagerPopup();
 				}
 
 				// Light gun crosshair color
