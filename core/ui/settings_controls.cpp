@@ -1000,33 +1000,56 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
-static struct
+class VmuManagerPopup
 {
+private:
 	std::array<char, 3> logicalPort;
-} vmuManagerPopupState;
+	std::vector<std::string> recentVmus;
 
-static void vmuManagerPopup()
-{
-	centerNextWindow();
-	ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)));
-	if (!ImGui::BeginPopupModal(T("VMU Manager")))
-		return;
-
-	if (ImGui::BeginChild("##left", ScaledVec2(150, 0)))
+	void RenderVmuList()
 	{
 		ImGui::TextUnformatted("left");
 	}
-	ImGui::EndChild();
 
-	ImGui::SameLine();
-	if (ImGui::BeginChild("##right", ImVec2(0, 0)))
+	void RenderVmuDetails()
 	{
 		ImGui::TextUnformatted("right");
 	}
-	ImGui::EndChild();
 
-	ImGui::EndPopup();
-}
+public:
+	void Open()
+	{
+		ImGui::OpenPopup(T("VMU Manager"));
+	}
+
+	void Render()
+	{
+		ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)), ImGuiCond_Appearing);
+		if (!ImGui::BeginPopupModal(T("VMU Manager")))
+			return;
+
+		if (ImGui::Button(T("Done")))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		if (ImGui::BeginChild("##left", ScaledVec2(150, 0)))
+		{
+			RenderVmuList();
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+		if (ImGui::BeginChild("##right", ImVec2(0, 0)))
+		{
+			RenderVmuDetails();
+		}
+		ImGui::EndChild();
+
+		ImGui::EndPopup();
+	}
+};
 
 void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
@@ -1336,14 +1359,15 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						ImGui::EndCombo();
 					}
 
+					static VmuManagerPopup vmuManagerPopup;
 					if (subtype == MDT_SegaVMU || subtype == MDT_DreamLink)
 					{
 						ImGui::SameLine();
 						if (ImGui::Button(ICON_FA_ELLIPSIS))
-							ImGui::OpenPopup(T("VMU Manager"));
+							vmuManagerPopup.Open();
 					}
 
-					vmuManagerPopup();
+					vmuManagerPopup.Render();
 				}
 
 				// Light gun crosshair color

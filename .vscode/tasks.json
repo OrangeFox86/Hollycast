@@ -90,7 +90,7 @@
             },
             "problemMatcher": [],
             "dependsOn": [
-                "CMake: configure (Debug)"
+                // "CMake: configure (Debug)"
             ],
             "hide": true
         },
