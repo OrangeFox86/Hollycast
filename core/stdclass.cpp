@@ -25,6 +25,24 @@ static std::vector<std::string> system_data_dirs;
 
 const std::string defaultWs(" \0", 2);
 
+size_t get_page_size()
+{
+	static size_t page_size = 0;
+	if (page_size == 0) {
+#ifdef _WIN32
+		SYSTEM_INFO si;
+		GetSystemInfo(&si);
+		page_size = si.dwPageSize;
+#elif defined(__APPLE__) || defined(__linux__) || defined(__ANDROID__)
+		page_size = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+#else
+		// Fallback for unknown platforms
+		page_size = 4096;
+#endif
+	}
+	return page_size;
+}
+
 bool file_exists(const std::string& filename)
 {
 	return (flycast::access(filename.c_str(), R_OK) == 0);
