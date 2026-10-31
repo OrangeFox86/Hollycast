@@ -150,7 +150,8 @@ jobs:
           dump_syms artifact/bin/Hollycast > symbols/Hollycast.sym 2>/dev/null
           strip artifact/bin/Hollycast
           shell/linux/make-appimage.sh . artifact/bin appimage
-          mv Hollycast-x86_64.AppImage artifact/bin
+          ARCH=$(uname -m)
+          mv Hollycast-${ARCH}.AppImage artifact/bin
           rm artifact/bin/Hollycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
 
