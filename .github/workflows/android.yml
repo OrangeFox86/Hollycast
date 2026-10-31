@@ -46,6 +46,12 @@ jobs:
       - name: Bump version code
         run: sed -i 's/versionCode = 8/versionCode = ${{ github.run_number }}/' shell/android-studio/flycast/build.gradle.kts
 
+      - name: Decode Keystore
+        run: |
+          # This replaces the playstore keystore file which is used for Flycast with the decoded one used for Hollycast
+          # This variable was generated using `base64 -w 0 playstore.jks`
+          echo "${{ secrets.ANDROID_KEYSTORE_FILE }}" | base64 --decode > shell/android-studio/playstore.jks
+
       - name: Gradle
         working-directory: shell/android-studio
         run: ./gradlew assembleRelease bundleRelease --parallel
