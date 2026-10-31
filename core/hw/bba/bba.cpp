@@ -21,6 +21,8 @@
 #include "hw/holly/holly_intc.h"
 #include "network/netservice.h"
 #include "serialize.h"
+#include "hw/sh4/sh4_sched.h"
+#include "cfg/option.h"
 
 static RTL8139State *rtl8139device;
 
@@ -50,6 +52,23 @@ static u8 GAPS_regs[GAPSPCI_REGS_SIZE];
 static u32 dmaOffset;
 static bool interruptPending;
 static constexpr u32 MAX_ETH_FRAME_SIZE = 1514;
+static int rxSchedId = -1;
+constexpr int RX_POLL_CYCLES = 5_sh4ms;
+
+static int rxDeliver(int tag, int cycles, int jitter, void *arg)
+{
+	u8 frame[MAX_ETH_FRAME_SIZE];
+	while (rtl8139_can_receive(rtl8139device))
+	{
+		const u32 size = net::modbba::sendEthFrame(frame);
+		if (size == 0)
+			break;
+		if (size < 6 || size > MAX_ETH_FRAME_SIZE)
+			continue;
+		rtl8139_receive(rtl8139device, frame, size);
+	}
+	return RX_POLL_CYCLES;
+}
 
 static void setInterrupt()
 {
@@ -65,7 +84,7 @@ void pci_set_irq(PCIDevice *pci_dev, int level)
 	setInterrupt();
 }
 
-void bba_Init()
+static void bba_Init()
 {
 	NICConf nicConf = { 0xc, 0xa, 0xf, 0xe, 0, 0 };
 	rtl8139device = rtl8139_init(&nicConf);
@@ -74,6 +93,9 @@ void bba_Init()
 	memset(&GAPS_regs[0], 0, sizeof(GAPS_regs));
 	memcpy(&GAPS_regs[0], "GAPSPCI_BRIDGE_2", 0x10);
 	memcpy(&GAPS_regs[0x1c], "SEGA", 4);
+
+	rxSchedId = sh4_sched_register(0, rxDeliver);
+	sh4_sched_request(rxSchedId, RX_POLL_CYCLES);
 }
 
 void bba_Term()
@@ -84,6 +106,8 @@ void bba_Term()
 		rtl8139_destroy(rtl8139device);
 		rtl8139device = nullptr;
 	}
+	sh4_sched_unregister(rxSchedId);
+	rxSchedId = -1;
 }
 
 void bba_Reset(bool hard)
@@ -91,7 +115,8 @@ void bba_Reset(bool hard)
 	if (hard)
 	{
 		bba_Term();
-		bba_Init();
+		if (config::EmulateBBA && (settings.platform.isConsole() || settings.platform.isAtomiswave()))
+			bba_Init();
 	}
 }
 
@@ -212,17 +237,6 @@ ssize_t qemu_send_packet(RTL8139State *s, const uint8_t *buf, int size)
 	net::modbba::receiveEthFrame(buf, size);
 
 	return size;
-}
-
-int bba_recv_frame(const u8 *data, u32 len)
-{
-	if (len < 6 || len > MAX_ETH_FRAME_SIZE)
-		return 0;
-	if (!rtl8139_can_receive(rtl8139device))
-		return 0;
-	rtl8139_receive(rtl8139device, data, len);
-
-	return 1;
 }
 
 void pci_dma_read(PCIDevice *dev, dma_addr_t addr, void *buf, dma_addr_t len)
