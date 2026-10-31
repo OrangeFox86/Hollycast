@@ -127,7 +127,7 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.buildType }} -DCMAKE_INSTALL_PREFIX=artifact -DENABLE_CTEST=ON ${{ matrix.config.cmakeArgs }}
           cmake --build build --config ${{ matrix.config.buildType }}
           ./build/Hollycast
-        if: matrix.config.name == 'x86_64-pc-linux-gnu'
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
 
       - name: Dump symbols
         run: |
@@ -142,7 +142,7 @@ jobs:
           ./configure
           make
           sudo make install
-        if: matrix.config.name == 'x86_64-pc-linux-gnu'
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
 
       - name: Dump symbols and make AppImage (linux)
         run: |
@@ -152,7 +152,7 @@ jobs:
           shell/linux/make-appimage.sh . artifact/bin appimage
           mv Hollycast-x86_64.AppImage artifact/bin
           rm artifact/bin/Hollycast
-        if: matrix.config.name == 'x86_64-pc-linux-gnu'
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
 
       - name: Package app (macos)
         run: |
