@@ -36,7 +36,6 @@ jobs:
           brew list -1 | grep python | while read formula; do brew unlink $formula; brew link --overwrite $formula; done
           brew update || :
           brew install libao ldid pulseaudio
-          brew uninstall --ignore-dependencies zstd
 
           moltenvk_tag="v1.4.2"
           moltenvk_root="$RUNNER_TEMP/MoltenVK-$moltenvk_tag"
@@ -88,7 +87,7 @@ jobs:
 
       - name: Compile universal dependencies (macOS)
         run: |
-          for formula in ./shell/apple/libomp.rb ./shell/apple/libpng-flycast.rb; do
+          for formula in ./shell/apple/libpng-flycast.rb; do
             libname=$(basename "$formula" .rb)
             HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew install --build-from-source --formula "$formula" || \
             HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew reinstall --build-from-source --formula "$formula"
@@ -106,6 +105,8 @@ jobs:
             fi
           done
           echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> $GITHUB_ENV
+          # After the last brew download: brew's own curl links brew's zstd
+          brew uninstall --ignore-dependencies zstd
         if: matrix.config.name == 'apple-darwin'
 
       - uses: actions/cache@v6
