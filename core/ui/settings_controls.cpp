@@ -30,6 +30,7 @@
 #ifdef USE_DREAMLINK_DEVICES
 #include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
+#include "gui_font.h"
 
 static float calcComboWidth(const char *labels[], size_t size)
 {
@@ -1000,33 +1001,58 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
-static struct
+class VmuManagerPopup
 {
+private:
 	std::array<char, 3> logicalPort;
-} vmuManagerPopupState;
 
-static void vmuManagerPopup()
-{
-	centerNextWindow();
-	ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)));
-	if (!ImGui::BeginPopupModal(T("VMU Manager")))
-		return;
-
-	if (ImGui::BeginChild("##left", ScaledVec2(150, 0)))
+	void RenderVmuList()
 	{
-		ImGui::TextUnformatted("left");
+		ImGui::TextUnformatted("list");
 	}
-	ImGui::EndChild();
 
-	ImGui::SameLine();
-	if (ImGui::BeginChild("##right", ImVec2(0, 0)))
+	void RenderVmuDetails()
 	{
-		ImGui::TextUnformatted("right");
+		ImGui::TextUnformatted("details");
 	}
-	ImGui::EndChild();
 
-	ImGui::EndPopup();
-}
+public:
+	void Open()
+	{
+		ImGui::OpenPopup(T("VMU Manager"));
+	}
+
+	void Render()
+	{
+		ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)), ImGuiCond_Appearing);
+
+		if (!ImGui::BeginPopupModal(T("VMU Manager")))
+			return;
+
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		if (ImGui::Button("Done"))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopFont();
+
+		if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmuList();
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+		if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmuDetails();
+		}
+		ImGui::EndChild();
+
+		ImGui::EndPopup();
+	}
+};
 
 void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
@@ -1335,15 +1361,14 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 #endif
 						ImGui::EndCombo();
 					}
-
-					if (subtype == MDT_SegaVMU || subtype == MDT_DreamLink)
+					static VmuManagerPopup vmuManagerPopup;
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato)
 					{
 						ImGui::SameLine();
 						if (ImGui::Button(ICON_FA_ELLIPSIS))
-							ImGui::OpenPopup(T("VMU Manager"));
+							vmuManagerPopup.Open();
 					}
-
-					vmuManagerPopup();
+					vmuManagerPopup.Render(); // ID stack ensures that Open() only affects the Render() of the same device ID
 				}
 
 				// Light gun crosshair color
