@@ -52,6 +52,10 @@ namespace vmufs
 
     class DirectoryEntry
     {
+        uint8_t* data;
+public:
+        DirectoryEntry(uint8_t* data) : data(data) { }
+
         static constexpr int Size = 0x20; // 32
         static constexpr int Offset_FileType = 0;
         static constexpr int Offset_CopyProtection = 1;
@@ -65,10 +69,6 @@ namespace vmufs
 
         static constexpr int Offset_SizeInBlocks = 0x18;
         static constexpr int Offset_VmsHeaderBlockOffset = 0x1a;
-
-        uint8_t* data;
-public:
-        DirectoryEntry(uint8_t* data) : data(data) { }
 
         FileType GetFileType() { return static_cast<FileType>(data[Offset_FileType]); }
         void SetFileType(FileType value) { data[Offset_FileType] = static_cast<uint8_t>(value); }
@@ -142,6 +142,7 @@ public:
         static constexpr int ColorAlpha = 0x14;
 
         // Gets the custom color if this VMU is using one.
+        // Note: this is meant to interop well with ImU32 from ImGui
         std::optional<uint32_t> GetCustomColor()
         {
             if (!data[Offset_UseCustomColor])
@@ -191,6 +192,16 @@ public:
 
         uint16_t GetGameSize() { return readUInt16LittleEndian(&data[0x56]); }
         void SetGameSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x56], value); }
+    };
+
+
+    class DirectoryTable
+    {
+        uint8_t* data;
+    public:
+        DirectoryTable(uint8_t* data) : data(data) { }
+
+        // TODO: range thingy
     };
 
     class FileSystem
