@@ -226,10 +226,6 @@ void cResetEvent::Wait()
     state = false;
 }
 
-#if defined(__ANDROID__) && (HOST_CPU == CPU_ARM64 || HOST_CPU == CPU_X64)
-const unsigned long PAGE_SIZE = (unsigned long)sysconf(_SC_PAGESIZE);
-#endif
-
 void RamRegion::serialize(Serializer &ser) const {
 	ser.serialize(data, size);
 }

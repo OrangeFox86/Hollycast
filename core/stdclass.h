@@ -20,7 +20,7 @@ size_t get_page_size();
 #undef PAGE_SIZE
 #undef PAGE_MASK
 
-#define PAGE_SIZE (get_page_size() )
+#define PAGE_SIZE (get_page_size())
 
 #ifndef PAGE_MASK
 #define PAGE_MASK (PAGE_SIZE-1)
