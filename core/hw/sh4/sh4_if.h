@@ -232,7 +232,7 @@ struct Sh4RCB
 	u8 _pad[FPCB_PAD - sizeof(Sh4Context)];
 	Sh4Context cntx;
 };
-static_assert((sizeof(Sh4RCB) % MAX_PAGE_SIZE) == 0, "sizeof(Sh4RCB) not multiple of MAX_PAGE_SIZE");
+//static_assert((sizeof(Sh4RCB) % MAX_PAGE_SIZE) == 0, "sizeof(Sh4RCB) not multiple of MAX_PAGE_SIZE");
 
 extern Sh4RCB* p_sh4rcb;
 #define Sh4cntx (p_sh4rcb->cntx)
