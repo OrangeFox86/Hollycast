@@ -197,11 +197,22 @@ public:
 
     class DirectoryTable
     {
+        // TODO2: finish range type
         uint8_t* data;
     public:
         DirectoryTable(uint8_t* data) : data(data) { }
 
-        // TODO: range thingy
+        class Iterator
+        {
+            uint8_t* data;
+        public:
+            Iterator(uint8_t* data) : data(data) { }
+        };
+
+        Iterator begin()
+        {
+            return Iterator(data);
+        }
     };
 
     class FileSystem
