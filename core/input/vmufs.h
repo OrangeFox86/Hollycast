@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <types.h>
 
 // https://vmudev.net/filesystem.html
 // See also FileSystem.cs in DreamPotato
@@ -91,15 +92,15 @@ public:
 
     // user region: where user visible files are stored.
     static constexpr int UserRegionSizeBlocks = 200;
-    static constexpr int UserRegionLastblockID = UserRegionSizeBlocks - 1;
+    static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
 
     static constexpr int BlockSize = 0x200; // 512b
-    static constexpr int blockIDSize = 2;
+    static constexpr int BlockIDSize = 2;
     static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
 
-    static constexpr uint8_t DirectoryTableLastblockID = BlocksCount - 3;
+    static constexpr uint8_t DirectoryTableLastBlockID = BlocksCount - 3;
     static constexpr int DirectoryTableSizeBlocks = 13;
-    static constexpr uint8_t DirectoryTableFirstblockID = DirectoryTableLastblockID - DirectoryTableSizeBlocks + 1;
+    static constexpr uint8_t DirectoryTableFirstBlockID = DirectoryTableLastBlockID - DirectoryTableSizeBlocks + 1;
 
     // hidden region: extra storage which is used on-demand to store user files when blocks in the user region being to malfunction.
     static constexpr int HiddenRegionSizeBlocks = BlocksCount - UserRegionSizeBlocks - DirectoryTableSizeBlocks - 1 /*root block*/ - 1 /*FAT size*/; // 41
@@ -120,8 +121,8 @@ public:
         uint8_t* data;
 public:
         FATBlock(uint8_t* data) : data(data) { }
-        uint16_t getSuccessorblockID(uint16_t blockID) { return readUInt16LittleEndian(&data[blockID * blockIDSize]); }
-        void setSuccessorblockID(uint16_t blockID, uint16_t value) { writeUInt16LittleEndian(&data[blockID * blockIDSize], value); }
+        uint16_t getSuccessorBlockID(uint16_t blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
+        void setSuccessorBlockID(uint16_t blockID, uint16_t value) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], value); }
     };
 
     // View over the root block.
@@ -197,21 +198,60 @@ public:
 
     class DirectoryTable
     {
-        // TODO2: finish range type
         uint8_t* data;
     public:
+        // Note: a pointer to the start of the volume is expected.
+        // Not to the start of the directory table.
         DirectoryTable(uint8_t* data) : data(data) { }
+
+        static constexpr int EntriesPerBlock = BlockSize / DirectoryEntry::Size;
+        static constexpr int EndIndex = DirectoryTableSizeBlocks * EntriesPerBlock;
 
         class Iterator
         {
             uint8_t* data;
+            int index;
         public:
-            Iterator(uint8_t* data) : data(data) { }
+            Iterator(uint8_t* data, int index) : data(data), index(index) { }
+
+            DirectoryEntry operator *()
+            {
+                verify(index < EndIndex);
+                // Directory blocks are visited from the end, toward the start, of the volume.
+                // Entries are visited from the start, toward the end, of each block.
+                // e.g. the visit order below is 'e1, e2, e3, e4, e5, e6'.
+                //    ┌───────────────┐
+                // b1 │ e4            │
+                //    │ e5            │
+                //    │ e6            │
+                //    └───────────────┘
+                //    ┌───────────────┐
+                // b2 │ e1            │
+                //    │ e2            │
+                //    │ e3            │
+                //    └───────────────┘
+                int blockOffset = index / EntriesPerBlock;
+                int blockID = DirectoryTableLastBlockID - blockOffset;
+                int entryID = index % EntriesPerBlock;
+                int finalOffset = blockID * BlockSize + entryID * DirectoryEntry::Size;
+                return DirectoryEntry(&data[finalOffset]);
+            }
+
+            Iterator& operator ++()
+            {
+                index++;
+                return *this;
+            }
         };
 
         Iterator begin()
         {
-            return Iterator(data);
+            return Iterator(data, 0);
+        }
+
+        Iterator end()
+        {
+            return Iterator(data, EndIndex);
         }
     };
 
