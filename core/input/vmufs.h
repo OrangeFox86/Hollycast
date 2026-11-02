@@ -51,10 +51,18 @@ namespace vmufs
         Game = 0xcc,
     };
 
+    // https://vmudev.net/formats.html#formats_vms_header
+    class VmsHeader
+    {
+        // TODO2: add constructor/accessors to get the vms header data.
+        // Expose the icon bitmaps in some way which is friendly to imgui's texture format
+    };
+
     class DirectoryEntry
     {
         uint8_t* data;
 public:
+        // Create with a pointer to the raw directory entry data.
         DirectoryEntry(uint8_t* data) : data(data) { }
 
         static constexpr int Size = 0x20; // 32
