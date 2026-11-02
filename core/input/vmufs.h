@@ -80,8 +80,19 @@ public:
         uint16_t GetStartFAT() { return readUInt16LittleEndian(&data[Offset_StartFAT]); }
         void SetStartFAT(uint16_t value) { writeUInt16LittleEndian(&data[Offset_StartFAT], value); }
 
-        uint8_t* GetFilename() { return &data[Offset_Filename]; }
-        void SetFilename(uint8_t* value) { memcpy(&data[Offset_Filename], value, FilenameLength); }
+        uint8_t* GetRawFilename() { return &data[Offset_Filename]; }
+        void SetRawFilename(uint8_t* value) { memcpy(&data[Offset_Filename], value, FilenameLength); }
+        std::string GetFilename()
+        {
+            uint8_t* rawFilename = GetRawFilename();
+            int len = 0;
+            while (len < FilenameLength && rawFilename[len] != '\0')
+                len++;
+
+            // Note: We should probably expect the filenames and VMS header descriptions to be in Shift-JIS.
+            // This isn't implemented for now. But definitely should be for good Japanese game support.
+            return std::string(rawFilename, &rawFilename[len]);
+        }
 
         // Get the raw binary-coded decimal date.
         uint8_t* GetDateBcd() { return &data[Offset_Date]; }
@@ -195,7 +206,8 @@ public:
         void SetGameSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x56], value); }
     };
 
-
+    // Iterable view over a VMU's directory table.
+    // Note: when iterating, caller must manually filter out entries with 'Kind == None'.
     class DirectoryTable
     {
         uint8_t* data;
@@ -241,6 +253,11 @@ public:
             {
                 index++;
                 return *this;
+            }
+
+            bool operator !=(Iterator& other)
+            {
+                return data != other.data || index != other.index;
             }
         };
 

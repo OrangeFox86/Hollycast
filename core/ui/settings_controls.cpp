@@ -23,6 +23,7 @@
 #include "input/keyboard_device.h"
 #include "input/maplelinkregistry.h"
 #include "input/mouse.h"
+#include "input/vmufs.h"
 #include "hw/maple/maple_devs.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
@@ -1001,6 +1002,10 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
+// TODO2: It's not clear whether/how to expose the maple device to settings layer.
+// Note that these do not exist until a game is launched.
+extern std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
+
 class VmuManagerPopup
 {
 private:
@@ -1011,9 +1016,16 @@ private:
 		ImGui::TextUnformatted("list");
 	}
 
-	void RenderVmuDetails()
+	void RenderVmuDetails(maple_sega_vmu* dev)
 	{
-		ImGui::TextUnformatted("details");
+		vmufs::DirectoryTable table(dev->flash_data);
+		for (vmufs::DirectoryEntry entry : table)
+		{
+			if (entry.GetFileType() == vmufs::FileType::None)
+				continue;
+
+			ImGui::TextUnformatted(entry.GetFilename().c_str());
+		}
 	}
 
 public:
@@ -1022,7 +1034,7 @@ public:
 		ImGui::OpenPopup(T("VMU Manager"));
 	}
 
-	void Render()
+	void Render(int bus, int port)
 	{
 		ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 		ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)), ImGuiCond_Appearing);
@@ -1037,18 +1049,22 @@ public:
 		}
 		ImGui::PopFont();
 
-		if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		auto dev = dynamic_cast<maple_sega_vmu*>(MapleDevices[bus][port].get());
+		if (dev != nullptr)
 		{
-			RenderVmuList();
-		}
-		ImGui::EndChild();
+			if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+			{
+				RenderVmuList();
+			}
+			ImGui::EndChild();
 
-		ImGui::SameLine();
-		if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
-		{
-			RenderVmuDetails();
+			ImGui::SameLine();
+			if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+			{
+				RenderVmuDetails(dev);
+			}
+			ImGui::EndChild();
 		}
-		ImGui::EndChild();
 
 		ImGui::EndPopup();
 	}
@@ -1368,7 +1384,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						if (ImGui::Button(ICON_FA_ELLIPSIS))
 							vmuManagerPopup.Open();
 					}
-					vmuManagerPopup.Render(); // ID stack ensures that Open() only affects the Render() of the same device ID
+					vmuManagerPopup.Render(bus, port); // ID stack ensures that Open() only affects the Render() of the same device ID
 				}
 
 				// Light gun crosshair color
