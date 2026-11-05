@@ -24,7 +24,7 @@
 #include "log/LogManager.h"
 #include "hw/maple/maple_if.h"
 #include "imgui_stdlib.h"
-#include "input/dreampotato.h"
+#include "input/dreamlink/dreampotato.h"
 
 #ifdef GDB_SERVER
 #include "hw/mem/addrspace.h"

@@ -297,14 +297,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_resume(J
     }
 }
 
-void input_term();
+void input_term(JNIEnv *env);
 
 extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_stop(JNIEnv *env,jobject obj)
 {
 	stopEmu();
 	savestateThread.WaitToEnd();
 	gui_stop_game();
-	input_term();
+	input_term(env);
 }
 
 static void *render_thread_func(void *)
