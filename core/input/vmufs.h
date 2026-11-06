@@ -38,6 +38,8 @@ namespace vmufs
         data[1] = value >> 8 & 0xff;
     }
 
+    class FileSystem;
+
     enum class FileCopyProtection : uint8_t
     {
         NotCopyProtected = 0x80,
@@ -52,10 +54,48 @@ namespace vmufs
     };
 
     // https://vmudev.net/formats.html#formats_vms_header
-    class VmsHeader
+    class VMSHeader
     {
+        uint8_t* data;
         // TODO2: add constructor/accessors to get the vms header data.
         // Expose the icon bitmaps in some way which is friendly to imgui's texture format
+public:
+        // Create from a pointer to start of the VMS header.
+        VMSHeader(uint8_t* data) : data(data) { }
+
+        static constexpr int Offset_VMUDescription = 0;
+        static constexpr int VMUDescriptionLength = 0x10;
+        static constexpr int Offset_DreamcastDescription = 0x10;
+        static constexpr int DreamcastDescriptionLength = 0x20;
+        static constexpr int Offset_ApplicationID = 0x30;
+        static constexpr int Offset_IconCount = 0x40;
+        static constexpr int Offset_AnimationSpeed = 0x42;
+        static constexpr int Offset_EyecatchType = 0x44;
+        static constexpr int Offset_CRC = 0x46;
+        static constexpr int Offset_DataBytes = 0x48;
+        static constexpr int Offset_Palette = 0x60;
+
+        uint8_t* GetRawVMUDescription() { return &data[Offset_VMUDescription]; }
+        void SetRawVMUDescription(uint8_t* value) { memcpy(&data[Offset_VMUDescription], value, VMUDescriptionLength); }
+        std::string GetVMUDescription()
+        {
+            uint8_t* rawVMUDescription = GetRawVMUDescription();
+            int len = strnlen((const char*)rawVMUDescription, VMUDescriptionLength);
+            return std::string(rawVMUDescription, &rawVMUDescription[len]);
+        }
+
+        uint8_t* GetRawDreamcastDescription() { return &data[Offset_DreamcastDescription]; }
+        void SetRawDreamcastDescription(uint8_t* value) { memcpy(&data[Offset_DreamcastDescription], value, DreamcastDescriptionLength); }
+        std::string GetDreamcastDescription()
+        {
+            uint8_t* rawDreamcastDescription = GetRawDreamcastDescription();
+            int len = strnlen((const char*)rawDreamcastDescription, DreamcastDescriptionLength);
+            return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
+        }
+
+        // Write 32x32 icon to ARGB buffer
+        // TODO2: implement. Need to be able to read the palette, translate the colors etc
+        void ReadIconData(uint32_t* dest) { }
     };
 
     class DirectoryEntry
@@ -77,7 +117,7 @@ public:
         static constexpr int DateLength = 8;
 
         static constexpr int Offset_SizeInBlocks = 0x18;
-        static constexpr int Offset_VmsHeaderBlockOffset = 0x1a;
+        static constexpr int Offset_VMSHeaderBlockOffset = 0x1a;
 
         FileType GetFileType() { return static_cast<FileType>(data[Offset_FileType]); }
         void SetFileType(FileType value) { data[Offset_FileType] = static_cast<uint8_t>(value); }
@@ -93,18 +133,22 @@ public:
         std::string GetFilename()
         {
             uint8_t* rawFilename = GetRawFilename();
-            int len = 0;
-            while (len < FilenameLength && rawFilename[len] != '\0')
-                len++;
-
             // Note: We should probably expect the filenames and VMS header descriptions to be in Shift-JIS.
             // This isn't implemented for now. But definitely should be for good Japanese game support.
+            int len = strnlen((const char*)rawFilename, FilenameLength);
             return std::string(rawFilename, &rawFilename[len]);
         }
 
         // Get the raw binary-coded decimal date.
-        uint8_t* GetDateBcd() { return &data[Offset_Date]; }
-        void SetDateBcd(uint8_t* value) { memcpy(&data[Offset_Date], value, DateLength); }
+        uint8_t* GetDateBCD() { return &data[Offset_Date]; }
+        void SetDateBCD(uint8_t* value) { memcpy(&data[Offset_Date], value, DateLength); }
+
+        uint16_t GetSizeInBlocks() { return readUInt16LittleEndian(&data[Offset_SizeInBlocks]); }
+        void SetSizeInBlocks(uint16_t value) { writeUInt16LittleEndian(&data[Offset_SizeInBlocks], value); }
+
+        // Note: this is *usually* 0 for data files, 1 for game files.
+        uint16_t GetVMSHeaderBlockOffset() { return readUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset]); }
+        void SetVMSHeaderBlockOffset(uint16_t value) { writeUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset], value); }
     };
 
     static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
@@ -284,10 +328,21 @@ public:
     {
         uint8_t* data;
     public:
+        // TODO: this is a pointer to the VMU image and requires the whole VMU to be read in advance.
+        // We should instead expose 'ReadBlock' and 'WriteBlock' which delegate to a maple_sega_vmu.
+        // This should let the functionality just work with external real hardware VMUs, etc.
+        // with only the minimally necessary I/O actually being performed.
         FileSystem(uint8_t* data) : data(data) { }
 
         uint8_t* GetBlock(uint16_t blockID) { return &data[blockID * BlockSize]; }
 
+        VMSHeader GetVMSHeader(DirectoryEntry entry)
+        {
+            uint16_t blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
+            return VMSHeader(GetBlock(blockID));
+        }
+
+        DirectoryTable GetDirectoryTable() { return DirectoryTable(data); }
         FATBlock GetFATBlock() { return FATBlock(GetBlock(FATBlockID)); }
         RootBlock GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
     };

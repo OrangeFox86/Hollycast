@@ -1018,13 +1018,22 @@ private:
 
 	void RenderVmuDetails(maple_sega_vmu* dev)
 	{
-		vmufs::DirectoryTable table(dev->flash_data);
+		vmufs::FileSystem fileSystem(dev->flash_data);
+		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 		for (vmufs::DirectoryEntry entry : table)
 		{
 			if (entry.GetFileType() == vmufs::FileType::None)
 				continue;
 
+			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
 			ImGui::TextUnformatted(entry.GetFilename().c_str());
+			ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+			ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+			ImGui::PopFont();
+
+			// TODO2: show image.
+			// Perhaps add 'class ImguiVmsFileTexture'.
 		}
 	}
 
