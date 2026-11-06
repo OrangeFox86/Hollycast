@@ -1026,10 +1026,11 @@ private:
 				continue;
 
 			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
-			ImGui::TextUnformatted(entry.GetFilename().c_str());
 			ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
 			ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+			ImGui::TextUnformatted(entry.GetFilename().c_str());
+			ImGui::SameLine();
+			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
 			ImGui::PopFont();
 
 			// TODO2: show image.
