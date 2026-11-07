@@ -804,6 +804,17 @@ const void *maple_sega_vmu::getData(size_t& size) const
 	return flash_data;
 }
 
+u8* maple_sega_vmu::GetBlock(u16 blockID)
+{
+	// Base implementation assumes flash_data is already populated
+	return &flash_data[blockID * BlockSize];
+}
+
+void maple_sega_vmu::CommitBlock(u16 blockID)
+{
+	std::abort(); // Not yet implemented
+}
+
 void maple_sega_vmu::setLcd()
 {
 	if (config)

@@ -238,6 +238,11 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 			return true; // local storage means this must always remain "linked"
 	}
 
+	u8* GetBlock(u16 blockID) override
+	{
+		std::abort(); // TODO: not implemented
+	}
+
 	//! Send a read request to the external VMU memory
 	//! @param[in] dest Destination address
 	//! @param[in] origin Origin address

@@ -438,6 +438,12 @@ struct maple_sega_vmu: maple_base
 	~maple_sega_vmu() override;
 	u32 dma(u32 cmd) override;
 	const void *getData(size_t& size) const override;
+
+	static constexpr int BlockSize = 0x200;
+	virtual u8* GetBlock(u16 blockID);
+	// Flush changes to a flash block to external device or disk.
+	virtual void CommitBlock(u16 blockID);
+
 	void setLcd();
 };
 

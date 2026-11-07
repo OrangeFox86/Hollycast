@@ -1003,7 +1003,7 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 }
 
 // TODO2: It's not clear whether/how to expose the maple device to settings layer.
-// Note that these do not exist until a game is launched.
+// Note that these do not exist until a game is launched, and might not be in sync with expansion device settings
 extern std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
 
 class VmuManagerPopup
@@ -1018,7 +1018,7 @@ private:
 
 	void RenderVmuDetails(maple_sega_vmu* dev)
 	{
-		vmufs::FileSystem fileSystem(dev->flash_data);
+		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 		for (vmufs::DirectoryEntry entry : table)
 		{

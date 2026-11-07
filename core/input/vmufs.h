@@ -18,13 +18,13 @@
 	along with Hollycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <cstdint>
 #include <cstring>
 #include <optional>
 #include <types.h>
 #include "rend/texconv.h"
 
 // https://vmudev.net/filesystem.html
+// VMU file system helpers
 // See also FileSystem.cs in DreamPotato
 namespace vmufs
 {
@@ -39,7 +39,7 @@ namespace vmufs
         data[1] = value >> 8 & 0xff;
     }
 
-    class FileSystem;
+    class DirectoryTable;
 
     enum class FileCopyProtection : u8
     {
@@ -287,25 +287,44 @@ public:
         void SetGameSize(u16 value) { return writeUInt16LittleEndian(&data[0x56], value); }
     };
 
+    class FileSystem
+    {
+        maple_sega_vmu* const vmuDevice;
+    public:
+        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
+
+        u8* GetBlock(u16 blockID) { return vmuDevice->GetBlock(blockID); }
+
+        VMSHeader GetVMSHeader(DirectoryEntry entry)
+        {
+            u16 blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
+            return VMSHeader(GetBlock(blockID));
+        }
+
+        DirectoryTable GetDirectoryTable();
+        FATBlock GetFATBlock() { return FATBlock(GetBlock(FATBlockID)); }
+        RootBlock GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
+
+        bool operator !=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
+    };
+
     // Iterable view over a VMU's directory table.
     // Note: when iterating, caller must manually filter out entries with 'Kind == None'.
     class DirectoryTable
     {
-        u8* data;
+        const FileSystem fileSystem;
     public:
-        // Note: a pointer to the start of the volume is expected.
-        // Not to the start of the directory table.
-        DirectoryTable(u8* data) : data(data) { }
+        DirectoryTable(FileSystem fileSystem) : fileSystem(fileSystem) { }
 
         static constexpr int EntriesPerBlock = BlockSize / DirectoryEntry::Size;
         static constexpr int EndIndex = DirectoryTableSizeBlocks * EntriesPerBlock;
 
         class Iterator
         {
-            u8* data;
+            FileSystem fileSystem;
             int index;
         public:
-            Iterator(u8* data, int index) : data(data), index(index) { }
+            Iterator(FileSystem fileSystem, int index) : fileSystem(fileSystem), index(index) { }
 
             DirectoryEntry operator *()
             {
@@ -325,9 +344,10 @@ public:
                 //    └───────────────┘
                 int blockOffset = index / EntriesPerBlock;
                 int blockID = DirectoryTableLastBlockID - blockOffset;
+                u8* block = fileSystem.GetBlock(blockID);
                 int entryID = index % EntriesPerBlock;
-                int finalOffset = blockID * BlockSize + entryID * DirectoryEntry::Size;
-                return DirectoryEntry(&data[finalOffset]);
+                int entryOffset = entryID * DirectoryEntry::Size;
+                return DirectoryEntry(&block[entryOffset]);
             }
 
             Iterator& operator ++()
@@ -338,41 +358,20 @@ public:
 
             bool operator !=(Iterator& other)
             {
-                return data != other.data || index != other.index;
+                return fileSystem != other.fileSystem || index != other.index;
             }
         };
 
         Iterator begin()
         {
-            return Iterator(data, 0);
+            return Iterator(fileSystem, 0);
         }
 
         Iterator end()
         {
-            return Iterator(data, EndIndex);
+            return Iterator(fileSystem, EndIndex);
         }
     };
 
-    class FileSystem
-    {
-        u8* data;
-    public:
-        // TODO: this is a pointer to the VMU image and requires the whole VMU to be read in advance.
-        // We should instead expose 'ReadBlock' and 'WriteBlock' which delegate to a maple_sega_vmu.
-        // This should let the functionality just work with external real hardware VMUs, etc.
-        // with only the minimally necessary I/O actually being performed.
-        FileSystem(u8* data) : data(data) { }
-
-        u8* GetBlock(u16 blockID) { return &data[blockID * BlockSize]; }
-
-        VMSHeader GetVMSHeader(DirectoryEntry entry)
-        {
-            u16 blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
-            return VMSHeader(GetBlock(blockID));
-        }
-
-        DirectoryTable GetDirectoryTable() { return DirectoryTable(data); }
-        FATBlock GetFATBlock() { return FATBlock(GetBlock(FATBlockID)); }
-        RootBlock GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
-    };
+    DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(*this); }
 }
