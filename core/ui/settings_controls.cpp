@@ -1043,6 +1043,8 @@ private:
 
 			// TODO2: decoding work should be moved into 'getId()' so it becomes lazy/amortized
 			ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
+
+			ImGui::TextUnformatted(std::to_string(entry.GetSizeInBlocks()).c_str());
 		}
 	}
 
