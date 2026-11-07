@@ -334,6 +334,18 @@ private:
 	static std::array<ImguiVmuTexture, 8> Vmus;
 };
 
+class ImguiVmsFileTexture : public ImguiTexture
+{
+public:
+	ImguiVmsFileTexture(std::string name, const u32* iconData) : name(name), iconData(iconData) {}
+
+	ImTextureID getId() override;
+
+private:
+	const std::string name;
+	const u32* iconData;
+};
+
 class IconButton
 {
 public:

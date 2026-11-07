@@ -1033,8 +1033,16 @@ private:
 			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
 			ImGui::PopFont();
 
-			// TODO2: show image.
-			// Perhaps add 'class ImguiVmsFileTexture'.
+			std::string textureName = std::string(dev->logical_port) + entry.GetFilename();
+			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData{};
+			header.ReadIconData((u32*)iconData.data());
+
+			// TODO2: These should probably be in some collection associated with the device
+			// so that when vms files are deleted, icon textures can be freed, etc.
+			ImguiVmsFileTexture iconTexture(textureName, iconData.data());
+
+			// TODO2: decoding work should be moved into 'getId()' so it becomes lazy/amortized
+			ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
 		}
 	}
 

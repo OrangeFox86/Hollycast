@@ -1204,6 +1204,19 @@ void ImguiVmuTexture::displayVmus(const ImVec2& pos)
 	}
 }
 
+ImTextureID ImguiVmsFileTexture::getId()
+{
+	ImTextureID texid = imguiDriver->getTexture(name);
+	if (texid == ImTextureID())
+	{
+		try {
+			texid = imguiDriver->updateTexture(name, (const u8 *)iconData, 32, 32, false);
+		} catch (...) {
+		}
+	}
+	return texid;
+}
+
 void Toast::show(const std::string& title, const std::string& message, u32 durationMs)
 {
 	const u64 now = getTimeMs();
