@@ -156,9 +156,5 @@ EOF
 chmod +x "$OUTDIR/AppRun"
 
 echo "Generate AppImage"
-<<<<<<< HEAD
-ARCH=x86_64 ./appimagetool-x86_64.AppImage -v "$OUTDIR" "Hollycast-x86_64.AppImage"
-=======
-ARCH=${ARCH} ./appimagetool-${ARCH}.AppImage -v "$OUTDIR" "flycast-${ARCH}.AppImage"
+ARCH=${ARCH} ./appimagetool-${ARCH}.AppImage -v "$OUTDIR" "Hollycast-${ARCH}.AppImage"
 
->>>>>>> flycast/dev
