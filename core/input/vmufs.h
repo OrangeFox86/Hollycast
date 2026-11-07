@@ -22,6 +22,7 @@
 #include <cstring>
 #include <optional>
 #include <types.h>
+#include "rend/texconv.h"
 
 // https://vmudev.net/filesystem.html
 // See also FileSystem.cs in DreamPotato
@@ -74,6 +75,10 @@ public:
         static constexpr int Offset_CRC = 0x46;
         static constexpr int Offset_DataBytes = 0x48;
         static constexpr int Offset_Palette = 0x60;
+        static constexpr int PaletteLengthBytes = 0x20;
+        static constexpr int PaletteLength = 0x10;
+        static constexpr int Size = 0x80;
+        static constexpr int IconSize = 0x200; // Size of a single icon bitmap.
 
         uint8_t* GetRawVMUDescription() { return &data[Offset_VMUDescription]; }
         void SetRawVMUDescription(uint8_t* value) { memcpy(&data[Offset_VMUDescription], value, VMUDescriptionLength); }
@@ -93,9 +98,35 @@ public:
             return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
         }
 
-        // Write 32x32 icon to ARGB buffer
-        // TODO2: implement. Need to be able to read the palette, translate the colors etc
-        void ReadIconData(uint32_t* dest) { }
+        // Get palette as array of 16 ARGB4444 values.
+        uint16_t* GetRawPalette() { return (uint16_t*)&data[Offset_Palette]; }
+        uint16_t* SetRawPalette(uint16_t* value) { memcpy(&data[Offset_Palette], value, PaletteLengthBytes); }
+
+        // Write 32x32 icon to 32-bit ARGB buffer
+        void ReadIconData(uint32_t* dest)
+        {
+            uint16_t* rawPalette = GetRawPalette();
+            std::array<uint32_t, PaletteLength> palette{};
+            for (int i = 0; i < PaletteLength; i++)
+                palette.at(i) = Unpacker4444_32<RGBAPacker>::unpack(rawPalette[i]);
+
+            uint8_t* sourceIconData = &data[Size];
+            static_assert(32 * 16 == IconSize);
+
+            // Each byte stores 2 pixels. Each pixel is an index into the palette array.
+            // Thus the following loop will read the 32x32 image.
+            for (int i = 0; i < 32; i++)
+            {
+                for (int j = 0; j < 16; j++)
+                {
+                    uint8_t source = sourceIconData[i * 16 + j];
+                    uint8_t left = source >> 4 & 0xf;
+                    dest[i * 16 + j] = palette.at(left);
+                    uint8_t right = source & 0xf;
+                    dest[i * 16 + j + 1] = palette.at(right);
+                }
+            }
+        }
     };
 
     class DirectoryEntry
