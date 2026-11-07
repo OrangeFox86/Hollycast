@@ -23,7 +23,11 @@
 #include "cfg/option.h"
 #include "nowide/fstream.hpp"
 #include "storage.h"
+<<<<<<< HEAD
 #include "oslib/http_client.h"
+=======
+#include "directory.h"
+>>>>>>> flycast/dev
 #ifndef _WIN32
 #include <unistd.h>
 #endif

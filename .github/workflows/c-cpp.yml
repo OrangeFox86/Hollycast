@@ -24,6 +24,7 @@ jobs:
           - { name: i686-pc-windows-msvc, os: windows-2022, shell: cmd, arch: x86, cmakeArgs: -G Ninja, buildType: Release }
           - { name: apple-darwin, os: macos-latest, shell: sh, cmakeArgs: -G Xcode -DUSE_DISCORD=ON -DMOLTENVK_DYLIB=$MOLTENVK_DYLIB, destDir: osx, buildType: RelWithDebInfo, packagePath: artifact/Hollycast-apple-darwin.zip }
           - { name: x86_64-pc-linux-gnu, os: ubuntu-22.04, shell: sh, cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: linux, buildType: RelWithDebInfo }
+          - { name: arm64-pc-linux-gnu, os: ubuntu-22.04-arm, shell: sh, cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: linux, buildType: RelWithDebInfo }
           - { name: x86_64-pc-windows-msvc, os: windows-2022, shell: cmd, arch: x64, cmakeArgs: -G Ninja -DUSE_DISCORD=ON, buildType: Release }
           - { name: x86_64-w64-mingw32, os: windows-2022, shell: 'msys2 {0}', cmakeArgs: -G Ninja -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON, destDir: win, buildType: RelWithDebInfo, packagePath: artifact/Hollycast-x86_64-w64-mingw32.zip }
           - { name: libretro-x86_64-pc-linux-gnu, os: ubuntu-22.04, shell: sh, cmakeArgs: -DLIBRETRO=ON -DUSE_LIBCDIO=ON -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE -G Ninja, buildType: Release }
@@ -125,8 +126,13 @@ jobs:
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config.buildType }} -DCMAKE_INSTALL_PREFIX=artifact -DENABLE_CTEST=ON ${{ matrix.config.cmakeArgs }}
           cmake --build build --config ${{ matrix.config.buildType }}
+<<<<<<< HEAD
           ./build/Hollycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu'
+=======
+          ./build/flycast
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
+>>>>>>> flycast/dev
 
       - name: Dump symbols
         run: |
@@ -141,7 +147,7 @@ jobs:
           ./configure
           make
           sudo make install
-        if: matrix.config.name == 'x86_64-pc-linux-gnu'
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
 
       - name: Dump symbols and make AppImage (linux)
         run: |
@@ -149,9 +155,16 @@ jobs:
           dump_syms artifact/bin/Hollycast > symbols/Hollycast.sym 2>/dev/null
           strip artifact/bin/Hollycast
           shell/linux/make-appimage.sh . artifact/bin appimage
+<<<<<<< HEAD
           mv Hollycast-x86_64.AppImage artifact/bin
           rm artifact/bin/Hollycast
         if: matrix.config.name == 'x86_64-pc-linux-gnu'
+=======
+          ARCH=$(uname -m)
+          mv flycast-${ARCH}.AppImage artifact/bin
+          rm artifact/bin/flycast
+        if: matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu'
+>>>>>>> flycast/dev
 
       - name: Package app (macos)
         run: |
@@ -163,9 +176,15 @@ jobs:
 
       - name: Package app (windows)
         run: |
+<<<<<<< HEAD
           powershell Compress-Archive artifact/bin/Hollycast.exe artifact/bin/Hollycast.zip
           rm artifact/bin/Hollycast.exe
           cp artifact/bin/Hollycast.zip "${{ matrix.config.packagePath }}"
+=======
+          powershell Compress-Archive artifact/bin/flycast.exe artifact/bin/flycast.zip
+          rm artifact/bin/flycast.exe
+          cp artifact/bin/flycast.zip "${{ matrix.config.packagePath }}"
+>>>>>>> flycast/dev
         if: matrix.config.name == 'x86_64-w64-mingw32'
 
       - uses: actions/upload-artifact@v7
@@ -176,4 +195,39 @@ jobs:
             ${{ matrix.config.packagePath || 'artifact/bin' }}
             ${{ !matrix.config.packagePath && 'artifact/lib/libretro' || '' }}
 
+<<<<<<< HEAD
       # Removed Sentry and Rclone steps until they are properly setup for Hollycast
+=======
+      - name: Setup Rclone
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.RCLONE_CONFIG }}
+
+      - name: Upload to S3
+        run: rclone copy artifact/bin scaleway:flycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
+        shell: bash
+        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.config.destDir != ''
+
+      - name: Setup Sentry CLI
+        uses: mathieu-bour/setup-sentry-cli@v2
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+        with:
+          url: https://sentry.io
+          token: ${{ env.SENTRY_TOKEN }}
+          organization: flycast
+          project: minidump
+          version: 2.21.2
+        if: ${{ env.SENTRY_TOKEN != '' }}
+
+      - name: Upload symbols to Sentry (Windows, macOS, Linux)
+        run: |
+          VERSION=$(git describe --tags --always)
+          sentry-cli releases new "$VERSION"
+          sentry-cli releases set-commits "$VERSION" --auto
+          sentry-cli debug-files upload symbols
+        shell: bash
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+        if: ${{ env.SENTRY_TOKEN != '' && (matrix.config.name == 'x86_64-w64-mingw32' || matrix.config.name == 'apple-darwin' || matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu') && github.event_name == 'push' }}
+>>>>>>> flycast/dev
