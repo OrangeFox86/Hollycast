@@ -15,8 +15,8 @@ Hollycast tracks the Flycast core while providing a home for features and experi
 
 ### Notable Differences from Flycast
 
-- Full DreamPicoPort integration, backed by the developer who made it
-- Full DreamPotato integration, backed by the developer who made it
+- Full [DreamPicoPort](https://github.com/OrangeFox86/DreamPicoPort) integration, backed by the developer who made it
+- Full [DreamPotato](https://github.com/RikkiGibson/DreamPotato) integration, backed by the developer who made it
 - Refreshed UI look and feel
 
 ## Contribution
