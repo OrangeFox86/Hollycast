@@ -28,12 +28,12 @@
 // See also FileSystem.cs in DreamPotato
 namespace vmufs
 {
-    uint16_t readUInt16LittleEndian(uint8_t* data)
+    u16 readUInt16LittleEndian(u8* data)
     {
         return data[0] | data[1] << 8;
     }
 
-    void writeUInt16LittleEndian(uint8_t* data, uint16_t value)
+    void writeUInt16LittleEndian(u8* data, u16 value)
     {
         data[0] = value & 0xff;
         data[1] = value >> 8 & 0xff;
@@ -41,13 +41,13 @@ namespace vmufs
 
     class FileSystem;
 
-    enum class FileCopyProtection : uint8_t
+    enum class FileCopyProtection : u8
     {
         NotCopyProtected = 0x80,
         CopyProtected = 0xff,
     };
 
-    enum class FileType : uint8_t
+    enum class FileType : u8
     {
         None = 0,
         Data = 0x33,
@@ -57,12 +57,10 @@ namespace vmufs
     // https://vmudev.net/formats.html#formats_vms_header
     class VMSHeader
     {
-        uint8_t* data;
-        // TODO2: add constructor/accessors to get the vms header data.
-        // Expose the icon bitmaps in some way which is friendly to imgui's texture format
+        u8* data;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(uint8_t* data) : data(data) { }
+        VMSHeader(u8* data) : data(data) { }
 
         static constexpr int Offset_VMUDescription = 0;
         static constexpr int VMUDescriptionLength = 0x10;
@@ -81,33 +79,33 @@ public:
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
         static constexpr int IconSizePixels = IconSizeBytes * 2;
 
-        uint8_t* GetRawVMUDescription() { return &data[Offset_VMUDescription]; }
-        void SetRawVMUDescription(uint8_t* value) { memcpy(&data[Offset_VMUDescription], value, VMUDescriptionLength); }
+        u8* GetRawVMUDescription() { return &data[Offset_VMUDescription]; }
+        void SetRawVMUDescription(u8* value) { memcpy(&data[Offset_VMUDescription], value, VMUDescriptionLength); }
         std::string GetVMUDescription()
         {
-            uint8_t* rawVMUDescription = GetRawVMUDescription();
+            u8* rawVMUDescription = GetRawVMUDescription();
             int len = strnlen((const char*)rawVMUDescription, VMUDescriptionLength);
             return std::string(rawVMUDescription, &rawVMUDescription[len]);
         }
 
-        uint8_t* GetRawDreamcastDescription() { return &data[Offset_DreamcastDescription]; }
-        void SetRawDreamcastDescription(uint8_t* value) { memcpy(&data[Offset_DreamcastDescription], value, DreamcastDescriptionLength); }
+        u8* GetRawDreamcastDescription() { return &data[Offset_DreamcastDescription]; }
+        void SetRawDreamcastDescription(u8* value) { memcpy(&data[Offset_DreamcastDescription], value, DreamcastDescriptionLength); }
         std::string GetDreamcastDescription()
         {
-            uint8_t* rawDreamcastDescription = GetRawDreamcastDescription();
+            u8* rawDreamcastDescription = GetRawDreamcastDescription();
             int len = strnlen((const char*)rawDreamcastDescription, DreamcastDescriptionLength);
             return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
         }
 
         // Get palette as array of 16 ARGB4444 values.
-        uint16_t* GetRawPalette() { return (uint16_t*)&data[Offset_Palette]; }
-        uint16_t* SetRawPalette(uint16_t* value) { memcpy(&data[Offset_Palette], value, PaletteLengthBytes); }
+        u16* GetRawPalette() { return (u16*)&data[Offset_Palette]; }
+        u16* SetRawPalette(u16* value) { memcpy(&data[Offset_Palette], value, PaletteLengthBytes); }
 
-        // Write 32x32 icon to 32-bit ARGB buffer of size 'IconSizeBytes / 4'
-        void ReadIconData(uint32_t* dest)
+        // Write 32x32 icon to 32-bit RGBA buffer of size 'IconSizePixels'
+        void ReadIconData(u32* dest)
         {
-            uint16_t* rawPalette = GetRawPalette();
-            std::array<uint32_t, PaletteLength> palette{};
+            u16* rawPalette = GetRawPalette();
+            std::array<u32, PaletteLength> palette{};
             for (int i = 0; i < PaletteLength; i++)
                 palette.at(i) = Unpacker4444_32<RGBAPacker>::unpack(rawPalette[i]);
 
@@ -116,9 +114,10 @@ public:
             // This code needs to start operating in terms of 'GetBlock(blockID)',
             // 'GetFATBlock().getSuccessorBlockID(blockID)', etc
             // instead of just using pointers.
-            uint8_t* sourceIconData = &data[HeaderSize];
+            u8* sourceIconData = &data[HeaderSize];
 
-            // source data is 4 bits per pixel
+            // Source data is 4 bits per pixel.
+            // Pixel color is obtained by looking it up in the palette.
             for (int i = 0; i < IconSizeBytes; i++)
             {
                 u8 source = sourceIconData[i];
@@ -130,10 +129,10 @@ public:
 
     class DirectoryEntry
     {
-        uint8_t* data;
+        u8* data;
 public:
         // Create with a pointer to the raw directory entry data.
-        DirectoryEntry(uint8_t* data) : data(data) { }
+        DirectoryEntry(u8* data) : data(data) { }
 
         static constexpr int Size = 0x20; // 32
         static constexpr int Offset_FileType = 0;
@@ -150,19 +149,19 @@ public:
         static constexpr int Offset_VMSHeaderBlockOffset = 0x1a;
 
         FileType GetFileType() { return static_cast<FileType>(data[Offset_FileType]); }
-        void SetFileType(FileType value) { data[Offset_FileType] = static_cast<uint8_t>(value); }
+        void SetFileType(FileType value) { data[Offset_FileType] = static_cast<u8>(value); }
 
         FileCopyProtection GetFileCopyProtection() { return static_cast<FileCopyProtection>(data[Offset_CopyProtection]); }
-        void SetFileCopyProtection(FileCopyProtection value) { data[Offset_CopyProtection] = static_cast<uint8_t>(value); }
+        void SetFileCopyProtection(FileCopyProtection value) { data[Offset_CopyProtection] = static_cast<u8>(value); }
 
-        uint16_t GetStartFAT() { return readUInt16LittleEndian(&data[Offset_StartFAT]); }
-        void SetStartFAT(uint16_t value) { writeUInt16LittleEndian(&data[Offset_StartFAT], value); }
+        u16 GetStartFAT() { return readUInt16LittleEndian(&data[Offset_StartFAT]); }
+        void SetStartFAT(u16 value) { writeUInt16LittleEndian(&data[Offset_StartFAT], value); }
 
-        uint8_t* GetRawFilename() { return &data[Offset_Filename]; }
-        void SetRawFilename(uint8_t* value) { memcpy(&data[Offset_Filename], value, FilenameLength); }
+        u8* GetRawFilename() { return &data[Offset_Filename]; }
+        void SetRawFilename(u8* value) { memcpy(&data[Offset_Filename], value, FilenameLength); }
         std::string GetFilename()
         {
-            uint8_t* rawFilename = GetRawFilename();
+            u8* rawFilename = GetRawFilename();
             // Note: We should probably expect the filenames and VMS header descriptions to be in Shift-JIS.
             // This isn't implemented for now. But definitely should be for good Japanese game support.
             int len = strnlen((const char*)rawFilename, FilenameLength);
@@ -170,15 +169,15 @@ public:
         }
 
         // Get the raw binary-coded decimal date.
-        uint8_t* GetDateBCD() { return &data[Offset_Date]; }
-        void SetDateBCD(uint8_t* value) { memcpy(&data[Offset_Date], value, DateLength); }
+        u8* GetDateBCD() { return &data[Offset_Date]; }
+        void SetDateBCD(u8* value) { memcpy(&data[Offset_Date], value, DateLength); }
 
-        uint16_t GetSizeInBlocks() { return readUInt16LittleEndian(&data[Offset_SizeInBlocks]); }
-        void SetSizeInBlocks(uint16_t value) { writeUInt16LittleEndian(&data[Offset_SizeInBlocks], value); }
+        u16 GetSizeInBlocks() { return readUInt16LittleEndian(&data[Offset_SizeInBlocks]); }
+        void SetSizeInBlocks(u16 value) { writeUInt16LittleEndian(&data[Offset_SizeInBlocks], value); }
 
         // Note: this is *usually* 0 for data files, 1 for game files.
-        uint16_t GetVMSHeaderBlockOffset() { return readUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset]); }
-        void SetVMSHeaderBlockOffset(uint16_t value) { writeUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset], value); }
+        u16 GetVMSHeaderBlockOffset() { return readUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset]); }
+        void SetVMSHeaderBlockOffset(u16 value) { writeUInt16LittleEndian(&data[Offset_VMSHeaderBlockOffset], value); }
     };
 
     static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
@@ -191,42 +190,42 @@ public:
     static constexpr int BlockIDSize = 2;
     static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
 
-    static constexpr uint8_t DirectoryTableLastBlockID = BlocksCount - 3;
+    static constexpr u8 DirectoryTableLastBlockID = BlocksCount - 3;
     static constexpr int DirectoryTableSizeBlocks = 13;
-    static constexpr uint8_t DirectoryTableFirstBlockID = DirectoryTableLastBlockID - DirectoryTableSizeBlocks + 1;
+    static constexpr u8 DirectoryTableFirstBlockID = DirectoryTableLastBlockID - DirectoryTableSizeBlocks + 1;
 
     // hidden region: extra storage which is used on-demand to store user files when blocks in the user region being to malfunction.
     static constexpr int HiddenRegionSizeBlocks = BlocksCount - UserRegionSizeBlocks - DirectoryTableSizeBlocks - 1 /*root block*/ - 1 /*FAT size*/; // 41
 
-    static constexpr uint8_t RootBlockID = BlocksCount - 1;
-    static constexpr uint8_t FATBlockID = BlocksCount - 2;
+    static constexpr u8 RootBlockID = BlocksCount - 1;
+    static constexpr u8 FATBlockID = BlocksCount - 2;
 
     static constexpr int Magic = 0x55;
 
-    static constexpr uint16_t FAT_Unallocated = 0xfffc;
-    static constexpr uint16_t FAT_LastInFile = 0xfffa;
+    static constexpr u16 FAT_Unallocated = 0xfffc;
+    static constexpr u16 FAT_LastInFile = 0xfffa;
 
     // View over the FAT block.
     // This is like a linked list of block IDs, packed into a single storage block.
     // We can lookup into it using a block ID, and get the ID of the next block of a file.
     class FATBlock
     {
-        uint8_t* data;
+        u8* data;
 public:
-        FATBlock(uint8_t* data) : data(data) { }
-        uint16_t getSuccessorBlockID(uint16_t blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
-        void setSuccessorBlockID(uint16_t blockID, uint16_t value) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], value); }
+        FATBlock(u8* data) : data(data) { }
+        u16 getSuccessorBlockID(u16 blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
+        void setSuccessorBlockID(u16 blockID, u16 successorID) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], successorID); }
     };
 
     // View over the root block.
     class RootBlock
     {
-        uint8_t* data;
+        u8* data;
 public:
-        RootBlock(uint8_t* data) : data(data) { }
+        RootBlock(u8* data) : data(data) { }
 
         // Get a pointer to the magic number which identifies the root block.
-        uint8_t* GetMagic() { return &data[0]; }
+        u8* GetMagic() { return &data[0]; }
 
         static constexpr int MagicLength = 0x10;
         static constexpr int Offset_UseCustomColor = MagicLength;
@@ -237,7 +236,7 @@ public:
 
         // Gets the custom color if this VMU is using one.
         // Note: this is meant to interop well with ImU32 from ImGui
-        std::optional<uint32_t> GetCustomColor()
+        std::optional<u32> GetCustomColor()
         {
             if (!data[Offset_UseCustomColor])
                 return std::nullopt;
@@ -246,67 +245,67 @@ public:
         }
 
         static constexpr int Offset_Timestamp = 0x30;
-        uint8_t* GetTimestampBinary() { return &data[Offset_Timestamp]; }
+        u8* GetTimestampBinary() { return &data[Offset_Timestamp]; }
 
-        uint16_t GetVolumeLast() { return readUInt16LittleEndian(&data[0x40]); }
-        void SetVolumeLast(uint16_t value) { return writeUInt16LittleEndian(&data[0x40], value); }
+        u16 GetVolumeLast() { return readUInt16LittleEndian(&data[0x40]); }
+        void SetVolumeLast(u16 value) { return writeUInt16LittleEndian(&data[0x40], value); }
 
-        uint16_t GetPartition() { return readUInt16LittleEndian(&data[0x42]); }
-        void SetPartition(uint16_t value) { return writeUInt16LittleEndian(&data[0x42], value); }
+        u16 GetPartition() { return readUInt16LittleEndian(&data[0x42]); }
+        void SetPartition(u16 value) { return writeUInt16LittleEndian(&data[0x42], value); }
 
-        uint16_t GetRoot() { return readUInt16LittleEndian(&data[0x44]); }
-        void SetRoot(uint16_t value) { return writeUInt16LittleEndian(&data[0x44], value); }
+        u16 GetRoot() { return readUInt16LittleEndian(&data[0x44]); }
+        void SetRoot(u16 value) { return writeUInt16LittleEndian(&data[0x44], value); }
 
-        uint16_t GetFATFirst() { return readUInt16LittleEndian(&data[0x46]); }
-        void SetFATFirst(uint16_t value) { return writeUInt16LittleEndian(&data[0x46], value); }
+        u16 GetFATFirst() { return readUInt16LittleEndian(&data[0x46]); }
+        void SetFATFirst(u16 value) { return writeUInt16LittleEndian(&data[0x46], value); }
 
-        uint16_t GetFATSize() { return readUInt16LittleEndian(&data[0x48]); }
-        void SetFATSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x48], value); }
+        u16 GetFATSize() { return readUInt16LittleEndian(&data[0x48]); }
+        void SetFATSize(u16 value) { return writeUInt16LittleEndian(&data[0x48], value); }
 
-        uint16_t GetDirLast() { return readUInt16LittleEndian(&data[0x4a]); }
-        void SetDirLast(uint16_t value) { return writeUInt16LittleEndian(&data[0x4a], value); }
+        u16 GetDirLast() { return readUInt16LittleEndian(&data[0x4a]); }
+        void SetDirLast(u16 value) { return writeUInt16LittleEndian(&data[0x4a], value); }
 
-        uint16_t GetDirSize() { return readUInt16LittleEndian(&data[0x4c]); }
-        void SetDirSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x4c], value); }
+        u16 GetDirSize() { return readUInt16LittleEndian(&data[0x4c]); }
+        void SetDirSize(u16 value) { return writeUInt16LittleEndian(&data[0x4c], value); }
 
-        uint8_t GetIcon() { return data[0x4e]; }
-        void SetIcon(uint8_t value) { data[0x4e] = value; }
+        u8 GetIcon() { return data[0x4e]; }
+        void SetIcon(u8 value) { data[0x4e] = value; }
 
-        uint8_t GetSort() { return data[0x4f]; }
-        void SetSort(uint8_t value) { data[0x4f] = value; }
+        u8 GetSort() { return data[0x4f]; }
+        void SetSort(u8 value) { data[0x4f] = value; }
 
-        uint16_t GetHiddenFirst() { return readUInt16LittleEndian(&data[0x50]); }
-        void SetHiddenFirst(uint16_t value) { return writeUInt16LittleEndian(&data[0x50], value); }
+        u16 GetHiddenFirst() { return readUInt16LittleEndian(&data[0x50]); }
+        void SetHiddenFirst(u16 value) { return writeUInt16LittleEndian(&data[0x50], value); }
 
-        uint16_t GetHiddenSize() { return readUInt16LittleEndian(&data[0x52]); }
-        void SetHiddenSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x52], value); }
+        u16 GetHiddenSize() { return readUInt16LittleEndian(&data[0x52]); }
+        void SetHiddenSize(u16 value) { return writeUInt16LittleEndian(&data[0x52], value); }
 
-        uint16_t GetGameFirst() { return readUInt16LittleEndian(&data[0x54]); }
-        void SetGameFirst(uint16_t value) { return writeUInt16LittleEndian(&data[0x54], value); }
+        u16 GetGameFirst() { return readUInt16LittleEndian(&data[0x54]); }
+        void SetGameFirst(u16 value) { return writeUInt16LittleEndian(&data[0x54], value); }
 
-        uint16_t GetGameSize() { return readUInt16LittleEndian(&data[0x56]); }
-        void SetGameSize(uint16_t value) { return writeUInt16LittleEndian(&data[0x56], value); }
+        u16 GetGameSize() { return readUInt16LittleEndian(&data[0x56]); }
+        void SetGameSize(u16 value) { return writeUInt16LittleEndian(&data[0x56], value); }
     };
 
     // Iterable view over a VMU's directory table.
     // Note: when iterating, caller must manually filter out entries with 'Kind == None'.
     class DirectoryTable
     {
-        uint8_t* data;
+        u8* data;
     public:
         // Note: a pointer to the start of the volume is expected.
         // Not to the start of the directory table.
-        DirectoryTable(uint8_t* data) : data(data) { }
+        DirectoryTable(u8* data) : data(data) { }
 
         static constexpr int EntriesPerBlock = BlockSize / DirectoryEntry::Size;
         static constexpr int EndIndex = DirectoryTableSizeBlocks * EntriesPerBlock;
 
         class Iterator
         {
-            uint8_t* data;
+            u8* data;
             int index;
         public:
-            Iterator(uint8_t* data, int index) : data(data), index(index) { }
+            Iterator(u8* data, int index) : data(data), index(index) { }
 
             DirectoryEntry operator *()
             {
@@ -356,19 +355,19 @@ public:
 
     class FileSystem
     {
-        uint8_t* data;
+        u8* data;
     public:
         // TODO: this is a pointer to the VMU image and requires the whole VMU to be read in advance.
         // We should instead expose 'ReadBlock' and 'WriteBlock' which delegate to a maple_sega_vmu.
         // This should let the functionality just work with external real hardware VMUs, etc.
         // with only the minimally necessary I/O actually being performed.
-        FileSystem(uint8_t* data) : data(data) { }
+        FileSystem(u8* data) : data(data) { }
 
-        uint8_t* GetBlock(uint16_t blockID) { return &data[blockID * BlockSize]; }
+        u8* GetBlock(u16 blockID) { return &data[blockID * BlockSize]; }
 
         VMSHeader GetVMSHeader(DirectoryEntry entry)
         {
-            uint16_t blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
+            u16 blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
             return VMSHeader(GetBlock(blockID));
         }
 
