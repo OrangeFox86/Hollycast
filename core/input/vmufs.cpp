@@ -84,6 +84,18 @@ namespace vmufs
         }
 	}
 
+	u16 VMSHeader::GetIconCount()
+	{
+		u8* data = fileSystem.GetBlock(blockID);
+		return readUInt16LittleEndian(&data[Offset_IconCount]);
+	}
+
+	u16 VMSHeader::GetAnimationSpeed()
+	{
+		u8* data = fileSystem.GetBlock(blockID);
+		return readUInt16LittleEndian(&data[Offset_AnimationSpeed]);
+	}
+
     void VMSHeader::ReadIconData(u32* dest)
     {
         u16* rawPalette = GetRawPalette();

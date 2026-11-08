@@ -1210,7 +1210,10 @@ ImTextureID ImguiVmsFileTexture::getId()
 	if (texid == ImTextureID())
 	{
 		try {
-			texid = imguiDriver->updateTexture(name, (const u8 *)iconData, 32, 32, false);
+			// TODO: adjust 'ReadIconData' so it uses 'iconIndex'
+			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData{};
+			vmsHeader.ReadIconData(iconData.data());
+			texid = imguiDriver->updateTexture(name, (const u8 *)iconData.data(), 32, 32, false);
 		} catch (...) {
 		}
 	}

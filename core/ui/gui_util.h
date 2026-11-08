@@ -22,6 +22,7 @@
 #include "cfg/option.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "input/vmufs.h"
 #include "gui.h"
 #include "emulator.h"
 #include "oslib/oslib.h"
@@ -337,13 +338,15 @@ private:
 class ImguiVmsFileTexture : public ImguiTexture
 {
 public:
-	ImguiVmsFileTexture(std::string name, const u32* iconData) : name(name), iconData(iconData) {}
+	ImguiVmsFileTexture(std::string name, vmufs::VMSHeader vmsHeader, u16 iconIndex)
+		: name(name), vmsHeader(vmsHeader), iconIndex(iconIndex) {}
 
 	ImTextureID getId() override;
 
 private:
-	const std::string name;
-	const u32* iconData;
+	std::string name;
+	vmufs::VMSHeader vmsHeader;
+	u16 iconIndex;
 };
 
 class IconButton
