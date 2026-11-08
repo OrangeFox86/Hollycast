@@ -46,6 +46,7 @@ public:
 		static const std::string defaultSortId;
 		return defaultSortId;
 	}
+	virtual const char* status() { return ""; }
 	virtual bool gamepad_btn_input(u32 code, bool pressed);
 	virtual bool gamepad_axis_input(u32 code, int value);
 	virtual ~GamepadDevice();

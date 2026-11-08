@@ -34,6 +34,9 @@
     <uses-feature
         android:name="android.software.leanback"
         android:required="false" />
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
 
     <application
         android:name="com.hollycast.emulator.Emulator"
@@ -58,10 +61,22 @@
             android:configChanges="orientation|navigation|screenSize|screenLayout|uiMode|keyboard|keyboardHidden"
             android:screenOrientation="sensorLandscape"
             android:exported="true"
-            android:theme="@style/Theme.AppCompat.NoActionBar"/>
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+
+			<intent-filter>
+				<action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+			</intent-filter>
+
+			<meta-data
+				android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+				android:resource="@xml/device_filter" />
+
+		</activity>
         <activity-alias
             android:name="com.hollycast.emulator.MainActivity"
             android:targetActivity="com.hollycast.emulator.NativeGLActivity"
+			android:label="@string/app_name"
 			android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -87,13 +102,16 @@
 				<data
 					android:host="*"
 					android:mimeType="*/*"
-					android:pathPattern=".*\\.CHD"
+					android:pathPattern=".*\\.chd"
 					android:scheme="file" />
 				<data
 					android:host="*"
 					android:mimeType="*/*"
-					android:pathPattern=".*\\.chd"
+					android:pathPattern=".*\\.CHD"
 					android:scheme="file" />
+				<data
+					android:mimeType="*/*"
+					android:scheme="content" />
 				<data
 					android:host="*"
 					android:mimeType="*/*"

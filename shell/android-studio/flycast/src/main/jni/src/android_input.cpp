@@ -1,5 +1,6 @@
 /*
 	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -17,10 +18,12 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "android_gamepad.h"
+#include "dreamlink_android_gamepad.h"
 #include "android_keyboard.h"
 #include "ui/vgamepad.h"
 #include "cfg/option.h"
 #include "hw/maple/maple_if.h"
+#include "jni_util.h"
 
 static std::shared_ptr<AndroidMouse> mouse;
 static std::shared_ptr<TouchMouse> touchMouse;
@@ -105,15 +108,110 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDevice
 	});
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickAdded(JNIEnv *env, jobject obj,
-		jint id, jstring name, jint maple_port, jstring junique_id, jintArray fullAxes, jintArray halfAxes, jboolean hasRumble)
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_isPermissionRequired(
+	JNIEnv *env,
+	jobject obj,
+	jint vendorId,
+	jint productId
+)
+{
+	return DreamLinkAndroidGamepad::isPermissionRequired(vendorId, productId);
+}
+
+//! Retrieves the joystick data associated with the InputDevice at the given ID
+//! @param[in] env Local Java environment
+//! @param[in] obj The local InputDeviceManager object
+//! @param[in] id ID of the InputDevice to get data for
+//! @return Data associated with the given ID
+static AndroidGamepadDevice::AndroidJoystickData getJoystickData(JNIEnv *env, jobject obj, jint id)
+{
+	AndroidGamepadDevice::AndroidJoystickData data { id };
+	if (obj == nullptr)
+		return data;
+
+	jni::Class inputDeviceManagerClass(env->GetObjectClass(obj));
+	if (inputDeviceManagerClass.isNull())
+		return data;
+
+	jmethodID getJoystickDataMid = env->GetStaticMethodID(
+		inputDeviceManagerClass,
+		"getJoystickData",
+		"(I)Lcom/hollycast/emulator/periph/InputDeviceManager$JoystickData;"
+	);
+	if (getJoystickDataMid == nullptr)
+	{
+		return data;
+	}
+
+	jni::Object joystickData(env->CallStaticObjectMethod(inputDeviceManagerClass, getJoystickDataMid, id));
+	if (joystickData.isNull())
+	{
+		return data;
+	}
+
+	jni::Class joystickDataClass(env->GetObjectClass(joystickData));
+	if (joystickDataClass.isNull())
+	{
+		return data;
+	}
+
+	jfieldID vidFid = env->GetFieldID(joystickDataClass, "vid", "I");
+	jfieldID pidFid = env->GetFieldID(joystickDataClass, "pid", "I");
+	jfieldID joynameFid = env->GetFieldID(joystickDataClass, "joyname", "Ljava/lang/String;");
+	jfieldID uniqueIdFid = env->GetFieldID(joystickDataClass, "uniqueId", "Ljava/lang/String;");
+	jfieldID fullAxesFid = env->GetFieldID(joystickDataClass, "fullAxes", "[I");
+	jfieldID halfAxesFid = env->GetFieldID(joystickDataClass, "halfAxes", "[I");
+	jfieldID hasRumbleFid = env->GetFieldID(joystickDataClass, "hasRumble", "Z");
+
+	if (vidFid != nullptr)
+		data.vid = env->GetIntField(joystickData, vidFid);
+	if (pidFid != nullptr)
+		data.pid = env->GetIntField(joystickData, pidFid);
+	if (hasRumbleFid != nullptr)
+		data.hasRumble = env->GetBooleanField(joystickData, hasRumbleFid) == JNI_TRUE;
+
+	if (joynameFid != nullptr)
+	{
+		jni::String joyname(env->GetObjectField(joystickData, joynameFid));
+		data.joyname = joyname.to_string();
+	}
+
+	if (uniqueIdFid != nullptr)
+	{
+		jni::String uniqueId(env->GetObjectField(joystickData, uniqueIdFid));
+		data.uniqueId = uniqueId.to_string();
+	}
+
+	if (fullAxesFid != nullptr)
+	{
+		jni::IntArray fullAxes(env->GetObjectField(joystickData, fullAxesFid));
+		data.fullAxes = fullAxes;
+	}
+
+	if (halfAxesFid != nullptr)
+	{
+		jni::IntArray halfAxes(env->GetObjectField(joystickData, halfAxesFid));
+		data.halfAxes = halfAxes;
+	}
+
+	return data;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_joystickAdded(
+	JNIEnv *env,
+	jobject obj,
+	jobject usbManager,
+	jint id,
+	jint maple_port
+)
 {
 	if (id == 0)
 		return;
+	AndroidGamepadDevice::AndroidJoystickData joystickData = getJoystickData(env, obj, id);
 	if (id == AndroidVirtualGamepad::GAMEPAD_ID)
 	{
 		if (virtualGamepad == nullptr) {
-			virtualGamepad = std::make_shared<AndroidVirtualGamepad>(hasRumble);
+			virtualGamepad = std::make_shared<AndroidVirtualGamepad>(joystickData.hasRumble);
 			GamepadDevice::Register(virtualGamepad);
 		}
 		if (touchMouse == nullptr) {
@@ -123,14 +221,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDevice
 	}
 	else
 	{
-		std::string joyname = jni::String(name, false);
-		std::string unique_id = jni::String(junique_id, false);
-		std::vector<int> full = jni::IntArray(fullAxes, false);
-		std::vector<int> half = jni::IntArray(halfAxes, false);
-
-		std::shared_ptr<AndroidGamepadDevice> gamepad = std::make_shared<AndroidGamepadDevice>(maple_port, id, joyname.c_str(), unique_id.c_str(), full, half);
+		std::shared_ptr<AndroidGamepadDevice> gamepad;
+		if (DreamLinkAndroidGamepad::isDreamLinkGamepad(joystickData.vid, joystickData.pid)) {
+			gamepad = createDreamLinkAndroidGamepad(env, usbManager, maple_port, joystickData);
+		}
+		else {
+			gamepad = std::make_shared<AndroidGamepadDevice>(maple_port, joystickData);
+		}
 		AndroidGamepadDevice::AddAndroidGamepad(gamepad);
-		gamepad->setRumbleEnabled(hasRumble);
 	}
 }
 
@@ -147,7 +245,27 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDevice
 	else {
 		std::shared_ptr<AndroidGamepadDevice> device = AndroidGamepadDevice::GetAndroidGamepad(id);
 		if (device)
-			AndroidGamepadDevice::RemoveAndroidGamepad(device);
+			AndroidGamepadDevice::RemoveAndroidGamepad(env, device);
+	}
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDeviceManager_permissionGranted(
+	JNIEnv *env,
+	jobject obj,
+	jobject usbManager,
+	jintArray ids
+)
+{
+	// Remove and re-add each device that is waiting for permission so it may see if it can get permission
+	std::vector<int> idVec = jni::IntArray(ids, false);
+	for (int id : idVec) {
+		std::shared_ptr<AndroidGamepadDevice> device = AndroidGamepadDevice::GetAndroidGamepad(id);
+		std::shared_ptr<DreamLinkAndroidGamepad> dreamLinkDevice = std::dynamic_pointer_cast<DreamLinkAndroidGamepad>(device);
+		if (dreamLinkDevice && dreamLinkDevice->isAwaitingPermission()) {
+			int maplePort = dreamLinkDevice->maple_port();
+			Java_com_hollycast_emulator_periph_InputDeviceManager_joystickRemoved(env, obj, id);
+			Java_com_hollycast_emulator_periph_InputDeviceManager_joystickAdded(env, obj, usbManager, id, maplePort);
+		}
 	}
 }
 
@@ -242,7 +360,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_periph_InputDevice
 	touchMouse->setButton(Mouse::MIDDLE_BUTTON, (buttons & 4) != 0);
 }
 
-void input_term()
+void input_term(JNIEnv *env)
 {
 	GamepadDevice::Unregister(mouse);
 	mouse.reset();
@@ -252,5 +370,5 @@ void input_term()
 	keyboard.reset();
 	GamepadDevice::Unregister(virtualGamepad);
 	virtualGamepad.reset();
-	AndroidGamepadDevice::RemoveAll();
+	AndroidGamepadDevice::RemoveAll(env);
 }

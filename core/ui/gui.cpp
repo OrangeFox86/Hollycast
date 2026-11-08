@@ -239,9 +239,9 @@ void gui_updateStyle()
 #endif
 	if (settings.display.uiScale != 1.f)
 		ImGui::GetStyle().ScaleAllSizes(settings.display.uiScale);
-	
+
 	gui_loadFonts();
-	
+
     NOTICE_LOG(RENDERER, "Screen DPI is %.0f, size %d x %d. Scaling by %.2f", settings.display.dpi, settings.display.width, settings.display.height, settings.display.uiScale);
 	vgamepad::applyUiScale();
 }
@@ -1279,7 +1279,7 @@ static void gui_display_loadscreen()
 				else
 					label = T("Loading...");
 			}
-			
+
 			const bool customTexPreloading = custom_texture.isPreloading();
 			if (gameReady && !customTexPreloading)
 			{
@@ -1300,11 +1300,11 @@ static void gui_display_loadscreen()
 				int texTotal = 0;
 				size_t loaded_size_b = 0;
 				custom_texture.getPreloadProgress(texLoaded, texTotal, loaded_size_b);
-				
+
 				ImGui::Text("%s", label);
 				float progress = 0;
 				char overlay[64] = "";
-				
+
 				if (!gameReady)
 				{
 					progress = gameLoader.getProgress().progress;
@@ -1322,7 +1322,7 @@ static void gui_display_loadscreen()
 						snprintf(overlay, sizeof(overlay), "%d / %d (%.1f MB)", texLoaded, texTotal, loaded_size_mb);
 					}
 				}
-				
+
 				ImguiStyleColor _(ImGuiCol_PlotHistogram, ImVec4(0.557f, 0.268f, 0.965f, 1.f));
 				ImGui::ProgressBar(progress, ImVec2(-1, uiScaled(20.f)), overlay);
 
@@ -1618,7 +1618,7 @@ void gui_saveState(bool stopRestart, bool inRam)
 		try {
 			if (stopRestart)
 				emu.stop();
-			
+
 			if (inRam)
 				dc_savestate(-2);
 			else

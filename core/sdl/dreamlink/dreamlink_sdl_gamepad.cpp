@@ -17,10 +17,10 @@
     You should have received a copy of the GNU General Public License
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "dreamlinkgamepad.h"
+#include "dreamlink_sdl_gamepad.h"
 
-#include "dreamconn.h"
-#include "dreampicoport.h"
+#include "dreamconn_sdl_gamepad.h"
+#include "dreampicoport_sdl_gamepad.h"
 
 #include "hw/maple/maple_devs.h"
 #include "ui/gui.h"
@@ -39,7 +39,7 @@
 #include <setupapi.h>
 #endif
 
-bool DreamLinkGamepad::isDreamcastController(int deviceIndex)
+bool DreamLinkSDLGamepad::isDreamLinkGamepad(int deviceIndex)
 {
 	char guid_str[33] {};
 	SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(deviceIndex), guid_str, sizeof(guid_str));
@@ -48,21 +48,21 @@ bool DreamLinkGamepad::isDreamcastController(int deviceIndex)
 			guid_str[18], guid_str[19], guid_str[16], guid_str[17]);
 
 #ifdef USE_DREAMCONN
-	if (DreamConnGamepad::identify(deviceIndex))
+	if (DreamConnSDLGamepad::identify(deviceIndex))
 		return true;
 #endif
-	if (DreamPicoPortGamepad::identify(deviceIndex))
+	if (DreamPicoPortSDLGamepad::identify(deviceIndex))
 		return true;
 	return false;
 }
 
-DreamLinkGamepad::DreamLinkGamepad(std::shared_ptr<SDLDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
+DreamLinkSDLGamepad::DreamLinkSDLGamepad(std::shared_ptr<GamepadDreamLink> dreamlink, int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
 	: SDLGamepad(maple_port, joystick_idx, sdl_joystick), dreamlink(dreamlink)
 {
 	verify(dreamlink != nullptr);
 }
 
-void DreamLinkGamepad::close()
+void DreamLinkSDLGamepad::close()
 {
 	if (dreamlink != nullptr)
 	{
@@ -85,7 +85,7 @@ void DreamLinkGamepad::close()
 	SDLGamepad::close();
 }
 
-const char* DreamLinkGamepad::dreamLinkStatus()
+const char* DreamLinkSDLGamepad::status()
 {
 	if (dreamlink->isConnected())
 	{
@@ -101,7 +101,7 @@ const char* DreamLinkGamepad::dreamLinkStatus()
 	return i18n::T("Disconnected");
 }
 
-void DreamLinkGamepad::set_maple_port(int port)
+void DreamLinkSDLGamepad::set_maple_port(int port)
 {
 	int oldPort = maple_port();
 	if (oldPort == port)
@@ -112,13 +112,13 @@ void DreamLinkGamepad::set_maple_port(int port)
 	dreamlink->changeBus(port);
 }
 
-void DreamLinkGamepad::registered()
+void DreamLinkSDLGamepad::registered()
 {
 	SDLGamepad::registered();
 	dreamlink->registered();
 }
 
-void DreamLinkGamepad::resetMappingToDefault(bool arcade, bool gamepad) {
+void DreamLinkSDLGamepad::resetMappingToDefault(bool arcade, bool gamepad) {
 	SDLGamepad::resetMappingToDefault(arcade, gamepad);
 	if (input_mapper) {
 		setCustomMapping(input_mapper);
@@ -126,7 +126,7 @@ void DreamLinkGamepad::resetMappingToDefault(bool arcade, bool gamepad) {
 	}
 }
 
-std::shared_ptr<InputMapping> DreamLinkGamepad::getDefaultMapping() {
+std::shared_ptr<InputMapping> DreamLinkSDLGamepad::getDefaultMapping() {
 	std::shared_ptr<InputMapping> mapping = SDLGamepad::getDefaultMapping();
 	if (mapping) {
 		setCustomMapping(mapping);
@@ -135,7 +135,7 @@ std::shared_ptr<InputMapping> DreamLinkGamepad::getDefaultMapping() {
 	return mapping;
 }
 
-void DreamLinkGamepad::setBaseDefaultMapping(const std::shared_ptr<InputMapping>& mapping) const
+void DreamLinkSDLGamepad::setBaseDefaultMapping(const std::shared_ptr<InputMapping>& mapping) const
 {
 	const u32 leftTrigger = mapping->get_axis_code(maple_port(), DreamcastKey::DC_AXIS_LT).first;
 	const u32 rightTrigger = mapping->get_axis_code(maple_port(), DreamcastKey::DC_AXIS_RT).first;
@@ -155,13 +155,13 @@ void DreamLinkGamepad::setBaseDefaultMapping(const std::shared_ptr<InputMapping>
 	}
 }
 
-std::shared_ptr<DreamLinkGamepad> createDreamLinkGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
+std::shared_ptr<DreamLinkSDLGamepad> createDreamLinkSDLGamepad(int maple_port, int joystick_idx, SDL_Joystick* sdl_joystick)
 {
-	if (DreamPicoPortGamepad::identify(joystick_idx))
-		return std::make_shared<DreamPicoPortGamepad>(maple_port, joystick_idx, sdl_joystick);
+	if (DreamPicoPortSDLGamepad::identify(joystick_idx))
+		return std::make_shared<DreamPicoPortSDLGamepad>(maple_port, joystick_idx, sdl_joystick);
 #ifdef USE_DREAMCONN
-	else if (DreamConnGamepad::identify(joystick_idx))
-		return std::make_shared<DreamConnGamepad>(maple_port, joystick_idx, sdl_joystick);
+	else if (DreamConnSDLGamepad::identify(joystick_idx))
+		return std::make_shared<DreamConnSDLGamepad>(maple_port, joystick_idx, sdl_joystick);
 #endif
 	return nullptr;
 }
