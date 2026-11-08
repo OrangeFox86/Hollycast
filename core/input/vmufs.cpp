@@ -41,7 +41,12 @@ namespace vmufs
     }
 
     // begin class VMSHeader
-    u8* VMSHeader::GetRawVMUDescription() { return &data[Offset_VMUDescription]; }
+    u8* VMSHeader::GetRawVMUDescription()
+	{
+		// TODO: perhaps constructor should get this block. Not important as GetBlock is supposed to be cheap
+		u8* data = fileSystem.GetBlock(blockID);
+		return &data[Offset_VMUDescription];
+	}
     std::string VMSHeader::GetVMUDescription()
     {
         u8* rawVMUDescription = GetRawVMUDescription();
@@ -49,7 +54,11 @@ namespace vmufs
         return std::string(rawVMUDescription, &rawVMUDescription[len]);
     }
 
-    u8* VMSHeader::GetRawDreamcastDescription() { return &data[Offset_DreamcastDescription]; }
+    u8* VMSHeader::GetRawDreamcastDescription()
+	{
+		u8* data = fileSystem.GetBlock(blockID);
+		return &data[Offset_DreamcastDescription];
+	}
     std::string VMSHeader::GetDreamcastDescription()
     {
         u8* rawDreamcastDescription = GetRawDreamcastDescription();
@@ -57,7 +66,11 @@ namespace vmufs
         return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
     }
 
-    u16* VMSHeader::GetRawPalette() { return (u16*)&data[Offset_Palette]; }
+    u16* VMSHeader::GetRawPalette()
+	{
+		u8* data = fileSystem.GetBlock(blockID);
+		return (u16*)&data[Offset_Palette];
+	}
 
     void VMSHeader::ReadIconData(u32* dest)
     {
@@ -71,6 +84,7 @@ namespace vmufs
         // This code needs to start operating in terms of 'GetBlock(blockID)',
         // 'GetFATBlock().getSuccessorBlockID(blockID)', etc
         // instead of just using pointers.
+		u8* data = fileSystem.GetBlock(blockID);
         u8* sourceIconData = &data[HeaderSize];
 
         // Source data is 4 bits per pixel.
@@ -156,7 +170,7 @@ namespace vmufs
     VMSHeader FileSystem::GetVMSHeader(DirectoryEntry entry)
     {
         u16 blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
-        return VMSHeader(GetBlock(blockID));
+        return VMSHeader(*this, blockID);
     }
 
     DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(*this); }

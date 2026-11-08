@@ -25,6 +25,29 @@
 
 namespace vmufs
 {
+    // General pattern in this file: classes are thin wrappers.
+    // They wrap either the maple device, or a pointer to a specific data structure.
+    // Methods on the class allow interpreting the data. Conversion is performed "on demand".
+
+    class VMSHeader;
+    class DirectoryEntry;
+    class FATBlock;
+    class RootBlock;
+    class DirectoryTable;
+
+    class FileSystem
+    {
+        maple_sega_vmu* const vmuDevice;
+    public:
+        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
+        u8* GetBlock(u16 blockID);
+        VMSHeader GetVMSHeader(DirectoryEntry entry);
+        DirectoryTable GetDirectoryTable();
+        FATBlock GetFATBlock();
+        RootBlock GetRootBlock();
+        bool operator!=(FileSystem& other);
+    };
+
     enum class FileCopyProtection : u8
     {
         NotCopyProtected = 0x80,
@@ -38,13 +61,39 @@ namespace vmufs
         Game = 0xcc,
     };
 
+    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
+
+    // user region: where user visible files are stored.
+    static constexpr int UserRegionSizeBlocks = 200;
+    static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
+
+    static constexpr int BlockSize = 0x200; // 512b
+    static constexpr int BlockIDSize = 2;
+    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
+
+    static constexpr u8 DirectoryTableLastBlockID = BlocksCount - 3;
+    static constexpr int DirectoryTableSizeBlocks = 13;
+    static constexpr u8 DirectoryTableFirstBlockID = DirectoryTableLastBlockID - DirectoryTableSizeBlocks + 1;
+
+    // hidden region: extra storage which is used on-demand to store user files when blocks in the user region being to malfunction.
+    static constexpr int HiddenRegionSizeBlocks = BlocksCount - UserRegionSizeBlocks - DirectoryTableSizeBlocks - 1 /*root block*/ - 1 /*FAT size*/; // 41
+
+    static constexpr u8 RootBlockID = BlocksCount - 1;
+    static constexpr u8 FATBlockID = BlocksCount - 2;
+
+    static constexpr int Magic = 0x55;
+
+    static constexpr u16 FAT_Unallocated = 0xfffc;
+    static constexpr u16 FAT_LastInFile = 0xfffa;
+
     // https://vmudev.net/formats.html#formats_vms_header
     class VMSHeader
     {
-        u8* data;
+        FileSystem fileSystem;
+        u16 blockID;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(u8* data) : data(data) { }
+        VMSHeader(FileSystem fileSystem, u16 blockID) : fileSystem(fileSystem), blockID(blockID) { }
 
         static constexpr int HeaderSize = 0x80;
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
@@ -176,48 +225,6 @@ public:
         u16 GetGameFirst();
         u16 GetGameSize();
     };
-
-    class DirectoryTable;
-
-    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
-
-    // user region: where user visible files are stored.
-    static constexpr int UserRegionSizeBlocks = 200;
-    static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
-
-    static constexpr int BlockSize = 0x200; // 512b
-    static constexpr int BlockIDSize = 2;
-    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
-
-    static constexpr u8 DirectoryTableLastBlockID = BlocksCount - 3;
-    static constexpr int DirectoryTableSizeBlocks = 13;
-    static constexpr u8 DirectoryTableFirstBlockID = DirectoryTableLastBlockID - DirectoryTableSizeBlocks + 1;
-
-    // hidden region: extra storage which is used on-demand to store user files when blocks in the user region being to malfunction.
-    static constexpr int HiddenRegionSizeBlocks = BlocksCount - UserRegionSizeBlocks - DirectoryTableSizeBlocks - 1 /*root block*/ - 1 /*FAT size*/; // 41
-
-    static constexpr u8 RootBlockID = BlocksCount - 1;
-    static constexpr u8 FATBlockID = BlocksCount - 2;
-
-    static constexpr int Magic = 0x55;
-
-    static constexpr u16 FAT_Unallocated = 0xfffc;
-    static constexpr u16 FAT_LastInFile = 0xfffa;
-
-
-    class FileSystem
-    {
-        maple_sega_vmu* const vmuDevice;
-    public:
-        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
-        u8* GetBlock(u16 blockID);
-        VMSHeader GetVMSHeader(DirectoryEntry entry);
-        DirectoryTable GetDirectoryTable();
-        FATBlock GetFATBlock();
-        RootBlock GetRootBlock();
-        bool operator!=(FileSystem& other);
-    };
-
     // Iterable view over a VMU's directory table.
     // Note: when iterating, caller must manually filter out entries with 'Kind == None'.
     class DirectoryTable
