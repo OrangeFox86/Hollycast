@@ -1013,7 +1013,12 @@ private:
 
 	void RenderVmuList()
 	{
-		ImGui::TextUnformatted("list");
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		if (ImGui::Button("Done"))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopFont();
 	}
 
 	float vmsFileButtonWidth()
@@ -1054,6 +1059,8 @@ private:
 		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
+		ImGui::Text("Free: %d / %d", fileSystem.GetFATBlock().CountUserFreeBlocks(), vmufs::UserRegionSizeBlocks);
+
 		bool first = true;
 		for (vmufs::DirectoryEntry entry : table)
 		{
@@ -1093,13 +1100,6 @@ public:
 
 		if (!ImGui::BeginPopupModal(T("VMU Manager")))
 			return;
-
-		ImGui::PushFont(settingsTitleFont, 0.0f);
-		if (ImGui::Button("Done"))
-		{
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::PopFont();
 
 		auto dev = dynamic_cast<maple_sega_vmu*>(MapleDevices[bus][port].get());
 		if (dev != nullptr)

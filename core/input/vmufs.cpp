@@ -160,6 +160,17 @@ namespace vmufs
     // begin class FATBlock
     u16 FATBlock::getSuccessorBlockID(u16 blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
     void FATBlock::setSuccessorBlockID(u16 blockID, u16 successorID) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], successorID); }
+    int FATBlock::CountUserFreeBlocks()
+	{
+		int count = 0;
+		for (int i = 0; i < UserRegionSizeBlocks; i++)
+		{
+			if (readUInt16LittleEndian(&data[i * 2]) == FAT_Unallocated)
+				count++;
+		}
+
+		return count;
+	}
     // end class FATBlock
 
     // begin class RootBlock

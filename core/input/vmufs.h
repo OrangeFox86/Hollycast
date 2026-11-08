@@ -183,6 +183,7 @@ public:
         FATBlock(u8* data) : data(data) { }
         u16 getSuccessorBlockID(u16 blockID);
         void setSuccessorBlockID(u16 blockID, u16 successorID);
+        int CountUserFreeBlocks();
     };
 
     // View over the root block.
