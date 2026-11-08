@@ -1045,8 +1045,7 @@ private:
 		ImGui::PopFont();
 
 		ImGui::SetCursorScreenPos(pos + padding);
-		// TODO2: These should probably be in some collection associated with the device
-		// so that when vms files are deleted, icon textures can be freed, etc.
+		// TODO2: We should free any VMU textures we made when closing the popup
 		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0);
 		ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
 		ImGui::EndGroup();
