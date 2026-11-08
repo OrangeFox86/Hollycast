@@ -1053,10 +1053,21 @@ private:
 	{
 		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
+
+		bool first = true;
 		for (vmufs::DirectoryEntry entry : table)
 		{
 			if (entry.GetFileType() == vmufs::FileType::None)
 				continue;
+
+			if (!first)
+			{
+				ImGui::SameLine();
+				// Flow to new line if not enough space
+				if (ImGui::GetContentRegionAvail().x <= vmsFileButtonWidth() + ImGui::GetStyle().ItemSpacing.x)
+					ImGui::NewLine();
+			}
+			first = false;
 
 			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
 			// ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
@@ -1065,11 +1076,6 @@ private:
 			// ImGui::SameLine();
 			// ImGui::TextUnformatted(header.GetVMUDescription().c_str());
 			// ImGui::PopFont();
-
-			// TODO2: reflowing doesn't work
-			if (ImGui::GetContentRegionAvail().x >= vmsFileButtonWidth())
-				ImGui::SameLine();
-
 			RenderVmsFileDetails(entry, header);
 		}
 	}
