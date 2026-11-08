@@ -43,10 +43,10 @@ namespace vmufs
     // begin class VMSHeader
     u8* VMSHeader::GetRawVMUDescription()
 	{
-		// TODO: perhaps constructor should get this block. Not important as GetBlock is supposed to be cheap
 		u8* data = fileSystem.GetBlock(blockID);
 		return &data[Offset_VMUDescription];
 	}
+
     std::string VMSHeader::GetVMUDescription()
     {
         u8* rawVMUDescription = GetRawVMUDescription();
@@ -59,6 +59,7 @@ namespace vmufs
 		u8* data = fileSystem.GetBlock(blockID);
 		return &data[Offset_DreamcastDescription];
 	}
+
     std::string VMSHeader::GetDreamcastDescription()
     {
         u8* rawDreamcastDescription = GetRawDreamcastDescription();
@@ -119,8 +120,8 @@ namespace vmufs
 		// │                  │
 		// │                  │
 		// └──────────────────┘
+		// Source data is stored as bytes with 4 bits per pixel. Destination is one array element per pixel.
 		static constexpr int firstChunkSourceSize = BlockSize - HeaderSize;
-		// Map from "4 bits per pixel" to "one u32 array element per pixel"
 		static constexpr int firstChunkDestSize = firstChunkSourceSize * 2;
 		readIconDataSegment(dest, &data[HeaderSize], firstChunkSourceSize, palette);
 
@@ -184,7 +185,7 @@ namespace vmufs
         return data[ColorRed] | data[ColorGreen] << 8 | data[ColorBlue] << 16 | data[ColorAlpha] << 24;
     }
 
-    void SetCustomColor(std::optional<u32> color) { std::abort(); } // TODO: not yet implemented
+    void SetCustomColor(std::optional<u32> color) { std::abort(); } // https://github.com/OrangeFox86/Hollycast/issues/111: not yet implemented
 
     static constexpr int Offset_Timestamp = 0x30;
     u8* RootBlock::GetTimestampBinary() { return &data[Offset_Timestamp]; }

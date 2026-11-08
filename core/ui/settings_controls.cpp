@@ -1009,8 +1009,6 @@ extern std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
 class VmuManagerPopup
 {
 private:
-	std::array<char, 3> logicalPort;
-
 	void RenderVmuList()
 	{
 		ImGui::PushFont(settingsTitleFont, 0.0f);
