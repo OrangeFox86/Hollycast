@@ -66,6 +66,7 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
 
     private final Set<String> pendingPermissionRequests = new HashSet<>();
     private boolean receiverRegistered = false;
+    private boolean usbDeviceReceiverRegistered = false;
 
     private boolean hasTouchscreen = false;
 
@@ -76,6 +77,19 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
     }
     private Map<Integer, VibrationParams> vibParams = new HashMap<>();
     private Set<Integer> knownDevices = new HashSet<>();
+
+    //! The receiver which is activated when a USB device is attached to the system
+    private final BroadcastReceiver usbDeviceAttachmentReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (device != null) {
+                    handleUsbDeviceAttached(device);
+                }
+            }
+        }
+    };
 
     //! The receiver which is activated after the user handles the UsbDevice permission dialog (approve/deny)
     private final BroadcastReceiver usbPermissionReceiver = new BroadcastReceiver() {
@@ -108,8 +122,12 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
     };
 
     public void handleUsbDeviceAttached(UsbDevice device) {
-        if (usbManager.hasPermission(device)) {
-            permissionGranted(usbManager, getKnownDeviceIdsByVidPid(device.getVendorId(), device.getProductId()));
+        if (isPermissionRequired(device.getVendorId(), device.getProductId())) {
+            if (usbManager.hasPermission(device)) {
+                permissionGranted(usbManager, getKnownDeviceIdsByVidPid(device.getVendorId(), device.getProductId()));
+            } else {
+                requestUsbPermission(device.getVendorId(), device.getProductId());
+            }
         }
     }
 
@@ -131,6 +149,9 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
         inputManager.registerInputDeviceListener(this, null);
         usbManager = (UsbManager)applicationContext.getSystemService(Context.USB_SERVICE);
 
+        // Register to be notified when USB devices are attached
+        ensureUsbDeviceReceiverRegistered();
+
         // Parse already-known devices
         int[] ids = InputDevice.getDeviceIds();
         for (int i = 0; i < ids.length; i++) {
@@ -147,6 +168,11 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
                 receiverRegistered = false;
             }
             pendingPermissionRequests.clear();
+        }
+
+        if (usbDeviceReceiverRegistered) {
+            Emulator.getAppContext().unregisterReceiver(usbDeviceAttachmentReceiver);
+            usbDeviceReceiverRegistered = false;
         }
 
         if (inputManager != null) {
@@ -172,6 +198,24 @@ public final class InputDeviceManager implements InputManager.InputDeviceListene
         );
 
         receiverRegistered = true;
+    }
+
+    //! Ensure that the usbDeviceAttachmentReceiver is registered in order to listen for USB device attachments
+    private void ensureUsbDeviceReceiverRegistered() {
+        if (usbDeviceReceiverRegistered) {
+            return;
+        }
+
+        IntentFilter filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+
+        ContextCompat.registerReceiver(
+            Emulator.getAppContext(),
+            usbDeviceAttachmentReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        );
+
+        usbDeviceReceiverRegistered = true;
     }
 
     @Override
