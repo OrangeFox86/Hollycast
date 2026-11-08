@@ -1016,29 +1016,37 @@ private:
 		ImGui::TextUnformatted("list");
 	}
 
+	float vmsFileButtonWidth()
+	{
+		return uiScaled(32) + ImGui::GetStyle().FramePadding.x * 2;
+	}
+
 	void RenderVmsFileDetails(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
 	{
 		std::string filename = directoryEntry.GetFilename();
 		ImguiID(filename.c_str());
+		ImGui::BeginGroup();
 
-		ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
-		float width = uiScaled(32) + spacing.x * 2;
-		float height = width + ImGui::GetTextLineHeight();
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		std::string sizeInBlocksString = std::to_string(directoryEntry.GetSizeInBlocks());
+		ImVec2 textSize = ImGui::CalcTextSize(sizeInBlocksString.c_str());
+
+		float width = vmsFileButtonWidth();
+		ImVec2 padding = ImGui::GetStyle().FramePadding;
+		float height = uiScaled(32) + padding.y * 2 + textSize.y;
 
 		ImVec2 pos = ImGui::GetCursorScreenPos();
-		ImGui::Selectable("##selectable", false, ImGuiSelectableFlags_None, ImVec2(width, height));
+		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 1.0f));
+		ImGui::Button(sizeInBlocksString.c_str(), ImVec2(width, height));
+		ImGui::PopStyleVar();
+		ImGui::PopFont();
 
-		ImGui::SetCursorScreenPos(pos + spacing);
+		ImGui::SetCursorScreenPos(pos + padding);
 		// TODO2: These should probably be in some collection associated with the device
 		// so that when vms files are deleted, icon textures can be freed, etc.
 		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0);
 		ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
-
-		std::string sizeString = std::to_string(directoryEntry.GetSizeInBlocks());
-		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - spacing.x - ImGui::CalcTextSize(sizeString.c_str()).x);
-		ImGui::TextUnformatted(sizeString.c_str());
-		ImGui::PopFont();
+		ImGui::EndGroup();
 	}
 
 	void RenderVmuDetails(maple_sega_vmu* dev)
@@ -1051,15 +1059,18 @@ private:
 				continue;
 
 			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
-			ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-			ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
-			ImGui::TextUnformatted(entry.GetFilename().c_str());
-			ImGui::SameLine();
-			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
-			ImGui::PopFont();
+			// ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+			// ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+			// ImGui::TextUnformatted(entry.GetFilename().c_str());
+			// ImGui::SameLine();
+			// ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+			// ImGui::PopFont();
+
+			// TODO2: reflowing doesn't work
+			if (ImGui::GetContentRegionAvail().x >= vmsFileButtonWidth())
+				ImGui::SameLine();
 
 			RenderVmsFileDetails(entry, header);
-			// ImGui::TextUnformatted(std::to_string(entry.GetSizeInBlocks()).c_str());
 		}
 	}
 
