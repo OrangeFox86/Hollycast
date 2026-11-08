@@ -203,6 +203,7 @@ private:
 	// Note: we don't want a translated label here, it should remain stable when locale changes.
 	const char* activeLabel = nullptr;
 	const char* nextFrameActiveLabel = nullptr;
+	float maxTabWidth;
 
 	void EndHelper()
 	{
@@ -211,12 +212,22 @@ private:
 	}
 
 public:
+	VerticalTabBar() = delete;
+
+	VerticalTabBar(float maxTabWidth): maxTabWidth(maxTabWidth)
+	{}
+
+	float TabBarWidth()
+	{
+		return uiScaled(maxTabWidth);
+	}
+
 	bool BeginTabBar(const char* id)
 	{
 		ImGui::PushID(id);
 		// Tab bar structure: tab list on left, active tab content on the right.
 		// The right child is added when we encounter it in BeginTab().
-		bool ret = ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
+		bool ret = ImGui::BeginChild("##verticalTabBar", ScaledVec2(maxTabWidth, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
 		if (!ret)
 			EndHelper();
 
@@ -339,10 +350,23 @@ void gui_display_settings()
 {
 	static std::array<bool, 4> mapleDevicesChanges;
 	static std::array<std::array<bool, 2>, 4> expDevicesChanges;
-	static VerticalTabBar settingsTabBar;
+	static VerticalTabBar settingsTabBar(155.0f); // Set width of the tab bar here
+	static constexpr float maxContentWidth = 600.f; // Max width of the content pane
+	static const float maxSettingsWidth =
+		settingsTabBar.TabBarWidth() + ImGui::GetStyle().ItemSpacing.x + uiScaled(maxContentWidth);
 
 	fullScreenWindow(false);
+
+	// Narrow the window so its title bar spans exactly the two panes, centered on screen
+	{
+		float areaWidth = ImGui::GetIO().DisplaySize.x - insetLeft - insetRight;
+		float windowWidth = ImMin(areaWidth, maxSettingsWidth + ImGui::GetStyle().WindowPadding.x * 2);
+		ImGui::SetNextWindowPos(ImVec2(insetLeft + (areaWidth - windowWidth) * 0.5f, insetTop));
+		ImGui::SetNextWindowSize(ImVec2(windowWidth, ImGui::GetIO().DisplaySize.y - insetTop - insetBottom));
+	}
+
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
+	ImguiStyleVar titleAlign(ImGuiStyleVar_WindowTitleAlign, ImVec2(0.5f, 0.5f));
 
     ImGui::Begin(T("Settings"), nullptr, ImGuiWindowFlags_DragScrolling | ImGuiWindowFlags_NoResize
 			| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
