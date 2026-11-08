@@ -1016,6 +1016,31 @@ private:
 		ImGui::TextUnformatted("list");
 	}
 
+	void RenderVmsFileDetails(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
+	{
+		std::string filename = directoryEntry.GetFilename();
+		ImguiID(filename.c_str());
+
+		ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+		float width = uiScaled(32) + spacing.x * 2;
+		float height = width + ImGui::GetTextLineHeight();
+
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+		ImGui::Selectable("##selectable", false, ImGuiSelectableFlags_None, ImVec2(width, height));
+
+		ImGui::SetCursorScreenPos(pos + spacing);
+		// TODO2: These should probably be in some collection associated with the device
+		// so that when vms files are deleted, icon textures can be freed, etc.
+		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0);
+		ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
+
+		std::string sizeString = std::to_string(directoryEntry.GetSizeInBlocks());
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - spacing.x - ImGui::CalcTextSize(sizeString.c_str()).x);
+		ImGui::TextUnformatted(sizeString.c_str());
+		ImGui::PopFont();
+	}
+
 	void RenderVmuDetails(maple_sega_vmu* dev)
 	{
 		vmufs::FileSystem fileSystem(dev);
@@ -1033,16 +1058,8 @@ private:
 			ImGui::TextUnformatted(header.GetVMUDescription().c_str());
 			ImGui::PopFont();
 
-			std::string textureName = std::string(dev->logical_port) + entry.GetFilename();
-
-			// TODO2: These should probably be in some collection associated with the device
-			// so that when vms files are deleted, icon textures can be freed, etc.
-			ImguiVmsFileTexture iconTexture(textureName, header, 0);
-
-			// TODO2: decoding work should be moved into 'getId()' so it becomes lazy/amortized
-			ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
-
-			ImGui::TextUnformatted(std::to_string(entry.GetSizeInBlocks()).c_str());
+			RenderVmsFileDetails(entry, header);
+			// ImGui::TextUnformatted(std::to_string(entry.GetSizeInBlocks()).c_str());
 		}
 	}
 
