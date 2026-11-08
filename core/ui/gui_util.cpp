@@ -97,7 +97,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 						else if (extension == "zip" || extension == "7z" || extension == "chd"
 								|| extension == "gdi" || extension == "cdi" || extension == "cue"
 								|| (!config::HideLegacyNaomiRoms
-										&& (extension == "bin" || extension == "lst" || extension == "dat")))
+										&& (extension == "bin" || extension == "dat")))
 							folderFiles.push_back(entry);
 					}
 				}
