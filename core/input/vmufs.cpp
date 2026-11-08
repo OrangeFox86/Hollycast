@@ -72,6 +72,18 @@ namespace vmufs
 		return (u16*)&data[Offset_Palette];
 	}
 
+	void readIconDataSegment(u32* dest, u8* sourceIconData, int length, std::array<u32, VMSHeader::PaletteLength>& palette)
+	{
+        // Source data is 4 bits per pixel.
+        // Pixel color is obtained by looking it up in the palette.
+        for (int i = 0; i < length; i++)
+        {
+            u8 source = sourceIconData[i];
+            dest[i * 2] = palette.at(source >> 4 & 0xf);
+            dest[i * 2 + 1] = palette.at(source & 0xf);
+        }
+	}
+
     void VMSHeader::ReadIconData(u32* dest)
     {
         u16* rawPalette = GetRawPalette();
@@ -79,22 +91,29 @@ namespace vmufs
         for (int i = 0; i < PaletteLength; i++)
             palette.at(i) = Unpacker4444_32<RGBAPacker>::unpack(rawPalette[i]);
 
-        // TODO2: This is not working properly because
-        // the icon data is not contiguous in the vmu image.
-        // This code needs to start operating in terms of 'GetBlock(blockID)',
-        // 'GetFATBlock().getSuccessorBlockID(blockID)', etc
-        // instead of just using pointers.
 		u8* data = fileSystem.GetBlock(blockID);
-        u8* sourceIconData = &data[HeaderSize];
+		// A single icon is split across multiple blocks.
+		// Blocks may not be contiguous in the VMU image, so we have to
+		// look in the FAT and get the successor block to read the last part of the icon.
+		// ┌──────────────────┐
+		// │ 0x0 VMS header   │
+		// │ 0x80 Icon 0      │
+		// │      ...         │
+		// │      ...         │
+		// └──────────────────┘
+		// ┌──────────────────┐
+		// │ 0x0  ...         │
+		// │ 0x80 Icon 1      │
+		// │                  │
+		// │                  │
+		// └──────────────────┘
+		static constexpr int firstChunkSourceSize = BlockSize - HeaderSize;
+		// Map from "4 bits per pixel" to "one u32 array element per pixel"
+		static constexpr int firstChunkDestSize = firstChunkSourceSize * 2;
+		readIconDataSegment(dest, &data[HeaderSize], firstChunkSourceSize, palette);
 
-        // Source data is 4 bits per pixel.
-        // Pixel color is obtained by looking it up in the palette.
-        for (int i = 0; i < IconSizeBytes; i++)
-        {
-            u8 source = sourceIconData[i];
-            dest[i * 2] = palette.at(source >> 4 & 0xf);
-            dest[i * 2 + 1] = palette.at(source & 0xf);
-        }
+		u16 nextBlockID = fileSystem.GetFATBlock().getSuccessorBlockID(blockID);
+		readIconDataSegment(&dest[firstChunkDestSize], fileSystem.GetBlock(nextBlockID), HeaderSize, palette);
     }
     // end class VMSHeader
 

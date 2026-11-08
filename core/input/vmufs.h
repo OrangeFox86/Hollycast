@@ -98,6 +98,8 @@ public:
         static constexpr int HeaderSize = 0x80;
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
         static constexpr int IconSizePixels = IconSizeBytes * 2;
+        static constexpr int PaletteLengthBytes = 0x20;
+        static constexpr int PaletteLength = 0x10;
 
         std::string GetVMUDescription();
         std::string GetDreamcastDescription();
@@ -115,8 +117,6 @@ private:
         static constexpr int Offset_CRC = 0x46;
         static constexpr int Offset_DataBytes = 0x48;
         static constexpr int Offset_Palette = 0x60;
-        static constexpr int PaletteLengthBytes = 0x20;
-        static constexpr int PaletteLength = 0x10;
 
         u8* GetRawVMUDescription();
         u8* GetRawDreamcastDescription();
