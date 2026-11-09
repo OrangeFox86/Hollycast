@@ -13,6 +13,12 @@ Hollycast tracks the Flycast core while providing a home for features and experi
 - Unlock functionality: We integrate community-requested features and experimental changes that Flycast chooses not to merge.
 - Developer freedom: We provide a stable sandbox for passion features and modernizations that keep the emulator evolving.
 
+### Notable Differences from Flycast
+
+- Full [DreamPicoPort](https://github.com/OrangeFox86/DreamPicoPort) integration, backed by the developer who made it
+- Full [DreamPotato](https://github.com/RikkiGibson/DreamPotato) integration, backed by the developer who made it
+- Refreshed UI look and feel
+
 ## Contribution
 
 Hollycast is under active development. If you'd like to contribute, please [join our Discord](https://discord.gg/erSUx3v4YH) and open a Feature Request to discuss your plans before submitting code.

@@ -56,6 +56,8 @@
 #include "hw/sh4/sh4_sched.h"
 #include "keyboard_map.h"
 #include "hw/maple/maple_cfg.h"
+#include "hw/naomi/systemsp.h"
+#include "hw/pvr/elan.h"
 #include "hw/maple/maple_if.h"
 #include "hw/pvr/pvr_regs.h"
 #include "hw/pvr/Renderer_if.h"
@@ -442,6 +444,8 @@ void retro_deinit()
 	emu.term();
 #endif
 	libretro_supports_bitmasks = false;
+	led_state_cb = NULL;
+	memset(retro_led_state, 0, sizeof(retro_led_state));
 	categoriesSupported = false;
 	platformIsDreamcast = true;
 	platformIsArcade = false;
@@ -2300,21 +2304,19 @@ bool retro_load_game(const struct retro_game_info *game)
 	char *ext = strrchr(g_base_name, '.');
 
 	{
-		/* Check for extension .lst, .bin, .dat or .zip. If found, we will set the system type
+		/* Check for extension .bin, .dat or .zip. If found, we will set the system type
 		 * automatically to Naomi or AtomisWave. */
 		if (ext)
 		{
 			log_cb(RETRO_LOG_INFO, "File extension is: %s\n", ext);
-			if (!strcmp(".lst", ext)
-					|| !strcmp(".bin", ext) || !strcmp(".BIN", ext)
+			if (!strcmp(".bin", ext) || !strcmp(".BIN", ext)
 					|| !strcmp(".dat", ext) || !strcmp(".DAT", ext)
 					|| !strcmp(".zip", ext) || !strcmp(".ZIP", ext)
 					|| !strcmp(".7z", ext) || !strcmp(".7Z", ext))
 			{
 				settings.platform.system = naomi_cart_GetPlatform(game->path);
 				// Users should use the superior format instead, let's warn them
-				if (!strcmp(".lst", ext)
-						|| !strcmp(".bin", ext) || !strcmp(".BIN", ext)
+				if (!strcmp(".bin", ext) || !strcmp(".BIN", ext)
 						|| !strcmp(".dat", ext) || !strcmp(".DAT", ext))
 				{
 					struct retro_message msg;
@@ -2499,22 +2501,16 @@ size_t retro_get_memory_size(unsigned type)
 size_t retro_serialize_size()
 {
 	DEBUG_LOG(SAVESTATE, "retro_serialize_size");
-	std::lock_guard<std::mutex> lock(mtx_serialization);
-
-	if (!first_run)
-		try {
-			emu.stop();
-		} catch (const FlycastException& e) {
-			ERROR_LOG(COMMON, "%s", e.what());
-			return 0;
-		}
-
-	Serializer ser;
-	dc_serialize(ser);
-	if (!first_run)
-		emu.start();
-
-	return ser.size();
+	// A frontend may size its buffer once, but a state grows and shrinks with the
+	// devices plugged in and the frames being drawn. Report the memory regions plus
+	// the allowance GGPO makes for everything else, Naomi's for System SP too.
+	size_t size = settings.platform.ram_size + settings.platform.vram_size
+			+ settings.platform.aram_size;
+	if (settings.platform.isNaomi2())
+		size += elan::ERAM_SIZE;
+	if (settings.platform.isSystemSP() && systemsp::SystemSpCart::Instance != nullptr)
+		size += systemsp::SystemSpCart::Instance->getSerializedMediaSize();
+	return size + (settings.platform.isNaomi() || settings.platform.isSystemSP() ? 20_MB : 10_MB);
 }
 
 bool retro_serialize(void *data, size_t size)
@@ -2597,7 +2593,7 @@ void retro_get_system_info(struct retro_system_info *info)
 #define GIT_VERSION "undefined"
 #endif
    info->library_version = GIT_VERSION;
-   info->valid_extensions = "chd|cdi|elf|cue|gdi|lst|bin|dat|zip|7z|m3u";
+   info->valid_extensions = "chd|cdi|elf|cue|gdi|bin|dat|zip|7z|m3u";
    info->need_fullpath = true;
    info->block_extract = true;
 }
@@ -3913,7 +3909,7 @@ static bool read_m3u(const char *file)
 		log_cb(RETRO_LOG_ERROR, "Could not read file\n");
 		return false;
 	}
-
+	unsigned disk_index = 0;
 	while (filestream_gets(f, line, sizeof(line)) && disk_index <= disk_paths.size())
 	{
 		if (line[0] == '#')

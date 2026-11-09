@@ -382,7 +382,7 @@ void gui_Appearance()
 void gui_Misc()
 {
 	if (OptionCheckbox(T("Hide Legacy Naomi Roms"), config::HideLegacyNaomiRoms,
-			T("Hide .bin, .dat and .lst files from the content browser")))
+			T("Hide .bin and .dat files from the content browser")))
 		scanner.refresh();
 #ifdef __ANDROID__
 	OptionCheckbox(T("Use SAF File Picker"), config::UseSafFilePicker,
@@ -409,6 +409,8 @@ void gui_Achievements()
 	{
 		DisabledScope _(!config::EnableAchievements);
 		ImGui::Indent();
+		OptionCheckbox(T("Show Achievement Popups"), config::ShowAchievementPopups,
+					   T("Shows achievement popups ingame."));
 		OptionCheckbox(T("Hardcore Mode"), config::AchievementsHardcoreMode,
 				T("Enable RetroAchievements hardcore mode. Using cheats and loading a state are not allowed in this mode."));
 		InputText(T("Username"), &config::AchievementsUserName.get(),

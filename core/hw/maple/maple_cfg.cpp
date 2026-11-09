@@ -240,7 +240,8 @@ static void mcfg_Create(MapleDeviceType type, u32 bus, u32 port, s32 player_num 
 		return;
 
 	std::shared_ptr<maple_device> dev = maple_Create(type);
-	dev->Setup(bus, port, player_num);
+	if (dev != nullptr)
+		dev->Setup(bus, port, player_num);
 }
 
 void createDreamLinkDevices(
