@@ -1112,7 +1112,7 @@ public:
 			return;
 
 		auto configDeviceType = config::MapleExpansionDevices[bus][port];
-		verify(configDeviceType == MDT_SegaVMU || configDeviceType == MDT_DreamPotato);
+		verify(configDeviceType == MDT_SegaVMU);
 
 		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
 		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
