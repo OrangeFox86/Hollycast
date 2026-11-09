@@ -25,6 +25,7 @@
 #include "input/mouse.h"
 #include "input/vmufs.h"
 #include "hw/maple/maple_devs.h"
+#include "hw/maple/maple_if.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
 
@@ -1002,10 +1003,6 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
-// TODO2: It's not clear whether/how to expose the maple device to settings layer.
-// Note that these do not exist until a game is launched, and might not be in sync with expansion device settings
-extern std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
-
 class VmuManagerPopup
 {
 private:
@@ -1042,7 +1039,7 @@ private:
 	void RenderVmsFileDetails(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
 	{
 		std::string filename = directoryEntry.GetFilename();
-		ImguiID(filename.c_str());
+		ImguiID id(filename.c_str());
 		ImGui::BeginGroup();
 
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
@@ -1070,7 +1067,9 @@ private:
 		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 		ImGui::Text("Free: %d / %d", fileSystem.GetFATBlock().CountUserFreeBlocks(), vmufs::UserRegionSizeBlocks);
+		ImGui::PopFont();
 
 		bool first = true;
 		for (vmufs::DirectoryEntry entry : table)
@@ -1112,22 +1111,42 @@ public:
 		if (!ImGui::BeginPopupModal(T("VMU Manager")))
 			return;
 
-		auto dev = dynamic_cast<maple_sega_vmu*>(MapleDevices[bus][port].get());
-		if (dev != nullptr)
-		{
-			if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
-			{
-				RenderVmuList();
-			}
-			ImGui::EndChild();
+		auto configDeviceType = config::MapleExpansionDevices[bus][port];
+		verify(configDeviceType == MDT_SegaVMU || configDeviceType == MDT_DreamPotato);
 
-			ImGui::SameLine();
-			if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
-			{
-				RenderVmuDetails(dev);
-			}
-			ImGui::EndChild();
+		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
+		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
+		{
+			// Devices are out of sync with config, perhaps due to loading a save state which had different settings
+			// Need to delete and re-create.
+			// TODO2: should this just re-create everything and put things fully in sync?
+			deviceSharedPtr = nullptr;
 		}
+		if (deviceSharedPtr == nullptr)
+		{
+			mcfg_CreateDevices();
+		}
+
+		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
+		if (dev == nullptr)
+		{
+			ImGui::TextUnformatted("Unable to initialize VMU. Please file a bug.");
+			ImGui::EndPopup();
+			return;
+		}
+
+		if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmuList();
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+		if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmuDetails(dev);
+		}
+		ImGui::EndChild();
 
 		ImGui::EndPopup();
 	}
