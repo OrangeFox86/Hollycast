@@ -1008,6 +1008,7 @@ class VmuManagerPopup
 private:
 	// List of file names found on the VMU(s). Used to clean up associated resources on close.
 	std::vector<std::string> allFileNames;
+	std::optional<vmufs::DirectoryEntry> hoveredEntry;
 
 	void Close()
 	{
@@ -1017,6 +1018,7 @@ private:
 			ImguiVmsFileTexture::deleteTexture(name);
 		}
 		allFileNames.clear();
+		hoveredEntry = std::nullopt;
 	}
 
 	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
@@ -1073,7 +1075,7 @@ private:
 		return uiScaled(32) + ImGui::GetStyle().FramePadding.x * 2;
 	}
 
-	void RenderVmsFileDetails(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
+	void RenderVmsFileIcon(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
 	{
 		std::string filename = directoryEntry.GetFilename();
 		ImguiID id(filename.c_str());
@@ -1090,6 +1092,9 @@ private:
 		ImVec2 pos = ImGui::GetCursorScreenPos();
 		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 1.0f));
 		ImGui::Button(sizeInBlocksString.c_str(), ImVec2(width, height));
+		if (ImGui::IsItemHovered())
+			hoveredEntry = directoryEntry;
+
 		ImGui::PopStyleVar();
 		ImGui::PopFont();
 
@@ -1099,7 +1104,7 @@ private:
 		ImGui::EndGroup();
 	}
 
-	void RenderVmuDetails(vmufs::FileSystem fileSystem)
+	void RenderVmsFileList(vmufs::FileSystem fileSystem)
 	{
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
@@ -1119,14 +1124,23 @@ private:
 			first = false;
 
 			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
-			// ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-			// ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
-			// ImGui::TextUnformatted(entry.GetFilename().c_str());
-			// ImGui::SameLine();
-			// ImGui::TextUnformatted(header.GetVMUDescription().c_str());
-			// ImGui::PopFont();
-			RenderVmsFileDetails(entry, header);
+			RenderVmsFileIcon(entry, header);
 		}
+	}
+
+	void RenderHoveredVmsFileDescription(vmufs::FileSystem fileSystem)
+	{
+		if (!hoveredEntry.has_value())
+			return;
+
+		vmufs::DirectoryEntry entry = hoveredEntry.value();
+		vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+		ImGui::TextUnformatted(entry.GetFilename().c_str());
+		ImGui::SameLine();
+		ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+		ImGui::PopFont();
 	}
 
 public:
@@ -1173,18 +1187,27 @@ public:
 		}
 
 		vmufs::FileSystem fileSystem(dev);
-		if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
 			RenderVmuList(fileSystem);
 		}
 		ImGui::EndChild();
 
 		ImGui::SameLine();
-		if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		ImGui::BeginGroup();
+		float hoveredVmsDescriptionHeight = uiScaled(100);
+		if (ImGui::BeginChild("vmsList", ImVec2(0, ImGui::GetContentRegionAvail().y - hoveredVmsDescriptionHeight), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
-			RenderVmuDetails(fileSystem);
+			RenderVmsFileList(fileSystem);
 		}
 		ImGui::EndChild();
+
+		if (ImGui::BeginChild("hoveredVmsDescription", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderHoveredVmsFileDescription(fileSystem);
+		}
+		ImGui::EndChild();
+		ImGui::EndGroup();
 
 		ImGui::EndPopup();
 	}
