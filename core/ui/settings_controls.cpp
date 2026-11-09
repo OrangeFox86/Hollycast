@@ -1119,7 +1119,12 @@ public:
 		{
 			// Devices are out of sync with config, perhaps due to loading a save state which had different settings
 			// Need to delete and re-create.
-			// TODO2: should this just re-create everything and put things fully in sync?
+			// TODO2: this scenario seems tricky.
+			// It looks like the usual reconnect strategy in this case,
+			// involves delaying for certain period of emulated time, before re-creating,
+			// perhaps to allow the emulated game to observe the change.
+			// Since we need the device immediately here, perhaps we can just re-create eagerly,
+			// but also mark it as "changed" so that it will go through that reconnecting dance afterwards.
 			deviceSharedPtr = nullptr;
 		}
 		if (deviceSharedPtr == nullptr)
