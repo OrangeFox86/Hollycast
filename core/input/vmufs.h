@@ -181,8 +181,8 @@ private:
         u8* data;
 public:
         FATBlock(u8* data) : data(data) { }
-        u16 getSuccessorBlockID(u16 blockID);
-        void setSuccessorBlockID(u16 blockID, u16 successorID);
+        u16 GetSuccessorBlockID(u16 blockID);
+        void SetSuccessorBlockID(u16 blockID, u16 successorID);
         int CountUserFreeBlocks();
     };
 

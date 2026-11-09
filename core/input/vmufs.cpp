@@ -124,7 +124,7 @@ namespace vmufs
 		static constexpr int firstChunkDestSize = firstChunkSourceSize * 2;
 		readIconDataSegment(dest, &data[HeaderSize], firstChunkSourceSize, palette);
 
-		u16 nextBlockID = fileSystem.GetFATBlock().getSuccessorBlockID(blockID);
+		u16 nextBlockID = fileSystem.GetFATBlock().GetSuccessorBlockID(blockID);
 		readIconDataSegment(&dest[firstChunkDestSize], fileSystem.GetBlock(nextBlockID), HeaderSize, palette);
     }
     // end class VMSHeader
@@ -158,8 +158,8 @@ namespace vmufs
     // end class DirectoryEntry
 
     // begin class FATBlock
-    u16 FATBlock::getSuccessorBlockID(u16 blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
-    void FATBlock::setSuccessorBlockID(u16 blockID, u16 successorID) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], successorID); }
+    u16 FATBlock::GetSuccessorBlockID(u16 blockID) { return readUInt16LittleEndian(&data[blockID * BlockIDSize]); }
+    void FATBlock::SetSuccessorBlockID(u16 blockID, u16 successorID) { writeUInt16LittleEndian(&data[blockID * BlockIDSize], successorID); }
     int FATBlock::CountUserFreeBlocks()
 	{
 		int count = 0;
