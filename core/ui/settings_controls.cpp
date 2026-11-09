@@ -1062,14 +1062,41 @@ private:
 		ImGui::EndGroup();
 	}
 
+	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
+	{
+		constexpr ImU32 usedSpaceColor = 0xff4924a4;
+		constexpr ImU32 freeSpaceColor = 0xffafaf89;
+		ImVec2 fullSize = ImVec2(uiScaled(64), ImGui::GetFrameHeight());
+
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + fullSize,
+			freeSpaceColor);
+
+		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
+		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
+		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + usedSize,
+			usedSpaceColor);
+
+		std::string freeText = std::string(T("Free: ")) + std::to_string(freeBlocks);
+		ImVec2 textSize = ImGui::CalcTextSize(freeText.c_str());
+		ImVec2 initialPos = ImGui::GetCursorScreenPos();
+		ImVec2 centerOffset = gui_centerIn(fullSize, textSize);
+		ImGui::SetCursorScreenPos(initialPos + centerOffset);
+		ImGui::TextUnformatted(freeText.c_str());
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + centerOffset.y);
+		ImGui::PopFont();
+	}
+
 	void RenderVmuDetails(maple_sega_vmu* dev)
 	{
 		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
-
-		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::Text("Free: %d / %d", fileSystem.GetFATBlock().CountUserFreeBlocks(), vmufs::UserRegionSizeBlocks);
-		ImGui::PopFont();
+		RenderFreeSpaceMeter(fileSystem);
 
 		bool first = true;
 		for (vmufs::DirectoryEntry entry : table)

@@ -46,6 +46,9 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button = ImGuiMouseButton_L
 // Helper to display a little (?) mark which shows a tooltip when hovered.
 void ShowHelpMarker(const char* desc);
 
+float gui_centerIn(float containerSize, float itemSize);
+ImVec2 gui_centerIn(ImVec2 containerSize, ImVec2 itemSize);
+
 // Renders a checkbox with optional help text as a single row.
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr);
 
