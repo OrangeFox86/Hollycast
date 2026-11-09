@@ -1009,15 +1009,28 @@ extern std::shared_ptr<maple_device> MapleDevices[MAPLE_PORTS][6];
 class VmuManagerPopup
 {
 private:
-	std::array<char, 3> logicalPort;
+	// List of file names found on the VMU(s). Used to clean up associated resources on close.
+	std::vector<std::string> allFileNames;
+
+	void Close()
+	{
+		ImGui::CloseCurrentPopup();
+		for (std::string name : allFileNames)
+		{
+			ImguiVmsFileTexture::deleteTexture(name);
+		}
+		allFileNames.clear();
+	}
 
 	void RenderVmuList()
 	{
+		// https://github.com/OrangeFox86/Hollycast/issues/111
+		// Eventually this section will contain a list of available VMU files.
+		// It will allow browsing the file system to find more, etc
 		ImGui::PushFont(settingsTitleFont, 0.0f);
 		if (ImGui::Button("Done"))
-		{
-			ImGui::CloseCurrentPopup();
-		}
+			Close();
+
 		ImGui::PopFont();
 	}
 
@@ -1047,9 +1060,7 @@ private:
 		ImGui::PopFont();
 
 		ImGui::SetCursorScreenPos(pos + padding);
-		// TODO2: These should probably be in some collection associated with the device
-		// so that when vms files are deleted, icon textures can be freed, etc.
-		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0);
+		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0, &allFileNames);
 		ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
 		ImGui::EndGroup();
 	}

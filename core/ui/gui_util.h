@@ -338,15 +338,17 @@ private:
 class ImguiVmsFileTexture : public ImguiTexture
 {
 public:
-	ImguiVmsFileTexture(std::string name, vmufs::VMSHeader vmsHeader, u16 iconIndex)
-		: name(name), vmsHeader(vmsHeader), iconIndex(iconIndex) {}
+	ImguiVmsFileTexture(std::string name, vmufs::VMSHeader vmsHeader, u16 iconIndex, std::vector<std::string>* allFileNames)
+		: name(name), vmsHeader(vmsHeader), iconIndex(iconIndex), allFileNames(allFileNames) {}
 
 	ImTextureID getId() override;
+	static void deleteTexture(std::string name);
 
 private:
 	std::string name;
 	vmufs::VMSHeader vmsHeader;
 	u16 iconIndex;
+	std::vector<std::string>* allFileNames;
 };
 
 class IconButton

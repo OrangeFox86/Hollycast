@@ -1210,14 +1210,20 @@ ImTextureID ImguiVmsFileTexture::getId()
 	if (texid == ImTextureID())
 	{
 		try {
-			// TODO: adjust 'ReadIconData' so it uses 'iconIndex'
+			// https://github.com/OrangeFox86/Hollycast/issues/111: adjust 'ReadIconData' so it uses 'iconIndex'
 			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData{};
 			vmsHeader.ReadIconData(iconData.data());
 			texid = imguiDriver->updateTexture(name, (const u8 *)iconData.data(), 32, 32, false);
+			allFileNames->push_back(name);
 		} catch (...) {
 		}
 	}
 	return texid;
+}
+
+void ImguiVmsFileTexture::deleteTexture(std::string name)
+{
+	imguiDriver->deleteTexture(name);
 }
 
 void Toast::show(const std::string& title, const std::string& message, u32 durationMs)
