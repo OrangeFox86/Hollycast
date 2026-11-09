@@ -1019,16 +1019,53 @@ private:
 		allFileNames.clear();
 	}
 
-	void RenderVmuList()
+	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
+	{
+		constexpr ImU32 usedSpaceColor = 0xff4924a4;
+		constexpr ImU32 freeSpaceColor = 0xffafaf89;
+		ImVec2 fullSize = ImVec2(uiScaled(64), ImGui::GetFrameHeight());
+
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + fullSize,
+			freeSpaceColor);
+
+		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
+		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
+		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + usedSize,
+			usedSpaceColor);
+
+		std::string freeText = std::string(T("Free: ")) + std::to_string(freeBlocks);
+		ImVec2 textSize = ImGui::CalcTextSize(freeText.c_str());
+		ImVec2 initialPos = ImGui::GetCursorScreenPos();
+		ImVec2 centerOffset = gui_centerIn(fullSize, textSize);
+		ImGui::SetCursorScreenPos(initialPos + centerOffset);
+		ImGui::TextUnformatted(freeText.c_str());
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + centerOffset.y);
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+		ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+		ImGui::PopStyleVar();
+		ImGui::PopFont();
+	}
+
+	void RenderVmuList(vmufs::FileSystem fileSystem)
 	{
 		// https://github.com/OrangeFox86/Hollycast/issues/111
 		// Eventually this section will contain a list of available VMU files.
 		// It will allow browsing the file system to find more, etc
+		// For now it just gives information about the current VMU file
 		ImGui::PushFont(settingsTitleFont, 0.0f);
 		if (ImGui::Button("Done"))
 			Close();
 
+		ImGui::TextUnformatted(fileSystem.description().c_str());
 		ImGui::PopFont();
+
+		RenderFreeSpaceMeter(fileSystem);
 	}
 
 	float vmsFileButtonWidth()
@@ -1062,41 +1099,9 @@ private:
 		ImGui::EndGroup();
 	}
 
-	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
+	void RenderVmuDetails(vmufs::FileSystem fileSystem)
 	{
-		constexpr ImU32 usedSpaceColor = 0xff4924a4;
-		constexpr ImU32 freeSpaceColor = 0xffafaf89;
-		ImVec2 fullSize = ImVec2(uiScaled(64), ImGui::GetFrameHeight());
-
-		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::GetWindowDrawList()->AddRectFilled(
-			ImGui::GetCursorScreenPos(),
-			ImGui::GetCursorScreenPos() + fullSize,
-			freeSpaceColor);
-
-		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
-		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
-		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
-		ImGui::GetWindowDrawList()->AddRectFilled(
-			ImGui::GetCursorScreenPos(),
-			ImGui::GetCursorScreenPos() + usedSize,
-			usedSpaceColor);
-
-		std::string freeText = std::string(T("Free: ")) + std::to_string(freeBlocks);
-		ImVec2 textSize = ImGui::CalcTextSize(freeText.c_str());
-		ImVec2 initialPos = ImGui::GetCursorScreenPos();
-		ImVec2 centerOffset = gui_centerIn(fullSize, textSize);
-		ImGui::SetCursorScreenPos(initialPos + centerOffset);
-		ImGui::TextUnformatted(freeText.c_str());
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + centerOffset.y);
-		ImGui::PopFont();
-	}
-
-	void RenderVmuDetails(maple_sega_vmu* dev)
-	{
-		vmufs::FileSystem fileSystem(dev);
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
-		RenderFreeSpaceMeter(fileSystem);
 
 		bool first = true;
 		for (vmufs::DirectoryEntry entry : table)
@@ -1167,16 +1172,17 @@ public:
 			return;
 		}
 
+		vmufs::FileSystem fileSystem(dev);
 		if (ImGui::BeginChild("list", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
-			RenderVmuList();
+			RenderVmuList(fileSystem);
 		}
 		ImGui::EndChild();
 
 		ImGui::SameLine();
 		if (ImGui::BeginChild("details", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
-			RenderVmuDetails(dev);
+			RenderVmuDetails(fileSystem);
 		}
 		ImGui::EndChild();
 

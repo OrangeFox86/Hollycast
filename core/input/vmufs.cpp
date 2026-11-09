@@ -24,7 +24,9 @@
 #include <cstring>
 #include <optional>
 #include "hw/maple/maple_devs.h"
+#include "oslib/oslib.h"
 #include "rend/texconv.h"
+#include "stdclass.h"
 #include "types.h"
 
 namespace vmufs
@@ -221,6 +223,20 @@ namespace vmufs
     RootBlock FileSystem::GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
 
     bool FileSystem::operator!=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
+
+	std::string FileSystem::description()
+	{
+		// https://github.com/OrangeFox86/Hollycast/issues/111
+		// Use a richer description depending on specifics of the vmu device.
+		// For example a DreamLink could maybe use the description of the link.
+		// Share some "get file name" helper with storage.cpp?
+		std::string path = hostfs::getVmuPath(vmuDevice->logical_port, true);
+		auto slash = get_last_slash_pos(path);
+		if (slash != std::string::npos && slash < path.size() - 1)
+			path = path.substr(slash + 1);
+
+		return path;
+	}
     // end class FileSystem
 
     // begin class DirectoryTable::Iterator

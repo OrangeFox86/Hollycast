@@ -47,6 +47,7 @@ namespace vmufs
         FATBlock GetFATBlock();
         RootBlock GetRootBlock();
         bool operator!=(FileSystem& other);
+        std::string description();
     };
 
     enum class FileCopyProtection : u8
