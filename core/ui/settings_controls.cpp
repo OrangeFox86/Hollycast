@@ -1163,14 +1163,11 @@ public:
 		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
 		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
 		{
-			// Devices are out of sync with config, perhaps due to loading a save state which had different settings
+			// Devices are out of sync with config, perhaps due to loading a save state which had different settings.
 			// Need to delete and re-create.
-			// TODO2: this scenario seems tricky.
-			// It looks like the usual reconnect strategy in this case,
-			// involves delaying for certain period of emulated time, before re-creating,
-			// perhaps to allow the emulated game to observe the change.
-			// Since we need the device immediately here, perhaps we can just re-create eagerly,
-			// but also mark it as "changed" so that it will go through that reconnecting dance afterwards.
+			// https://github.com/OrangeFox86/Hollycast/issues/111
+			// Once DreamLink is supported with this UI, then, this check should also look for DreamLink related state
+			// such as 'config::DreamLinkSelect', and potentially downcast and further inspect the vmu device
 			deviceSharedPtr = nullptr;
 		}
 		if (deviceSharedPtr == nullptr)
