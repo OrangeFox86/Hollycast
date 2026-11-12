@@ -128,6 +128,14 @@ private:
         u16* GetRawPalette();
     };
 
+    // A date in binary-coded decimal (BCD).
+    struct BCDDate
+    {
+        u8 century, year, month, day, hour, minute, second;
+        // 0=Mon thru 6=Sun
+        u8 week_day;
+    };
+
     class DirectoryEntry
     {
         u8* data;
@@ -140,6 +148,8 @@ public:
         FileType GetFileType();
         void SetFileType(FileType value);
 
+        std::string GetFileTypeString();
+
         FileCopyProtection GetFileCopyProtection();
         void SetFileCopyProtection(FileCopyProtection value);
 
@@ -148,7 +158,7 @@ public:
 
         std::string GetFilename();
 
-        // TODO: date accessor
+        BCDDate GetDate();
 
         u16 GetSizeInBlocks();
         void SetSizeInBlocks(u16 value);
@@ -170,8 +180,7 @@ private:
         static constexpr int Offset_VMSHeaderBlockOffset = 0x1a;
 
         u8* GetRawFilename();
-        // Get the raw binary-coded decimal date.
-        u8* GetDateBCD();
+        u8* GetRawDate();
     };
 
     // View over the FAT block.

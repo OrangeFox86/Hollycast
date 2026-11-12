@@ -135,6 +135,16 @@ namespace vmufs
     // begin class DirectoryEntry
     FileType DirectoryEntry::GetFileType() { return static_cast<FileType>(data[Offset_FileType]); }
     void DirectoryEntry::SetFileType(FileType value) { data[Offset_FileType] = static_cast<u8>(value); }
+    std::string DirectoryEntry::GetFileTypeString()
+    {
+        switch (GetFileType())
+        {
+            case FileType::None: return "NONE";
+            case FileType::Data: return "DATA";
+            case FileType::Game: return "GAME";
+            default: return "?";
+        }
+    }
 
     FileCopyProtection DirectoryEntry::GetFileCopyProtection() { return static_cast<FileCopyProtection>(data[Offset_CopyProtection]); }
     void DirectoryEntry::SetFileCopyProtection(FileCopyProtection value) { data[Offset_CopyProtection] = static_cast<u8>(value); }
@@ -152,7 +162,12 @@ namespace vmufs
         return std::string(rawFilename, &rawFilename[len]);
     }
 
-    u8* DirectoryEntry::GetDateBCD() { return &data[Offset_Date]; }
+    u8* DirectoryEntry::GetRawDate() { return &data[Offset_Date]; }
+    BCDDate DirectoryEntry::GetDate()
+    {
+        BCDDate* datePtr = (BCDDate*)GetRawDate();
+        return *datePtr;
+    }
 
     u16 DirectoryEntry::GetSizeInBlocks() { return readUInt16LittleEndian(&data[Offset_SizeInBlocks]); }
     void DirectoryEntry::SetSizeInBlocks(u16 value) { writeUInt16LittleEndian(&data[Offset_SizeInBlocks], value); }

@@ -1137,9 +1137,24 @@ private:
 		vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 		ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+		ImGui::SameLine();
+		ImGui::TextUnformatted(entry.GetFileTypeString().c_str());
+
 		ImGui::TextUnformatted(entry.GetFilename().c_str());
 		ImGui::SameLine();
 		ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+
+		vmufs::BCDDate dateBcd = entry.GetDate();
+		// MM/DD/YYYY HH:MM
+		ImGui::Text("%02x/%02x/%02x%02x %02x:%02x",
+			dateBcd.month,
+			dateBcd.day,
+			dateBcd.century,
+			dateBcd.year,
+			dateBcd.hour,
+			dateBcd.minute);
+		ImGui::SameLine();
+		ImGui::Text("%d Block(s)", entry.GetSizeInBlocks());
 		ImGui::PopFont();
 	}
 
