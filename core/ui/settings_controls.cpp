@@ -1024,22 +1024,32 @@ private:
 	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
 	{
 		constexpr ImU32 usedSpaceColor = 0xff4924a4;
+		// https://github.com/OrangeFox86/Hollycast/issues/111
+		// This color is based on the DC BIOS, but, hard to read without a more contrasting font.
+		// Before stabilizing the feature, will want to either adjust the color(s) or delete this unused color.
 		constexpr ImU32 freeSpaceColor = 0xffafaf89;
-		ImVec2 fullSize = ImVec2(uiScaled(64), ImGui::GetFrameHeight());
+		ImVec2 fullSize = ImVec2(uiScaled(80), ImGui::GetFrameHeight());
 
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 		ImGui::GetWindowDrawList()->AddRectFilled(
 			ImGui::GetCursorScreenPos(),
 			ImGui::GetCursorScreenPos() + fullSize,
-			freeSpaceColor);
+			ImGui::GetColorU32(ImGuiCol_FrameBg),
+			ImGui::GetStyle().FrameRounding);
 
 		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
 		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
 		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
+
+		// The "used space" rect is always drawn at full size, but, a clipping rect is used to cut it off horizontally when partially filled
+		// This makes the rounded edges work out but gives it a flat edge when partially filled
+		ImGui::PushClipRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + usedSize, true);
 		ImGui::GetWindowDrawList()->AddRectFilled(
 			ImGui::GetCursorScreenPos(),
-			ImGui::GetCursorScreenPos() + usedSize,
-			usedSpaceColor);
+			ImGui::GetCursorScreenPos() + fullSize,
+			usedSpaceColor,
+			ImGui::GetStyle().FrameRounding);
+		ImGui::PopClipRect();
 
 		std::string freeText = std::string(T("Free: ")) + std::to_string(freeBlocks);
 		ImVec2 textSize = ImGui::CalcTextSize(freeText.c_str());
