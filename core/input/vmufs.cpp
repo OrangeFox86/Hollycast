@@ -165,6 +165,7 @@ namespace vmufs
     u8* DirectoryEntry::GetRawDate() { return &data[Offset_Date]; }
     BCDDate DirectoryEntry::GetDate()
     {
+        // Note: this is only fine because all the fields of BCDDate are bytes (no endianness concern).
         BCDDate* datePtr = (BCDDate*)GetRawDate();
         return *datePtr;
     }
