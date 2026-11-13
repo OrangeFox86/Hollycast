@@ -231,7 +231,17 @@ namespace vmufs
 
     VMSHeader FileSystem::GetVMSHeader(DirectoryEntry entry)
     {
-        u16 blockID = entry.GetStartFAT() + entry.GetVMSHeaderBlockOffset();
+        // Note: it's functionally required, that a data file has offset 0, and a game file has offset 1.
+        // vmi files don't store this value, so otherwise it would be impossible to round trip to vmi+vms and back.
+        // If this expectation is violated, we could consider displaying an error instead of crashing. But it's a rare case.
+        u16 headerBlockOffset = entry.GetVMSHeaderBlockOffset();
+        u16 expectedOffset = entry.GetFileType() == FileType::Game ? 1 : 0;
+        verify(headerBlockOffset == expectedOffset);
+        // https://vmudev.net/filesystem.html#fs_dir
+        // The docs don't make it clear whether the offset is in terms of number of 'GetSuccessor()' indirections in the FAT,
+        // or if it is literally an offset to the value of the block ID.
+        // In practice there is no difference in well formed VMUs, because only game files can have nonzero offset, and game files must be contiguous.
+        u16 blockID = entry.GetStartFAT() + headerBlockOffset;
         return VMSHeader(*this, blockID);
     }
 
