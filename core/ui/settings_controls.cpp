@@ -1109,7 +1109,7 @@ private:
 
 		ImGui::SetCursorScreenPos(pos + padding);
 		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0, &allFileNames);
-		ImGui::Image(iconTexture.getId(), ScaledVec2(32, 32));
+		iconTexture.draw(ScaledVec2(32, 32));
 		ImGui::EndGroup();
 	}
 
