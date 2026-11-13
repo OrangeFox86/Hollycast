@@ -157,7 +157,8 @@ namespace vmufs
     std::string DirectoryEntry::GetFilename()
     {
         u8* rawFilename = GetRawFilename();
-        // Note: We should probably expect the filenames and VMS header descriptions to be in Shift-JIS.
+        // https://github.com/OrangeFox86/Hollycast/issues/111
+        // We should probably expect the filenames and VMS header descriptions to be in Shift-JIS, and convert to UTF-8 for ImGui.
         // This isn't implemented for now. But definitely should be for good Japanese game support.
         int len = strnlen((const char*)rawFilename, FilenameLength);
         return std::string(rawFilename, &rawFilename[len]);
