@@ -1064,15 +1064,14 @@ private:
 		ImGui::PopFont();
 	}
 
-	void RenderVmuList(vmufs::FileSystem fileSystem)
+	void RenderVmuList(vmufs::FileSystem fileSystem, bool& close)
 	{
 		// https://github.com/OrangeFox86/Hollycast/issues/111
 		// Eventually this section will contain a list of available VMU files.
 		// It will allow browsing the file system to find more, etc
 		// For now it just gives information about the current VMU file
 		ImGui::PushFont(settingsTitleFont, 0.0f);
-		if (ImGui::Button("Done"))
-			Close();
+		close = ImGui::Button(T("Done"));
 
 		ImGui::TextUnformatted(fileSystem.description().c_str());
 		ImGui::PopFont();
@@ -1164,7 +1163,7 @@ private:
 			dateBcd.hour,
 			dateBcd.minute);
 		ImGui::SameLine();
-		ImGui::Text("%d Block(s)", entry.GetSizeInBlocks());
+		ImGui::Text(T("%d Block(s)"), entry.GetSizeInBlocks());
 		ImGui::PopFont();
 	}
 
@@ -1203,15 +1202,19 @@ public:
 		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
 		if (dev == nullptr)
 		{
-			ImGui::TextUnformatted("Unable to initialize VMU. Please file a bug.");
+			if (ImGui::Button(T("Done")))
+				Close();
+
+			ImGui::TextUnformatted(T("Unable to initialize VMU. Please file a bug."));
 			ImGui::EndPopup();
 			return;
 		}
 
 		vmufs::FileSystem fileSystem(dev);
+		bool close = false;
 		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
-			RenderVmuList(fileSystem);
+			RenderVmuList(fileSystem, close);
 		}
 		ImGui::EndChild();
 
@@ -1230,6 +1233,9 @@ public:
 		}
 		ImGui::EndChild();
 		ImGui::EndGroup();
+
+		if (close)
+			Close();
 
 		ImGui::EndPopup();
 	}

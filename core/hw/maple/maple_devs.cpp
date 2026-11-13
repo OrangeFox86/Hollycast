@@ -13,6 +13,7 @@
 #include "hw/aica/sgc_if.h"
 #include "cfg/option.h"
 #include "input/maplelinkregistry.h"
+#include "input/vmufs.h"
 #include <zlib.h>
 #include <cerrno>
 #include <ctime>
@@ -806,6 +807,7 @@ const void *maple_sega_vmu::getData(size_t& size) const
 
 u8* maple_sega_vmu::GetBlock(u16 blockID)
 {
+	verify(blockID < vmufs::BlocksCount);
 	// Base implementation assumes flash_data is already populated
 	return &flash_data[blockID * BlockSize];
 }

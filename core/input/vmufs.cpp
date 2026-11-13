@@ -101,6 +101,7 @@ namespace vmufs
 
     void VMSHeader::ReadIconData(u32* dest)
     {
+        verify(GetIconCount() >= 1);
         u16* rawPalette = GetRawPalette();
         std::array<u32, PaletteLength> palette{};
         for (int i = 0; i < PaletteLength; i++)
