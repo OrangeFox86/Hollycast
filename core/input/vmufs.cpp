@@ -101,6 +101,8 @@ namespace vmufs
 
     void VMSHeader::ReadIconData(u32* dest)
     {
+        // https://github.com/OrangeFox86/Hollycast/issues/111
+        // ICONDATA_VMS icons are not displaying properly, they need special handling.
         verify(GetIconCount() >= 1);
         u16* rawPalette = GetRawPalette();
         std::array<u32, PaletteLength> palette{};
