@@ -345,13 +345,16 @@ public:
 		: name(name), vmsHeader(vmsHeader), iconIndex(iconIndex), allFileNames(allFileNames) {}
 
 	ImTextureID getId() override;
-	static void deleteTexture(std::string name);
+	static void deferDeleteTexture(std::string name);
+	static void deleteTextures();
 
 private:
 	std::string name;
 	vmufs::VMSHeader vmsHeader;
 	u16 iconIndex;
 	std::vector<std::string>* allFileNames;
+
+	static std::vector<std::string> toDelete;
 };
 
 class IconButton

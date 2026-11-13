@@ -1223,10 +1223,20 @@ ImTextureID ImguiVmsFileTexture::getId()
 	return texid;
 }
 
-void ImguiVmsFileTexture::deleteTexture(std::string name)
+void ImguiVmsFileTexture::deferDeleteTexture(std::string name)
 {
-	imguiDriver->deleteTexture(name);
+	toDelete.push_back(name);
 }
+
+void ImguiVmsFileTexture::deleteTextures()
+{
+	for (std::string& name : toDelete)
+		imguiDriver->deleteTexture(name);
+
+	toDelete.clear();
+}
+
+std::vector<std::string> ImguiVmsFileTexture::toDelete;
 
 void Toast::show(const std::string& title, const std::string& message, u32 durationMs)
 {

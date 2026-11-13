@@ -1015,7 +1015,7 @@ private:
 		ImGui::CloseCurrentPopup();
 		for (std::string name : allFileNames)
 		{
-			ImguiVmsFileTexture::deleteTexture(name);
+			ImguiVmsFileTexture::deferDeleteTexture(name);
 		}
 		allFileNames.clear();
 		hoveredEntry = std::nullopt;
