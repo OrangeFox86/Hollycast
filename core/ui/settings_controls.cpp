@@ -1210,6 +1210,19 @@ public:
 			return;
 		}
 
+		// TODO2: check device connection status in absence of sh4 running
+		// MapleLinkVmu* mapleLinkDev = dynamic_cast<MapleLinkVmu*>(dev);
+		// if (mapleLinkDev != nullptr && !mapleLinkDev->linkStatus())
+		if (false)
+		{
+			if (ImGui::Button(T("Done")))
+				Close();
+
+			ImGui::TextUnformatted(T("Please connect the external VMU to continue."));
+			ImGui::EndPopup();
+			return;
+		}
+
 		vmufs::FileSystem fileSystem(dev);
 		bool close = false;
 		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))

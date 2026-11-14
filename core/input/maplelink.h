@@ -240,7 +240,29 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 
 	u8* GetBlock(u16 blockID) override
 	{
-		// https://github.com/OrangeFox86/Hollycast/issues/111: not implemented
+		verify(blockID < vmufs::BlocksCount);
+		// assert(linkStatus()); // GetBlock should only be used if the device is considered to be connected
+		if (link.storageEnabled() && accessed_blocks_valid && !accessed_blocks[blockID])
+		{
+			// Send a block read to the external device
+			// This ensures the block data is locally cached, then we can just return the pointer to it below
+			MapleMsg msg{};
+			msg.command = MDCF_BlockRead;
+			msg.destAP = (bus_id << 6) | (1 << bus_port);
+			msg.originAP = (bus_id << 6) | 0x20;
+			msg.pushData(MFID_1_Storage);
+			const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
+			msg.pushData(locationWord);
+
+			MapleMsg rxMsg;
+			u32 outlen = RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
+			if (!accessed_blocks[blockID])
+			{
+				// TODO2: something failed. Probably should indicate this in UI rather than giving blank data or crashing.
+				WARN_LOG(INPUT, "failed to read block %d", blockID);
+			}
+		}
+
 		return maple_sega_vmu::GetBlock(blockID);
 	}
 
