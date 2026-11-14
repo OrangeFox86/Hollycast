@@ -1204,6 +1204,40 @@ void ImguiVmuTexture::displayVmus(const ImVec2& pos)
 	}
 }
 
+ImTextureID ImguiVmsFileTexture::getId()
+{
+	ImTextureID texid = imguiDriver->getTexture(name);
+	if (texid == ImTextureID())
+	{
+		try {
+			// https://github.com/OrangeFox86/Hollycast/issues/111: adjust 'ReadIconData' so it uses 'iconIndex'
+			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData{};
+			if (vmsHeader.GetIconCount() > iconIndex)
+				iconData = vmsHeader.ReadIconData();
+
+			texid = imguiDriver->updateTexture(name, (const u8 *)iconData.data(), 32, 32, false);
+			allFileNames->push_back(name);
+		} catch (...) {
+		}
+	}
+	return texid;
+}
+
+void ImguiVmsFileTexture::deferDeleteTexture(std::string name)
+{
+	toDelete.push_back(name);
+}
+
+void ImguiVmsFileTexture::deleteTextures()
+{
+	for (std::string& name : toDelete)
+		imguiDriver->deleteTexture(name);
+
+	toDelete.clear();
+}
+
+std::vector<std::string> ImguiVmsFileTexture::toDelete;
+
 void Toast::show(const std::string& title, const std::string& message, u32 durationMs)
 {
 	const u64 now = getTimeMs();

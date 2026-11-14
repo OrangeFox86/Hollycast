@@ -1427,6 +1427,7 @@ void gui_display_ui()
 	gui_endFrame(gui_open);
 	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 	ImguiFileTexture::resetLoadCount();
+	ImguiVmsFileTexture::deleteTextures();
 
 	if (gui_state == GuiState::Closed)
 		emu.start();

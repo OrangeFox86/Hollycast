@@ -6,7 +6,9 @@ target_sources(${PROJECT_NAME} PRIVATE
         maplelink.cpp
         maplelink.h
         maplelinkregistry.cpp
-        maplelinkregistry.h)
+        maplelinkregistry.h
+        vmufs.cpp
+        vmufs.h)
 if(NOT LIBRETRO)
     target_sources(${PROJECT_NAME} PRIVATE
             gamepad.h

@@ -23,13 +23,16 @@
 #include "input/keyboard_device.h"
 #include "input/maplelinkregistry.h"
 #include "input/mouse.h"
+#include "input/vmufs.h"
 #include "hw/maple/maple_devs.h"
+#include "hw/maple/maple_if.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
 
 #ifdef USE_DREAMLINK_DEVICES
 #include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
+#include "gui_font.h"
 
 static float calcComboWidth(const char *labels[], size_t size)
 {
@@ -1000,6 +1003,244 @@ static void gamepadSettingsPopup(const std::shared_ptr<GamepadDevice>& gamepad)
 	}
 }
 
+class VmuManagerPopup
+{
+private:
+	// List of file names found on the VMU(s). Used to clean up associated resources on close.
+	std::vector<std::string> allFileNames;
+	std::optional<vmufs::DirectoryEntry> hoveredEntry;
+
+	void Close()
+	{
+		ImGui::CloseCurrentPopup();
+		for (std::string name : allFileNames)
+		{
+			ImguiVmsFileTexture::deferDeleteTexture(name);
+		}
+		allFileNames.clear();
+		hoveredEntry = std::nullopt;
+	}
+
+	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
+	{
+		constexpr ImU32 usedSpaceColor = 0xff4924a4;
+		// https://github.com/OrangeFox86/Hollycast/issues/111
+		// This color is based on the DC BIOS, but, hard to read without a more contrasting font.
+		// Before stabilizing the feature, will want to either adjust the color(s) or delete this unused color.
+		constexpr ImU32 freeSpaceColor = 0xffafaf89;
+		ImVec2 fullSize = ImVec2(uiScaled(80), ImGui::GetFrameHeight());
+
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + fullSize,
+			ImGui::GetColorU32(ImGuiCol_FrameBg),
+			ImGui::GetStyle().FrameRounding);
+
+		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
+		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
+		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
+
+		// The "used space" rect is always drawn at full size, but, a clipping rect is used to cut it off horizontally when partially filled
+		// This makes the rounded edges work out but gives it a flat edge when partially filled
+		ImGui::PushClipRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + usedSize, true);
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImGui::GetCursorScreenPos(),
+			ImGui::GetCursorScreenPos() + fullSize,
+			usedSpaceColor,
+			ImGui::GetStyle().FrameRounding);
+		ImGui::PopClipRect();
+
+		std::string freeText = std::string(T("Free: ")) + std::to_string(freeBlocks);
+		ImVec2 textSize = ImGui::CalcTextSize(freeText.c_str());
+		ImVec2 initialPos = ImGui::GetCursorScreenPos();
+		ImVec2 centerOffset = gui_centerIn(fullSize, textSize);
+		ImGui::SetCursorScreenPos(initialPos + centerOffset);
+		ImGui::TextUnformatted(freeText.c_str());
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + centerOffset.y);
+		ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+		ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+		ImGui::PopStyleVar();
+		ImGui::PopFont();
+	}
+
+	void RenderVmuList(vmufs::FileSystem fileSystem, bool& close)
+	{
+		// https://github.com/OrangeFox86/Hollycast/issues/111
+		// Eventually this section will contain a list of available VMU files.
+		// It will allow browsing the file system to find more, etc
+		// For now it just gives information about the current VMU file
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		close = ImGui::Button(T("Done"));
+
+		ImGui::TextUnformatted(fileSystem.description().c_str());
+		ImGui::PopFont();
+
+		RenderFreeSpaceMeter(fileSystem);
+	}
+
+	float vmsFileButtonWidth()
+	{
+		return uiScaled(32) + ImGui::GetStyle().FramePadding.x * 2;
+	}
+
+	void RenderVmsFileIcon(vmufs::DirectoryEntry directoryEntry, vmufs::VMSHeader vmsHeader)
+	{
+		std::string filename = directoryEntry.GetFilename();
+		ImguiID id(filename.c_str());
+		ImGui::BeginGroup();
+
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		std::string sizeInBlocksString = std::to_string(directoryEntry.GetSizeInBlocks());
+		ImVec2 textSize = ImGui::CalcTextSize(sizeInBlocksString.c_str());
+
+		float width = vmsFileButtonWidth();
+		ImVec2 padding = ImGui::GetStyle().FramePadding;
+		float height = uiScaled(32) + padding.y * 2 + textSize.y;
+
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 1.0f));
+		ImGui::Button(sizeInBlocksString.c_str(), ImVec2(width, height));
+		if (ImGui::IsItemHovered())
+			hoveredEntry = directoryEntry;
+
+		ImGui::PopStyleVar();
+		ImGui::PopFont();
+
+		ImGui::SetCursorScreenPos(pos + padding);
+		ImguiVmsFileTexture iconTexture(filename, vmsHeader, 0, &allFileNames);
+		iconTexture.draw(ScaledVec2(32, 32));
+		ImGui::EndGroup();
+	}
+
+	void RenderVmsFileList(vmufs::FileSystem fileSystem)
+	{
+		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
+
+		bool first = true;
+		for (vmufs::DirectoryEntry entry : table)
+		{
+			if (entry.GetFileType() == vmufs::FileType::None)
+				continue;
+
+			if (!first)
+			{
+				ImGui::SameLine();
+				// Flow to new line if not enough space
+				if (ImGui::GetContentRegionAvail().x <= vmsFileButtonWidth() + ImGui::GetStyle().ItemSpacing.x)
+					ImGui::NewLine();
+			}
+			first = false;
+
+			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
+			RenderVmsFileIcon(entry, header);
+		}
+	}
+
+	void RenderHoveredVmsFileDescription(vmufs::FileSystem fileSystem)
+	{
+		if (!hoveredEntry.has_value())
+			return;
+
+		vmufs::DirectoryEntry entry = hoveredEntry.value();
+		vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+		ImGui::SameLine();
+		ImGui::TextUnformatted(entry.GetFileTypeString().c_str());
+
+		ImGui::TextUnformatted(entry.GetFilename().c_str());
+		ImGui::SameLine();
+		ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+
+		vmufs::BCDDate dateBcd = entry.GetDate();
+		// MM/DD/YYYY HH:MM
+		ImGui::Text("%02x/%02x/%02x%02x %02x:%02x",
+			dateBcd.month,
+			dateBcd.day,
+			dateBcd.century,
+			dateBcd.year,
+			dateBcd.hour,
+			dateBcd.minute);
+		ImGui::SameLine();
+		ImGui::Text(T("%d Block(s)"), entry.GetSizeInBlocks());
+		ImGui::PopFont();
+	}
+
+public:
+	void Open()
+	{
+		ImGui::OpenPopup(T("VMU Manager"));
+	}
+
+	void Render(int bus, int port)
+	{
+		ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(min(ImGui::GetIO().DisplaySize, ScaledVec2(450.f, 300.f)), ImGuiCond_Appearing);
+
+		if (!ImGui::BeginPopupModal(T("VMU Manager")))
+			return;
+
+		auto configDeviceType = config::MapleExpansionDevices[bus][port];
+		verify(configDeviceType == MDT_SegaVMU);
+
+		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
+		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
+		{
+			// Devices are out of sync with config, perhaps due to loading a save state which had different settings.
+			// Need to delete and re-create.
+			// https://github.com/OrangeFox86/Hollycast/issues/111
+			// Once DreamLink is supported with this UI, then, this check should also look for DreamLink related state
+			// such as 'config::DreamLinkSelect', and potentially downcast and further inspect the vmu device
+			deviceSharedPtr = nullptr;
+		}
+		if (deviceSharedPtr == nullptr)
+		{
+			mcfg_CreateDevices();
+		}
+
+		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
+		if (dev == nullptr)
+		{
+			if (ImGui::Button(T("Done")))
+				Close();
+
+			ImGui::TextUnformatted(T("Unable to initialize VMU. Please file a bug."));
+			ImGui::EndPopup();
+			return;
+		}
+
+		vmufs::FileSystem fileSystem(dev);
+		bool close = false;
+		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmuList(fileSystem, close);
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+		ImGui::BeginGroup();
+		float hoveredVmsDescriptionHeight = uiScaled(100);
+		if (ImGui::BeginChild("vmsList", ImVec2(0, ImGui::GetContentRegionAvail().y - hoveredVmsDescriptionHeight), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderVmsFileList(fileSystem);
+		}
+		ImGui::EndChild();
+
+		if (ImGui::BeginChild("hoveredVmsDescription", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
+		{
+			RenderHoveredVmsFileDescription(fileSystem);
+		}
+		ImGui::EndChild();
+		ImGui::EndGroup();
+
+		if (close)
+			Close();
+
+		ImGui::EndPopup();
+	}
+};
+
 void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
 	uiLanguageHandler.init();
@@ -1307,6 +1548,14 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 #endif
 						ImGui::EndCombo();
 					}
+					static VmuManagerPopup vmuManagerPopup;
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button(ICON_FA_ELLIPSIS))
+							vmuManagerPopup.Open();
+					}
+					vmuManagerPopup.Render(bus, port); // ID stack ensures that Open() only affects the Render() of the same device ID
 				}
 
 				// Light gun crosshair color

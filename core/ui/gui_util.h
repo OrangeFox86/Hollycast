@@ -22,6 +22,7 @@
 #include "cfg/option.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "input/vmufs.h"
 #include "gui.h"
 #include "emulator.h"
 #include "oslib/oslib.h"
@@ -44,6 +45,9 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button = ImGuiMouseButton_L
 
 // Helper to display a little (?) mark which shows a tooltip when hovered.
 void ShowHelpMarker(const char* desc);
+
+float gui_centerIn(float containerSize, float itemSize);
+ImVec2 gui_centerIn(ImVec2 containerSize, ImVec2 itemSize);
 
 // Renders a checkbox with optional help text as a single row.
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr);
@@ -332,6 +336,25 @@ private:
 	u64 vmuLastChanged = 0;
 
 	static std::array<ImguiVmuTexture, 8> Vmus;
+};
+
+class ImguiVmsFileTexture : public ImguiTexture
+{
+public:
+	ImguiVmsFileTexture(std::string name, vmufs::VMSHeader vmsHeader, u16 iconIndex, std::vector<std::string>* allFileNames)
+		: name(name), vmsHeader(vmsHeader), iconIndex(iconIndex), allFileNames(allFileNames) {}
+
+	ImTextureID getId() override;
+	static void deferDeleteTexture(std::string name);
+	static void deleteTextures();
+
+private:
+	std::string name;
+	vmufs::VMSHeader vmsHeader;
+	u16 iconIndex;
+	std::vector<std::string>* allFileNames;
+
+	static std::vector<std::string> toDelete;
 };
 
 class IconButton

@@ -238,6 +238,12 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 			return true; // local storage means this must always remain "linked"
 	}
 
+	u8* GetBlock(u16 blockID) override
+	{
+		// https://github.com/OrangeFox86/Hollycast/issues/111: not implemented
+		return maple_sega_vmu::GetBlock(blockID);
+	}
+
 	//! Send a read request to the external VMU memory
 	//! @param[in] dest Destination address
 	//! @param[in] origin Origin address
