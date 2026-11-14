@@ -814,11 +814,6 @@ u8* maple_sega_vmu::GetBlock(u16 blockID)
 	return &flash_data[blockID * BlockSize];
 }
 
-void maple_sega_vmu::CommitBlock(u16 blockID)
-{
-	std::abort(); // Not yet implemented
-}
-
 void maple_sega_vmu::setLcd()
 {
 	if (config)
