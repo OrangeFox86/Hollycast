@@ -92,7 +92,7 @@ namespace vmufs
     class VMSHeader
     {
         FileSystem fileSystem;
-        u16 blockID;
+        const u16 blockID;
 public:
         // Create from a pointer to start of the VMS header.
         VMSHeader(FileSystem fileSystem, u16 blockID) : fileSystem(fileSystem), blockID(blockID) { }
