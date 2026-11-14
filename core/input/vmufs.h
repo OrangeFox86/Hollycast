@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include <array>
 #include <cstring>
 #include <optional>
 #include "hw/maple/maple_devs.h"
@@ -107,8 +108,8 @@ public:
         std::string GetDreamcastDescription();
         u16 GetIconCount();
         u16 GetAnimationSpeed();
-        // Write 32x32 icon to 32-bit RGBA buffer of size 'IconSizePixels'
-        void ReadIconData(u32* dest);
+        // Write 32x32 icon to 32-bit RGBA buffer
+        std::array<u32, IconSizePixels> ReadIconData();
 private:
         static constexpr int Offset_VMUDescription = 0;
         static constexpr int VMUDescriptionLength = 0x10;

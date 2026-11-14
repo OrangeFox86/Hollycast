@@ -99,7 +99,7 @@ namespace vmufs
 		return readUInt16LittleEndian(&data[Offset_AnimationSpeed]);
 	}
 
-    void VMSHeader::ReadIconData(u32* dest)
+    std::array<u32, VMSHeader::IconSizePixels> VMSHeader::ReadIconData()
     {
         // https://github.com/OrangeFox86/Hollycast/issues/111
         // ICONDATA_VMS icons are not displaying properly, they need special handling.
@@ -128,10 +128,12 @@ namespace vmufs
 		// Source data is stored as bytes with 4 bits per pixel. Destination is one array element per pixel.
 		static constexpr int firstChunkSourceSize = BlockSize - HeaderSize;
 		static constexpr int firstChunkDestSize = firstChunkSourceSize * 2;
-		readIconDataSegment(dest, &data[HeaderSize], firstChunkSourceSize, palette);
+        std::array<u32, IconSizePixels> dest;
+		readIconDataSegment(dest.data(), &data[HeaderSize], firstChunkSourceSize, palette);
 
 		u16 nextBlockID = fileSystem.GetFATBlock().GetSuccessorBlockID(blockID);
-		readIconDataSegment(&dest[firstChunkDestSize], fileSystem.GetBlock(nextBlockID), HeaderSize, palette);
+		readIconDataSegment(&dest.at(firstChunkDestSize), fileSystem.GetBlock(nextBlockID), HeaderSize, palette);
+        return dest;
     }
     // end class VMSHeader
 
