@@ -240,7 +240,8 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 
 	u8* GetBlock(u16 blockID) override
 	{
-		std::abort(); // https://github.com/OrangeFox86/Hollycast/issues/111: not implemented
+		// https://github.com/OrangeFox86/Hollycast/issues/111: not implemented
+		return maple_sega_vmu::GetBlock(blockID);
 	}
 
 	//! Send a read request to the external VMU memory
