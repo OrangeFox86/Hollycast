@@ -1199,6 +1199,10 @@ public:
 			mcfg_CreateDevices();
 		}
 
+		// TODO2: For DreamPicoPort we don't actually get a `maple_sega_vmu` even when the external VMU is used.
+		// Instead it internally contains a VMU.
+		// And, the effects of the dma() on the wrapper device are important.
+		// We might need to separately take in a VMU flash buffer as well as a device which is assumed to be associated with the buffer
 		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
 		if (dev == nullptr)
 		{
@@ -1561,7 +1565,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						ImGui::EndCombo();
 					}
 					static VmuManagerPopup vmuManagerPopup;
-					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato)
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato || subtype == MDT_DreamLink)
 					{
 						ImGui::SameLine();
 						if (ImGui::Button(ICON_FA_ELLIPSIS))
