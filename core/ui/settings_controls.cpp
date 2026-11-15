@@ -1210,10 +1210,9 @@ public:
 			return;
 		}
 
-		// TODO2: check device connection status in absence of sh4 running
-		// MapleLinkVmu* mapleLinkDev = dynamic_cast<MapleLinkVmu*>(dev);
-		// if (mapleLinkDev != nullptr && !mapleLinkDev->linkStatus())
-		if (false)
+		// To manage an external VMU, it must either be physically connected or not using storage
+		MapleLinkVmu* mapleLinkDev = dynamic_cast<MapleLinkVmu*>(dev);
+		if (mapleLinkDev != nullptr && mapleLinkDev->link.storageEnabled() && !mapleLinkDev->physicalLinkStatus())
 		{
 			if (ImGui::Button(T("Done")))
 				Close();
