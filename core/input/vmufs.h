@@ -37,12 +37,15 @@ namespace vmufs
     class RootBlock;
     class DirectoryTable;
 
+    static constexpr int BlockSize = 0x200; // 512b
+
     class FileSystem
     {
-        maple_sega_vmu* const vmuDevice;
+        //! Underlying maple device. Might be a maple_sega_vmu, DppMapleLinkDevice, ...
+        maple_base* const vmuDevice;
     public:
-        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
-        u8* GetBlock(u16 blockID);
+        FileSystem(maple_base* vmuDevice) : vmuDevice(vmuDevice) { }
+        std::array<u8, BlockSize> GetBlock(u16 blockID);
         VMSHeader GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
         FATBlock GetFATBlock();
@@ -70,7 +73,6 @@ namespace vmufs
     static constexpr int UserRegionSizeBlocks = 200;
     static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
 
-    static constexpr int BlockSize = 0x200; // 512b
     static constexpr int BlockIDSize = 2;
     static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
 

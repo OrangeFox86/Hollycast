@@ -805,15 +805,6 @@ const void *maple_sega_vmu::getData(size_t& size) const
 	return flash_data;
 }
 
-u8* maple_sega_vmu::GetBlock(u16 blockID)
-{
-	// https://github.com/OrangeFox86/Hollycast/issues/111
-	// We could consider returning nullptr and having caller display an error, in case a corrupt VMU file is used
-	verify(blockID < vmufs::BlocksCount);
-	// Base implementation assumes flash_data is already populated
-	return &flash_data[blockID * BlockSize];
-}
-
 void maple_sega_vmu::setLcd()
 {
 	if (config)

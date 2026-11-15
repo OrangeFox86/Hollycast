@@ -90,10 +90,27 @@ public:
 //! Virtual class which describes additional interfaces for a MapleLinkDevice
 struct MapleLinkDevice
 {
+	//! The linked device
+	MapleLink link;
+
+	//! Default constructor (deleted)
+	MapleLinkDevice() = delete;
+
+	//! Constructor
+	//! @param[in] link The link to set
+	explicit inline MapleLinkDevice(const MapleLink& link) : link(link) {}
+
 	//! This is called by the deserialization process to relay what deserialization virtual device type
 	//! @param[in] type The type that should be assumed for subsequent deserialize
 	//! @return true iff this MapleLink is setup to accept this type
 	virtual bool deserializingFor(MapleDeviceType type) = 0;
+
+	//! @return true iff this device is physically present
+	// i.e. ignores the simulated reconnect mechanism in `maple_device.linkStatus()`
+	bool physicalLinkStatus()
+	{
+		return (link.isConnected() && (link.getFunctionCodesMask() != 0));
+	}
 
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice
@@ -140,22 +157,12 @@ template <
 >
 struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 {
-	//! The linked device
-	MapleLink link;
-
 	//! Default constructor (deleted)
 	MapleLinkDeviceBase() = delete;
 
 	//! Constructor
 	//! @param[in] link The link to set
-	explicit inline MapleLinkDeviceBase(const MapleLink& link) : link(link) {}
-
-	//! @return true iff this device is physically present
-	// i.e. ignores the simulated reconnect mechanism in `maple_device.linkStatus()`
-	bool physicalLinkStatus()
-	{
-		return (link.isConnected() && (link.getFunctionCodesMask() != 0));
-	}
+	explicit inline MapleLinkDeviceBase(const MapleLink& link) : MapleLinkDevice(link) {}
 
 	//! @return true iff this device is both physically and logically present
 	bool linkStatus() override
@@ -244,37 +251,6 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 			return link.isConnected();
 		else
 			return true; // local storage means this must always remain "linked"
-	}
-
-	u8* GetBlock(u16 blockID) override
-	{
-		if (link.storageEnabled() && accessed_blocks_valid && !accessed_blocks[blockID])
-		{
-			verify(blockID < vmufs::BlocksCount);
-			// Send a block read to the external device
-			// If it succeeds, this will locally cache the block data and set 'accessed_blocks[blockID] = true'.
-			// If it fails, then, the block will remain stale/empty.
-			// TODO2: it would be bad if we take the stale/empty data mixed with correct data and treat it like it's all valid.
-			// Especially if we start making changes based on what we see in that data.
-			// We probably need explicit nullable returns for some of these calls as a result.
-			MapleMsg msg{};
-			msg.command = MDCF_BlockRead;
-			msg.destAP = (bus_id << 6) | (1 << bus_port);
-			msg.originAP = (bus_id << 6) | 0x20;
-			msg.pushData(MFID_1_Storage);
-			const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
-			msg.pushData(locationWord);
-
-			MapleMsg rxMsg;
-			u32 outlen = RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
-			if (!accessed_blocks[blockID])
-			{
-				// TODO2: something failed. Probably should indicate this in UI rather than giving blank data or crashing.
-				WARN_LOG(INPUT, "failed to read block %d", blockID);
-			}
-		}
-
-		return maple_sega_vmu::GetBlock(blockID);
 	}
 
 	//! Send a read request to the external VMU memory
