@@ -44,7 +44,7 @@ namespace vmufs
 
     class FileSystem
     {
-        //! Underlying maple device. We try to treat this as a black box which we talk to via 'dma()'.
+        //! Underlying maple device. We try to treat this as a black box which we talk to via 'RawDma()'.
         maple_base* const vmuDevice;
         std::array<u8, vmufs::VolumeSizeBytes>* const flashData;
         std::array<bool, vmufs::BlocksCount>* const accessedBlocks;

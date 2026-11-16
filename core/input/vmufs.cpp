@@ -43,10 +43,7 @@ namespace vmufs
     }
 
     // begin class VMSHeader
-    u8* VMSHeader::GetRawVMUDescription()
-	{
-		return &firstBlock[Offset_VMUDescription];
-	}
+    u8* VMSHeader::GetRawVMUDescription() { return &firstBlock[Offset_VMUDescription]; }
 
     std::string VMSHeader::GetVMUDescription()
     {
@@ -55,10 +52,7 @@ namespace vmufs
         return std::string(rawVMUDescription, &rawVMUDescription[len]);
     }
 
-    u8* VMSHeader::GetRawDreamcastDescription()
-	{
-		return &firstBlock[Offset_DreamcastDescription];
-	}
+    u8* VMSHeader::GetRawDreamcastDescription() { return &firstBlock[Offset_DreamcastDescription]; }
 
     std::string VMSHeader::GetDreamcastDescription()
     {
@@ -67,10 +61,7 @@ namespace vmufs
         return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
     }
 
-    u16* VMSHeader::GetRawPalette()
-	{
-		return (u16*)&firstBlock[Offset_Palette];
-	}
+    u16* VMSHeader::GetRawPalette() { return (u16*)&firstBlock[Offset_Palette]; }
 
 	void readIconDataSegment(u32* dest, u8* sourceIconData, int length, std::array<u32, VMSHeader::PaletteLength>& palette)
 	{
@@ -84,15 +75,9 @@ namespace vmufs
         }
 	}
 
-	u16 VMSHeader::GetIconCount()
-	{
-		return readUInt16LittleEndian(&firstBlock[Offset_IconCount]);
-	}
+	u16 VMSHeader::GetIconCount() { return readUInt16LittleEndian(&firstBlock[Offset_IconCount]); }
 
-	u16 VMSHeader::GetAnimationSpeed()
-	{
-		return readUInt16LittleEndian(&firstBlock[Offset_AnimationSpeed]);
-	}
+	u16 VMSHeader::GetAnimationSpeed() { return readUInt16LittleEndian(&firstBlock[Offset_AnimationSpeed]); }
 
     std::optional<std::array<u32, VMSHeader::IconSizePixels>> VMSHeader::ReadIconData()
     {

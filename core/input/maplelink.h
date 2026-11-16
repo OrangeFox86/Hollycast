@@ -164,7 +164,7 @@ struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 	//! @param[in] link The link to set
 	explicit inline MapleLinkDeviceBase(const MapleLink& link) : MapleLinkDevice(link) {}
 
-	//! @return true iff this device is both physically and logically present
+	//! @return true iff this device is physically and logically present
 	bool linkStatus() override
 	{
 		return (MapleDeviceBase::linkStatus() && physicalLinkStatus());

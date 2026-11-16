@@ -1127,9 +1127,9 @@ private:
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
 		bool first = true;
-		for (std::optional<vmufs::DirectoryEntry> entry : table.GetFiles())
+		for (vmufs::DirectoryEntry entry : table.GetFiles())
 		{
-			std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(*entry);
+			std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(entry);
 			if (header == std::nullopt)
 				break; // Failed to read, bail out.
 
@@ -1141,7 +1141,7 @@ private:
 					ImGui::NewLine();
 			}
 			first = false;
-			RenderVmsFileIcon(*entry, *header);
+			RenderVmsFileIcon(entry, *header);
 		}
 	}
 
@@ -1213,7 +1213,7 @@ public:
 		if (dev == nullptr)
 		{
 			if (ImGui::Button(T("Done")))
-			Close();
+				Close();
 
 			ImGui::TextUnformatted(T("Unable to initialize VMU. Please file a bug."));
 			ImGui::EndPopup();
@@ -1222,6 +1222,7 @@ public:
 
 		// To manage an external VMU, it must either be physically connected or not using storage
 		// TODO2: manually test the ejected but not using physical memory case
+		// TODO2: DreamPotato Integrated is not getting populated until a game is launched
 		MapleLinkDevice* mapleLinkDevOpt = dynamic_cast<MapleLinkDevice*>(dev);
 		if (mapleLinkDevOpt != nullptr && mapleLinkDevOpt->link.storageEnabled() && !mapleLinkDevOpt->physicalLinkStatus())
 		{
