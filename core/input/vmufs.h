@@ -265,7 +265,7 @@ public:
         public:
             Iterator(FileSystem fileSystem, int index) : fileSystem(fileSystem), index(index) { }
 
-            DirectoryEntry operator*();
+            std::optional<DirectoryEntry> operator*();
             Iterator& operator++();
             bool operator!=(Iterator& other);
         };

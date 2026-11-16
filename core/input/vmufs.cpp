@@ -297,7 +297,7 @@ namespace vmufs
     // end class FileSystem
 
     // begin class DirectoryTable::Iterator
-    DirectoryEntry DirectoryTable::Iterator::operator*()
+    std::optional<DirectoryEntry> DirectoryTable::Iterator::operator*()
     {
         verify(index < EndIndex);
         // Directory blocks are visited from the end, toward the start, of the volume.
@@ -316,6 +316,9 @@ namespace vmufs
         int blockOffset = index / EntriesPerBlock;
         int blockID = DirectoryTableLastBlockID - blockOffset;
         u8* block = fileSystem.GetBlock(blockID);
+        if (block == nullptr)
+            return std::nullopt;
+
         int entryID = index % EntriesPerBlock;
         int entryOffset = entryID * DirectoryEntry::Size;
         return DirectoryEntry(&block[entryOffset]);

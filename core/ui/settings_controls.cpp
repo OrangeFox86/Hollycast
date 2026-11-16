@@ -1123,9 +1123,12 @@ private:
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
 		bool first = true;
-		for (vmufs::DirectoryEntry entry : table)
+		for (std::optional<vmufs::DirectoryEntry> entry : table)
 		{
-			if (entry.GetFileType() == vmufs::FileType::None)
+			if (entry == std::nullopt)
+				break;
+
+			if (entry->GetFileType() == vmufs::FileType::None)
 				continue;
 
 			if (!first)
@@ -1137,8 +1140,8 @@ private:
 			}
 			first = false;
 
-			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
-			RenderVmsFileIcon(entry, header);
+			vmufs::VMSHeader header = fileSystem.GetVMSHeader(*entry);
+			RenderVmsFileIcon(*entry, header);
 		}
 	}
 
