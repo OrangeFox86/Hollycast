@@ -103,7 +103,10 @@ namespace vmufs
         u8* const firstBlock;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(FileSystem fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock) { }
+        VMSHeader(FileSystem fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock)
+        {
+            verify(firstBlock != nullptr);
+        }
 
         static constexpr int HeaderSize = 0x80;
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
@@ -149,7 +152,7 @@ private:
         u8* data;
 public:
         // Create with a pointer to the raw directory entry data.
-        DirectoryEntry(u8* data) : data(data) { }
+        DirectoryEntry(u8* data) : data(data) { verify(data != nullptr); }
 
         static constexpr int Size = 0x20; // 32
 
@@ -198,7 +201,7 @@ private:
     {
         u8* data;
 public:
-        FATBlock(u8* data) : data(data) { }
+        FATBlock(u8* data) : data(data) { verify(data != nullptr); }
         u16 GetSuccessorBlockID(u16 blockID);
         void SetSuccessorBlockID(u16 blockID, u16 successorID);
         int CountUserFreeBlocks();
@@ -210,7 +213,7 @@ public:
     {
         u8* data;
     public:
-        RootBlock(u8* data) : data(data) { }
+        RootBlock(u8* data) : data(data) { verify(data != nullptr); }
 
         // Gets the custom color if this VMU is using one.
         // Note: this is meant to interop well with ImU32 from ImGui
