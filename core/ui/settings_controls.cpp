@@ -1010,6 +1010,9 @@ private:
 	std::vector<std::string> allFileNames;
 	std::optional<vmufs::DirectoryEntry> hoveredEntry;
 
+	std::array<u8, vmufs::VolumeSizeBytes> flashData{};
+	std::array<bool, vmufs::BlocksCount> accessedBlocks{};
+
 	void Close()
 	{
 		ImGui::CloseCurrentPopup();
@@ -1019,6 +1022,8 @@ private:
 		}
 		allFileNames.clear();
 		hoveredEntry = std::nullopt;
+		flashData = {};
+		accessedBlocks = {};
 	}
 
 	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
@@ -1181,29 +1186,28 @@ public:
 		if (!ImGui::BeginPopupModal(T("VMU Manager")))
 			return;
 
-		auto configDeviceType = config::MapleExpansionDevices[bus][port];
-		verify(configDeviceType == MDT_SegaVMU);
+		// We should only get here if using a Sega VMU, or DreamPotato, or DreamPicoPort
+		verify(config::MapleExpansionDevices[bus][port] == MDT_SegaVMU || config::DreamLinkSelect[bus][port]);
 
 		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
-		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
-		{
-			// Devices are out of sync with config, perhaps due to loading a save state which had different settings.
-			// Need to delete and re-create.
-			// https://github.com/OrangeFox86/Hollycast/issues/111
-			// Once DreamLink is supported with this UI, then, this check should also look for DreamLink related state
-			// such as 'config::DreamLinkSelect', and potentially downcast and further inspect the vmu device
+		bool isMapleLink = dynamic_cast<MapleLinkDevice*>(deviceSharedPtr.get()) != nullptr;
+		// Detect if the device configuration is out of sync with settings and re-create device if necessary.
+		// https://github.com/OrangeFox86/Hollycast/issues/121
+		// Extract helper and verify correctness.
+		bool recreate = isMapleLink != MapleLinkRegistry::GetMapleLink(bus, port).has_value()
+			|| (!isMapleLink && deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU);
+		if (recreate)
 			deviceSharedPtr = nullptr;
-		}
-		if (deviceSharedPtr == nullptr)
-		{
-			mcfg_CreateDevices();
-		}
 
-		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
+		// Create device if it doesn't exist
+		if (deviceSharedPtr == nullptr)
+			mcfg_CreateDevices();
+
+		maple_base* dev = dynamic_cast<maple_base*>(deviceSharedPtr.get());
 		if (dev == nullptr)
 		{
 			if (ImGui::Button(T("Done")))
-				Close();
+			Close();
 
 			ImGui::TextUnformatted(T("Unable to initialize VMU. Please file a bug."));
 			ImGui::EndPopup();
@@ -1211,8 +1215,9 @@ public:
 		}
 
 		// To manage an external VMU, it must either be physically connected or not using storage
-		MapleLinkVmu* mapleLinkDev = dynamic_cast<MapleLinkVmu*>(dev);
-		if (mapleLinkDev != nullptr && mapleLinkDev->link.storageEnabled() && !mapleLinkDev->physicalLinkStatus())
+		// TODO2: manually test the ejected but not using physical memory case
+		MapleLinkDevice* mapleLinkDevOpt = dynamic_cast<MapleLinkDevice*>(dev);
+		if (mapleLinkDevOpt != nullptr && mapleLinkDevOpt->link.storageEnabled() && !mapleLinkDevOpt->physicalLinkStatus())
 		{
 			if (ImGui::Button(T("Done")))
 				Close();
@@ -1222,7 +1227,7 @@ public:
 			return;
 		}
 
-		vmufs::FileSystem fileSystem(dev);
+		vmufs::FileSystem fileSystem(dev, &flashData, &accessedBlocks);
 		bool close = false;
 		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
@@ -1561,7 +1566,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						ImGui::EndCombo();
 					}
 					static VmuManagerPopup vmuManagerPopup;
-					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato)
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato || subtype == MDT_DreamLink)
 					{
 						ImGui::SameLine();
 						if (ImGui::Button(ICON_FA_ELLIPSIS))

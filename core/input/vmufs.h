@@ -37,11 +37,20 @@ namespace vmufs
     class RootBlock;
     class DirectoryTable;
 
+    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
+    static constexpr int BlockSize = 0x200; // 512b
+    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
+
     class FileSystem
     {
-        maple_sega_vmu* const vmuDevice;
+        //! Underlying maple device. We try to treat this as a black box which we talk to via 'dma()'.
+        maple_base* const vmuDevice;
+        std::array<u8, vmufs::VolumeSizeBytes>* const flashData;
+        std::array<bool, vmufs::BlocksCount>* const accessedBlocks;
     public:
-        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
+        FileSystem(maple_base* vmuDevice, std::array<u8, vmufs::VolumeSizeBytes>* flashData, std::array<bool, vmufs::BlocksCount>* const accessedBlocks)
+            : vmuDevice(vmuDevice), flashData(flashData), accessedBlocks(accessedBlocks) { }
+        //! Returns nullptr on failure to get the block.
         u8* GetBlock(u16 blockID);
         VMSHeader GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
@@ -64,15 +73,11 @@ namespace vmufs
         Game = 0xcc,
     };
 
-    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
-
     // user region: where user visible files are stored.
     static constexpr int UserRegionSizeBlocks = 200;
     static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
 
-    static constexpr int BlockSize = 0x200; // 512b
     static constexpr int BlockIDSize = 2;
-    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
 
     static constexpr u8 DirectoryTableLastBlockID = BlocksCount - 3;
     static constexpr int DirectoryTableSizeBlocks = 13;

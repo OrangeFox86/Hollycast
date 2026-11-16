@@ -232,7 +232,32 @@ namespace vmufs
     // end class RootBlock
 
     // begin class FileSystem
-    u8* FileSystem::GetBlock(u16 blockID) { return vmuDevice->GetBlock(blockID); }
+    u8* FileSystem::GetBlock(u16 blockID)
+    {
+        u8* block = &flashData->at(blockID * vmufs::BlockSize);
+        if (!accessedBlocks->at(blockID))
+        {
+            MapleMsg msg{};
+            msg.command = MDCF_BlockRead;
+            msg.destAP = (vmuDevice->bus_id << 6) | (1 << vmuDevice->bus_port);
+            msg.originAP = (vmuDevice->bus_id << 6) | 0x20;
+            msg.pushData(MFID_1_Storage);
+            const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
+            msg.pushData(locationWord);
+
+            MapleMsg rxMsg;
+            vmuDevice->RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
+            if (rxMsg.command != MDRS_DataTransfer)
+                return nullptr;
+
+            // rxMsg starts with function code (32 bits), then block number (32 bits), then block data
+            verify(rxMsg.getDataSize() >= BlockSize + 8);
+            memcpy(block, &rxMsg.data[8], BlockSize);
+            accessedBlocks->begin()[blockID] = true;
+        }
+
+        return block;
+    }
 
     VMSHeader FileSystem::GetVMSHeader(DirectoryEntry entry)
     {
