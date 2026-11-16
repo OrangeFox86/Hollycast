@@ -1123,13 +1123,11 @@ private:
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
 		bool first = true;
-		for (std::optional<vmufs::DirectoryEntry> entry : table)
+		for (std::optional<vmufs::DirectoryEntry> entry : table.GetFiles())
 		{
-			if (entry == std::nullopt)
-				break;
-
-			if (entry->GetFileType() == vmufs::FileType::None)
-				continue;
+			std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(*entry);
+			if (header == std::nullopt)
+				break; // Failed to read, bail out.
 
 			if (!first)
 			{
@@ -1139,9 +1137,7 @@ private:
 					ImGui::NewLine();
 			}
 			first = false;
-
-			vmufs::VMSHeader header = fileSystem.GetVMSHeader(*entry);
-			RenderVmsFileIcon(*entry, header);
+			RenderVmsFileIcon(*entry, *header);
 		}
 	}
 
@@ -1151,15 +1147,18 @@ private:
 			return;
 
 		vmufs::DirectoryEntry entry = hoveredEntry.value();
-		vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
+		std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(entry);
+		if (!header.has_value())
+			return;
+
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+		ImGui::TextUnformatted(header->GetDreamcastDescription().c_str());
 		ImGui::SameLine();
 		ImGui::TextUnformatted(entry.GetFileTypeString().c_str());
 
 		ImGui::TextUnformatted(entry.GetFilename().c_str());
 		ImGui::SameLine();
-		ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+		ImGui::TextUnformatted(header->GetVMUDescription().c_str());
 
 		vmufs::BCDDate dateBcd = entry.GetDate();
 		// MM/DD/YYYY HH:MM

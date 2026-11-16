@@ -22,6 +22,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include <vector>
 #include "hw/maple/maple_devs.h"
 #include "types.h"
 
@@ -52,7 +53,7 @@ namespace vmufs
             : vmuDevice(vmuDevice), flashData(flashData), accessedBlocks(accessedBlocks) { }
         //! Returns nullptr on failure to get the block.
         u8* GetBlock(u16 blockID);
-        VMSHeader GetVMSHeader(DirectoryEntry entry);
+        std::optional<VMSHeader> GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
         FATBlock GetFATBlock();
         RootBlock GetRootBlock();
@@ -99,9 +100,10 @@ namespace vmufs
     {
         FileSystem fileSystem;
         const u16 blockID;
+        u8* const firstBlock;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(FileSystem fileSystem, u16 blockID) : fileSystem(fileSystem), blockID(blockID) { }
+        VMSHeader(FileSystem fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock) { }
 
         static constexpr int HeaderSize = 0x80;
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
@@ -114,7 +116,7 @@ public:
         u16 GetIconCount();
         u16 GetAnimationSpeed();
         // Write 32x32 icon to 32-bit RGBA buffer
-        std::array<u32, IconSizePixels> ReadIconData();
+        std::optional<std::array<u32, IconSizePixels>> ReadIconData();
 private:
         static constexpr int Offset_VMUDescription = 0;
         static constexpr int VMUDescriptionLength = 0x10;
@@ -272,5 +274,20 @@ public:
 
         Iterator begin();
         Iterator end();
+
+        std::vector<DirectoryEntry> GetFiles()
+        {
+            std::vector<DirectoryEntry> result;
+            for (auto entry : *this)
+            {
+                if (entry == std::nullopt)
+                    return std::vector<DirectoryEntry>{};
+
+                if (entry->GetFileType() != FileType::None)
+                    result.push_back(*entry);
+            }
+
+            return result;
+        };
     };
 }
