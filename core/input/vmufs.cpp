@@ -125,7 +125,11 @@ namespace vmufs
         std::array<u32, IconSizePixels> dest;
 		readIconDataSegment(dest.data(), &firstBlock[HeaderSize], firstChunkSourceSize, palette);
 
-		u16 nextBlockID = fileSystem.GetFATBlock().GetSuccessorBlockID(blockID);
+        auto fatBlock = fileSystem.GetFATBlock();
+        if (!fatBlock.has_value())
+            return std::nullopt;
+
+		u16 nextBlockID = fatBlock->GetSuccessorBlockID(blockID);
         u8* nextBlock = fileSystem.GetBlock(nextBlockID);
         if (nextBlock == nullptr)
             return std::nullopt;
@@ -278,8 +282,17 @@ namespace vmufs
     }
 
     DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(*this); }
-    FATBlock FileSystem::GetFATBlock() { return FATBlock(GetBlock(FATBlockID)); }
-    RootBlock FileSystem::GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
+    std::optional<FATBlock> FileSystem::GetFATBlock()
+    {
+        u8* block = GetBlock(FATBlockID);
+        return block == nullptr ? std::nullopt : std::optional(FATBlock(block));
+    }
+
+    std::optional<RootBlock> FileSystem::GetRootBlock()
+    {
+        u8* block = GetBlock(FATBlockID);
+        return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
+    }
 
     bool FileSystem::operator!=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
 

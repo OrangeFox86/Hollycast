@@ -55,8 +55,8 @@ namespace vmufs
         u8* GetBlock(u16 blockID);
         std::optional<VMSHeader> GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
-        FATBlock GetFATBlock();
-        RootBlock GetRootBlock();
+        std::optional<FATBlock> GetFATBlock();
+        std::optional<RootBlock> GetRootBlock();
         bool operator!=(FileSystem& other);
         std::string description();
     };

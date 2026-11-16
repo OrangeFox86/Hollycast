@@ -1028,6 +1028,10 @@ private:
 
 	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
 	{
+		auto fatBlock = fileSystem.GetFATBlock();
+		if (!fatBlock.has_value())
+			return;
+
 		constexpr ImU32 usedSpaceColor = 0xff4924a4;
 		// https://github.com/OrangeFox86/Hollycast/issues/111
 		// This color is based on the DC BIOS, but, hard to read without a more contrasting font.
@@ -1042,7 +1046,7 @@ private:
 			ImGui::GetColorU32(ImGuiCol_FrameBg),
 			ImGui::GetStyle().FrameRounding);
 
-		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
+		int freeBlocks = fatBlock->CountUserFreeBlocks();
 		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
 		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
 
