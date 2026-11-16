@@ -1130,7 +1130,7 @@ private:
 		for (vmufs::DirectoryEntry entry : table.GetFiles())
 		{
 			std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(entry);
-			if (header == std::nullopt)
+			if (!header.has_value())
 				break; // Failed to read, bail out.
 
 			if (!first)
