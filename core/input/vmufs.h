@@ -22,6 +22,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include <vector>
 #include "hw/maple/maple_devs.h"
 #include "types.h"
 
@@ -37,16 +38,25 @@ namespace vmufs
     class RootBlock;
     class DirectoryTable;
 
+    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
+    static constexpr int BlockSize = 0x200; // 512b
+    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
+
     class FileSystem
     {
-        maple_sega_vmu* const vmuDevice;
+        //! Underlying maple device. We try to treat this as a black box which we talk to via 'RawDma()'.
+        maple_base* const vmuDevice;
+        std::array<u8, vmufs::VolumeSizeBytes>* const flashData;
+        std::array<bool, vmufs::BlocksCount>* const accessedBlocks;
     public:
-        FileSystem(maple_sega_vmu* vmuDevice) : vmuDevice(vmuDevice) { }
+        FileSystem(maple_base* vmuDevice, std::array<u8, vmufs::VolumeSizeBytes>* flashData, std::array<bool, vmufs::BlocksCount>* const accessedBlocks)
+            : vmuDevice(vmuDevice), flashData(flashData), accessedBlocks(accessedBlocks) { }
+        //! Returns nullptr on failure to get the block.
         u8* GetBlock(u16 blockID);
-        VMSHeader GetVMSHeader(DirectoryEntry entry);
+        std::optional<VMSHeader> GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
-        FATBlock GetFATBlock();
-        RootBlock GetRootBlock();
+        std::optional<FATBlock> GetFATBlock();
+        std::optional<RootBlock> GetRootBlock();
         bool operator!=(FileSystem& other);
         std::string description();
     };
@@ -64,15 +74,11 @@ namespace vmufs
         Game = 0xcc,
     };
 
-    static constexpr int VolumeSizeBytes = 128 * 1024; // 128kb
-
     // user region: where user visible files are stored.
     static constexpr int UserRegionSizeBlocks = 200;
     static constexpr int UserRegionLastBlockID = UserRegionSizeBlocks - 1;
 
-    static constexpr int BlockSize = 0x200; // 512b
     static constexpr int BlockIDSize = 2;
-    static constexpr int BlocksCount = VolumeSizeBytes / BlockSize; // 256
 
     static constexpr u8 DirectoryTableLastBlockID = BlocksCount - 3;
     static constexpr int DirectoryTableSizeBlocks = 13;
@@ -94,9 +100,13 @@ namespace vmufs
     {
         FileSystem fileSystem;
         const u16 blockID;
+        u8* const firstBlock;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(FileSystem fileSystem, u16 blockID) : fileSystem(fileSystem), blockID(blockID) { }
+        VMSHeader(FileSystem fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock)
+        {
+            verify(firstBlock != nullptr);
+        }
 
         static constexpr int HeaderSize = 0x80;
         static constexpr int IconSizeBytes = 0x200; // Size of a single icon bitmap. (4 bits per pixel)
@@ -109,7 +119,7 @@ public:
         u16 GetIconCount();
         u16 GetAnimationSpeed();
         // Write 32x32 icon to 32-bit RGBA buffer
-        std::array<u32, IconSizePixels> ReadIconData();
+        std::optional<std::array<u32, IconSizePixels>> ReadIconData();
 private:
         static constexpr int Offset_VMUDescription = 0;
         static constexpr int VMUDescriptionLength = 0x10;
@@ -142,7 +152,7 @@ private:
         u8* data;
 public:
         // Create with a pointer to the raw directory entry data.
-        DirectoryEntry(u8* data) : data(data) { }
+        DirectoryEntry(u8* data) : data(data) { verify(data != nullptr); }
 
         static constexpr int Size = 0x20; // 32
 
@@ -191,7 +201,7 @@ private:
     {
         u8* data;
 public:
-        FATBlock(u8* data) : data(data) { }
+        FATBlock(u8* data) : data(data) { verify(data != nullptr); }
         u16 GetSuccessorBlockID(u16 blockID);
         void SetSuccessorBlockID(u16 blockID, u16 successorID);
         int CountUserFreeBlocks();
@@ -203,7 +213,7 @@ public:
     {
         u8* data;
     public:
-        RootBlock(u8* data) : data(data) { }
+        RootBlock(u8* data) : data(data) { verify(data != nullptr); }
 
         // Gets the custom color if this VMU is using one.
         // Note: this is meant to interop well with ImU32 from ImGui
@@ -260,12 +270,27 @@ public:
         public:
             Iterator(FileSystem fileSystem, int index) : fileSystem(fileSystem), index(index) { }
 
-            DirectoryEntry operator*();
+            std::optional<DirectoryEntry> operator*();
             Iterator& operator++();
             bool operator!=(Iterator& other);
         };
 
         Iterator begin();
         Iterator end();
+
+        std::vector<DirectoryEntry> GetFiles()
+        {
+            std::vector<DirectoryEntry> result;
+            for (auto entry : *this)
+            {
+                if (entry == std::nullopt)
+                    return std::vector<DirectoryEntry>{}; // Block read failed, just bail out entirely.
+
+                if (entry->GetFileType() != FileType::None)
+                    result.push_back(*entry);
+            }
+
+            return result;
+        };
     };
 }

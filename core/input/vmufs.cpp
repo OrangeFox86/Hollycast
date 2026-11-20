@@ -43,11 +43,7 @@ namespace vmufs
     }
 
     // begin class VMSHeader
-    u8* VMSHeader::GetRawVMUDescription()
-	{
-		u8* data = fileSystem.GetBlock(blockID);
-		return &data[Offset_VMUDescription];
-	}
+    u8* VMSHeader::GetRawVMUDescription() { return &firstBlock[Offset_VMUDescription]; }
 
     std::string VMSHeader::GetVMUDescription()
     {
@@ -56,11 +52,7 @@ namespace vmufs
         return std::string(rawVMUDescription, &rawVMUDescription[len]);
     }
 
-    u8* VMSHeader::GetRawDreamcastDescription()
-	{
-		u8* data = fileSystem.GetBlock(blockID);
-		return &data[Offset_DreamcastDescription];
-	}
+    u8* VMSHeader::GetRawDreamcastDescription() { return &firstBlock[Offset_DreamcastDescription]; }
 
     std::string VMSHeader::GetDreamcastDescription()
     {
@@ -69,11 +61,7 @@ namespace vmufs
         return std::string(rawDreamcastDescription, &rawDreamcastDescription[len]);
     }
 
-    u16* VMSHeader::GetRawPalette()
-	{
-		u8* data = fileSystem.GetBlock(blockID);
-		return (u16*)&data[Offset_Palette];
-	}
+    u16* VMSHeader::GetRawPalette() { return (u16*)&firstBlock[Offset_Palette]; }
 
 	void readIconDataSegment(u32* dest, u8* sourceIconData, int length, std::array<u32, VMSHeader::PaletteLength>& palette)
 	{
@@ -87,19 +75,11 @@ namespace vmufs
         }
 	}
 
-	u16 VMSHeader::GetIconCount()
-	{
-		u8* data = fileSystem.GetBlock(blockID);
-		return readUInt16LittleEndian(&data[Offset_IconCount]);
-	}
+	u16 VMSHeader::GetIconCount() { return readUInt16LittleEndian(&firstBlock[Offset_IconCount]); }
 
-	u16 VMSHeader::GetAnimationSpeed()
-	{
-		u8* data = fileSystem.GetBlock(blockID);
-		return readUInt16LittleEndian(&data[Offset_AnimationSpeed]);
-	}
+	u16 VMSHeader::GetAnimationSpeed() { return readUInt16LittleEndian(&firstBlock[Offset_AnimationSpeed]); }
 
-    std::array<u32, VMSHeader::IconSizePixels> VMSHeader::ReadIconData()
+    std::optional<std::array<u32, VMSHeader::IconSizePixels>> VMSHeader::ReadIconData()
     {
         // https://github.com/OrangeFox86/Hollycast/issues/111
         // ICONDATA_VMS icons are not displaying properly, they need special handling.
@@ -109,7 +89,6 @@ namespace vmufs
         for (int i = 0; i < PaletteLength; i++)
             palette.at(i) = Unpacker4444_32<RGBAPacker>::unpack(rawPalette[i]);
 
-		u8* data = fileSystem.GetBlock(blockID);
 		// A single icon is split across multiple blocks.
 		// Blocks may not be contiguous in the VMU image, so we have to
 		// look in the FAT and get the successor block to read the last part of the icon.
@@ -129,10 +108,18 @@ namespace vmufs
 		static constexpr int firstChunkSourceSize = BlockSize - HeaderSize;
 		static constexpr int firstChunkDestSize = firstChunkSourceSize * 2;
         std::array<u32, IconSizePixels> dest;
-		readIconDataSegment(dest.data(), &data[HeaderSize], firstChunkSourceSize, palette);
+		readIconDataSegment(dest.data(), &firstBlock[HeaderSize], firstChunkSourceSize, palette);
 
-		u16 nextBlockID = fileSystem.GetFATBlock().GetSuccessorBlockID(blockID);
-		readIconDataSegment(&dest.at(firstChunkDestSize), fileSystem.GetBlock(nextBlockID), HeaderSize, palette);
+        auto fatBlock = fileSystem.GetFATBlock();
+        if (!fatBlock.has_value())
+            return std::nullopt;
+
+		u16 nextBlockID = fatBlock->GetSuccessorBlockID(blockID);
+        u8* nextBlock = fileSystem.GetBlock(nextBlockID);
+        if (nextBlock == nullptr)
+            return std::nullopt;
+
+		readIconDataSegment(&dest.at(firstChunkDestSize), nextBlock, HeaderSize, palette);
         return dest;
     }
     // end class VMSHeader
@@ -232,9 +219,34 @@ namespace vmufs
     // end class RootBlock
 
     // begin class FileSystem
-    u8* FileSystem::GetBlock(u16 blockID) { return vmuDevice->GetBlock(blockID); }
+    u8* FileSystem::GetBlock(u16 blockID)
+    {
+        u8* block = &flashData->at(blockID * vmufs::BlockSize);
+        if (!accessedBlocks->at(blockID))
+        {
+            MapleMsg msg{};
+            msg.command = MDCF_BlockRead;
+            msg.destAP = (vmuDevice->bus_id << 6) | (1 << vmuDevice->bus_port);
+            msg.originAP = (vmuDevice->bus_id << 6) | 0x20;
+            msg.pushData(MFID_1_Storage);
+            const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
+            msg.pushData(locationWord);
 
-    VMSHeader FileSystem::GetVMSHeader(DirectoryEntry entry)
+            MapleMsg rxMsg;
+            vmuDevice->RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
+            if (rxMsg.command != MDRS_DataTransfer)
+                return nullptr;
+
+            // rxMsg starts with function code (32 bits), then block number (32 bits), then block data
+            verify(rxMsg.getDataSize() >= BlockSize + 8);
+            memcpy(block, &rxMsg.data[8], BlockSize);
+            accessedBlocks->begin()[blockID] = true;
+        }
+
+        return block;
+    }
+
+    std::optional<VMSHeader> FileSystem::GetVMSHeader(DirectoryEntry entry)
     {
         // Note: it's functionally required, that a data file has offset 0, and a game file has offset 1.
         // vmi files don't store this value, so otherwise it would be impossible to round trip to vmi+vms and back.
@@ -247,12 +259,25 @@ namespace vmufs
         // or if it is literally an offset to the value of the block ID.
         // In practice there is no difference in well formed VMUs, because only game files can have nonzero offset, and game files must be contiguous.
         u16 blockID = entry.GetStartFAT() + headerBlockOffset;
-        return VMSHeader(*this, blockID);
+        u8* firstBlock = GetBlock(blockID);
+        if (firstBlock == nullptr)
+            return std::nullopt;
+
+        return VMSHeader(*this, blockID, firstBlock);
     }
 
     DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(*this); }
-    FATBlock FileSystem::GetFATBlock() { return FATBlock(GetBlock(FATBlockID)); }
-    RootBlock FileSystem::GetRootBlock() { return RootBlock(GetBlock(RootBlockID)); }
+    std::optional<FATBlock> FileSystem::GetFATBlock()
+    {
+        u8* block = GetBlock(FATBlockID);
+        return block == nullptr ? std::nullopt : std::optional(FATBlock(block));
+    }
+
+    std::optional<RootBlock> FileSystem::GetRootBlock()
+    {
+        u8* block = GetBlock(FATBlockID);
+        return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
+    }
 
     bool FileSystem::operator!=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
 
@@ -272,7 +297,7 @@ namespace vmufs
     // end class FileSystem
 
     // begin class DirectoryTable::Iterator
-    DirectoryEntry DirectoryTable::Iterator::operator*()
+    std::optional<DirectoryEntry> DirectoryTable::Iterator::operator*()
     {
         verify(index < EndIndex);
         // Directory blocks are visited from the end, toward the start, of the volume.
@@ -291,6 +316,9 @@ namespace vmufs
         int blockOffset = index / EntriesPerBlock;
         int blockID = DirectoryTableLastBlockID - blockOffset;
         u8* block = fileSystem.GetBlock(blockID);
+        if (block == nullptr)
+            return std::nullopt;
+
         int entryID = index % EntriesPerBlock;
         int entryOffset = entryID * DirectoryEntry::Size;
         return DirectoryEntry(&block[entryOffset]);
