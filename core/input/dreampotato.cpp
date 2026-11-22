@@ -193,6 +193,8 @@ struct DreamPotatoVmu : public MapleLinkVmu
 				}
 			}
 		}
+
+		DEBUG_LOG(INPUT, "DreamPotato[%s] DMA block[%d]", logical_port, inMsg->data[7]);
 		return MapleLinkVmu::dma(cmd);
 	}
 
@@ -353,6 +355,7 @@ public:
 			WARN_LOG(INPUT, "DreamPotato[%d] sendFilePath error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
+		DEBUG_LOG(INPUT, "DreamPotato[%s] sendFilePath: %s", logical_port.c_str(), path.c_str());
 	}
 #endif
 

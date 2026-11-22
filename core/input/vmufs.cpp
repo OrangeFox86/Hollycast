@@ -287,6 +287,8 @@ namespace vmufs
     bool FileSystem::IsExternalDeviceDisconnected()
     {
         // TODO2: Should we use a RawDma here to simply ask directly about what device is connected?
+        // physicalLinkStatus is probably wrong here.
+        // The subtypes seem to run some subtle and important logic in the overrides of 'linkStatus()'.
         MapleLinkDevice* mapleLinkDevOpt = dynamic_cast<MapleLinkDevice*>(vmuDevice);
 		return mapleLinkDevOpt != nullptr && mapleLinkDevOpt->link.storageEnabled() && !mapleLinkDevOpt->physicalLinkStatus();
     }
