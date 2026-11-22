@@ -1198,6 +1198,8 @@ public:
 			deviceSharedPtr = nullptr;
 
 		// Create device if it doesn't exist
+		// TODO2: we need to recreate all steps performed when the settings dialog is closed at this point.
+		//     Extract helper from 'gui_display_settings_header' and make the arrays global (or file-static).
 		if (deviceSharedPtr == nullptr)
 			mcfg_CreateDevices();
 
