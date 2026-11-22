@@ -24,6 +24,7 @@
 #include <cstring>
 #include <optional>
 #include "hw/maple/maple_devs.h"
+#include "maplelink.h"
 #include "oslib/oslib.h"
 #include "rend/texconv.h"
 #include "stdclass.h"
@@ -110,12 +111,12 @@ namespace vmufs
         std::array<u32, IconSizePixels> dest;
 		readIconDataSegment(dest.data(), &firstBlock[HeaderSize], firstChunkSourceSize, palette);
 
-        auto fatBlock = fileSystem.GetFATBlock();
+        auto fatBlock = fileSystem->GetFATBlock();
         if (!fatBlock.has_value())
             return std::nullopt;
 
 		u16 nextBlockID = fatBlock->GetSuccessorBlockID(blockID);
-        u8* nextBlock = fileSystem.GetBlock(nextBlockID);
+        u8* nextBlock = fileSystem->GetBlock(nextBlockID);
         if (nextBlock == nullptr)
             return std::nullopt;
 
@@ -221,27 +222,30 @@ namespace vmufs
     // begin class FileSystem
     u8* FileSystem::GetBlock(u16 blockID)
     {
-        u8* block = &flashData->at(blockID * vmufs::BlockSize);
-        if (!accessedBlocks->at(blockID))
-        {
-            MapleMsg msg{};
-            msg.command = MDCF_BlockRead;
-            msg.destAP = (vmuDevice->bus_id << 6) | (1 << vmuDevice->bus_port);
-            msg.originAP = (vmuDevice->bus_id << 6) | 0x20;
-            msg.pushData(MFID_1_Storage);
-            const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
-            msg.pushData(locationWord);
+        verify(blockID == static_cast<u8>(blockID));
+        auto it = flashBlocks.find(blockID);
+        if (it != flashBlocks.end())
+            return it->second.data();
 
-            MapleMsg rxMsg;
-            vmuDevice->RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
-            if (rxMsg.command != MDRS_DataTransfer)
-                return nullptr;
+        MapleMsg msg{};
+        msg.command = MDCF_BlockRead;
+        msg.destAP = (vmuDevice->bus_id << 6) | (1 << vmuDevice->bus_port);
+        msg.originAP = (vmuDevice->bus_id << 6);
+        msg.pushData(MFID_1_Storage);
+        const u32 locationWord = (blockID & 0xFF) << 24; // (BE) partition #, phase, block #
+        msg.pushData(locationWord);
 
-            // rxMsg starts with function code (32 bits), then block number (32 bits), then block data
-            verify(rxMsg.getDataSize() >= BlockSize + 8);
-            memcpy(block, &rxMsg.data[8], BlockSize);
-            accessedBlocks->begin()[blockID] = true;
-        }
+        MapleMsg rxMsg;
+        vmuDevice->RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
+        if (rxMsg.command != MDRS_DataTransfer)
+            return nullptr;
+
+        // rxMsg starts with function code (32 bits), then block number (32 bits), then block data
+        verify(rxMsg.getDataSize() >= BlockSize + 8);
+        // Insert key 'blockID' into 'flashBlocks' and get pointer to value.
+        // Key assumption: Inserting into map does not invalidate pointers to other map values.
+        u8* block = flashBlocks[blockID].data();
+        memcpy(block, &rxMsg.data[8], BlockSize);
 
         return block;
     }
@@ -263,10 +267,10 @@ namespace vmufs
         if (firstBlock == nullptr)
             return std::nullopt;
 
-        return VMSHeader(*this, blockID, firstBlock);
+        return VMSHeader(this, blockID, firstBlock);
     }
 
-    DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(*this); }
+    DirectoryTable FileSystem::GetDirectoryTable() { return DirectoryTable(this); }
     std::optional<FATBlock> FileSystem::GetFATBlock()
     {
         u8* block = GetBlock(FATBlockID);
@@ -277,6 +281,18 @@ namespace vmufs
     {
         u8* block = GetBlock(FATBlockID);
         return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
+    }
+
+    bool FileSystem::IsExternalDeviceDisconnected()
+    {
+        // TODO2: Should we use a RawDma here to simply ask directly about what device is connected?
+        MapleLinkDevice* mapleLinkDevOpt = dynamic_cast<MapleLinkDevice*>(vmuDevice);
+		return mapleLinkDevOpt != nullptr && mapleLinkDevOpt->link.storageEnabled() && !mapleLinkDevOpt->physicalLinkStatus();
+    }
+
+    void FileSystem::ClearCachedBlocks()
+    {
+        flashBlocks.clear();
     }
 
     bool FileSystem::operator!=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
@@ -315,7 +331,7 @@ namespace vmufs
         //    └───────────────┘
         int blockOffset = index / EntriesPerBlock;
         int blockID = DirectoryTableLastBlockID - blockOffset;
-        u8* block = fileSystem.GetBlock(blockID);
+        u8* block = fileSystem->GetBlock(blockID);
         if (block == nullptr)
             return std::nullopt;
 

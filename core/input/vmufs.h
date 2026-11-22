@@ -21,6 +21,7 @@
 #pragma once
 #include <array>
 #include <cstring>
+#include <map>
 #include <optional>
 #include <vector>
 #include "hw/maple/maple_devs.h"
@@ -28,7 +29,8 @@
 
 namespace vmufs
 {
-    // General pattern in this file: classes are thin wrappers.
+    // General pattern in this file: Most classes are thin wrappers.
+    // 'FileSystem' specifically is the exception to this. It caches blocks read from the underlying device.
     // They wrap either the maple device, or a pointer to a specific data structure.
     // Methods on the class allow interpreting the data. Conversion is performed "on demand".
 
@@ -46,17 +48,26 @@ namespace vmufs
     {
         //! Underlying maple device. We try to treat this as a black box which we talk to via 'RawDma()'.
         maple_base* const vmuDevice;
-        std::array<u8, vmufs::VolumeSizeBytes>* const flashData;
-        std::array<bool, vmufs::BlocksCount>* const accessedBlocks;
+        //! Read blocks cached from the underlying device.
+        std::map<u8, std::array<u8, vmufs::BlockSize>> flashBlocks;
     public:
-        FileSystem(maple_base* vmuDevice, std::array<u8, vmufs::VolumeSizeBytes>* flashData, std::array<bool, vmufs::BlocksCount>* const accessedBlocks)
-            : vmuDevice(vmuDevice), flashData(flashData), accessedBlocks(accessedBlocks) { }
+        explicit FileSystem(maple_base* vmuDevice)
+            : vmuDevice(vmuDevice) { }
+
+        // Prevent copying/moving.
+        FileSystem(const FileSystem&) = delete;
+        FileSystem& operator=(const FileSystem&) = delete;
+        FileSystem(FileSystem&&) = delete;
+        FileSystem& operator=(FileSystem&&) = delete;
+
         //! Returns nullptr on failure to get the block.
         u8* GetBlock(u16 blockID);
         std::optional<VMSHeader> GetVMSHeader(DirectoryEntry entry);
         DirectoryTable GetDirectoryTable();
         std::optional<FATBlock> GetFATBlock();
         std::optional<RootBlock> GetRootBlock();
+        bool IsExternalDeviceDisconnected();
+        void ClearCachedBlocks();
         bool operator!=(FileSystem& other);
         std::string description();
     };
@@ -98,12 +109,12 @@ namespace vmufs
     // https://vmudev.net/formats.html#formats_vms_header
     class VMSHeader
     {
-        FileSystem fileSystem;
+        FileSystem* fileSystem;
         const u16 blockID;
         u8* const firstBlock;
 public:
         // Create from a pointer to start of the VMS header.
-        VMSHeader(FileSystem fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock)
+        VMSHeader(FileSystem* fileSystem, u16 blockID, u8* firstBlock) : fileSystem(fileSystem), blockID(blockID), firstBlock(firstBlock)
         {
             verify(firstBlock != nullptr);
         }
@@ -152,7 +163,7 @@ private:
         u8* data;
 public:
         // Create with a pointer to the raw directory entry data.
-        DirectoryEntry(u8* data) : data(data) { verify(data != nullptr); }
+        explicit DirectoryEntry(u8* data) : data(data) { verify(data != nullptr); }
 
         static constexpr int Size = 0x20; // 32
 
@@ -201,7 +212,7 @@ private:
     {
         u8* data;
 public:
-        FATBlock(u8* data) : data(data) { verify(data != nullptr); }
+        explicit FATBlock(u8* data) : data(data) { verify(data != nullptr); }
         u16 GetSuccessorBlockID(u16 blockID);
         void SetSuccessorBlockID(u16 blockID, u16 successorID);
         int CountUserFreeBlocks();
@@ -213,7 +224,7 @@ public:
     {
         u8* data;
     public:
-        RootBlock(u8* data) : data(data) { verify(data != nullptr); }
+        explicit RootBlock(u8* data) : data(data) { verify(data != nullptr); }
 
         // Gets the custom color if this VMU is using one.
         // Note: this is meant to interop well with ImU32 from ImGui
@@ -254,9 +265,9 @@ public:
     // Note: when iterating, caller must manually filter out entries with 'Kind == None'.
     class DirectoryTable
     {
-        const FileSystem fileSystem;
+        FileSystem* const fileSystem;
     public:
-        DirectoryTable(FileSystem fileSystem) : fileSystem(fileSystem) { }
+        DirectoryTable(FileSystem* fileSystem) : fileSystem(fileSystem) { }
 
     private:
         static constexpr int EntriesPerBlock = BlockSize / DirectoryEntry::Size;
@@ -265,10 +276,10 @@ public:
     public:
         class Iterator
         {
-            FileSystem fileSystem;
+            FileSystem* const fileSystem;
             int index;
         public:
-            Iterator(FileSystem fileSystem, int index) : fileSystem(fileSystem), index(index) { }
+            Iterator(FileSystem* fileSystem, int index) : fileSystem(fileSystem), index(index) { }
 
             std::optional<DirectoryEntry> operator*();
             Iterator& operator++();
