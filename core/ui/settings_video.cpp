@@ -204,14 +204,14 @@ void gui_settings_video()
     	{
     		DisabledScope scope(!config::VmuSecondaryScreen);
     		ImGui::Indent();
-    		ImGui::Text("%s", T("Secondary Display Scaling:"));
-    		ImGui::Columns(3, "vmuSecondaryScaling", false);
-    		OptionRadioButton(T("Fit"), config::VmuSecondaryScreenScaling, 0, T("Scale the VMU screen to fill as much of the display as possible while keeping its aspect ratio"));
-    		ImGui::NextColumn();
-    		OptionRadioButton(T("Integer"), config::VmuSecondaryScreenScaling, 1, T("Scale the VMU screen by the largest whole number that fits, for evenly sized pixels"));
-    		ImGui::NextColumn();
-    		OptionRadioButton(T("Stretch"), config::VmuSecondaryScreenScaling, 2, T("Stretch the VMU screen to fill the whole display, ignoring its aspect ratio"));
-    		ImGui::Columns(1, nullptr, false);
+			const char* preview = ComboBox2Col::Preview(config::VmuSecondaryScreenScaling, { T("Fit"), T("Integer"), T("Stretch") });
+			if (ComboBox2Col::BeginCombo(T("Secondary Display Scaling:"), preview))
+			{
+				ComboBox2Col::Selectable(T("Fit"), config::VmuSecondaryScreenScaling, 0, T("Scale the VMU screen to fill as much of the display as possible while keeping its aspect ratio"));
+				ComboBox2Col::Selectable(T("Integer"), config::VmuSecondaryScreenScaling, 1, T("Scale the VMU screen by the largest whole number that fits, for evenly sized pixels"));
+				ComboBox2Col::Selectable(T("Stretch"), config::VmuSecondaryScreenScaling, 2, T("Stretch the VMU screen to fill the whole display, ignoring its aspect ratio"));
+				ComboBox2Col::EndCombo();
+			}
     		ImGui::Unindent();
     	}
 #endif

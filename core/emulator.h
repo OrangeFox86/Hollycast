@@ -193,7 +193,6 @@ public:
 		runner.runOnThread(func);
 	}
 
-<<<<<<< HEAD
 	/**
 	 * Run a function after the given duration of time has passed
 	 * @param[in] sh4Duration Time duration as sh4 clock ticks
@@ -225,12 +224,9 @@ public:
 	 */
 	void runAt(u64 sh4TimePoint, const std::function<void()>& func);
 
-	void dc_reset(bool hard); // for tests only
-=======
 	// For tests only
 	void init(int platform);
 	void term();
->>>>>>> flycast/dev
 
 private:
 	bool checkStatus(bool wait = false);

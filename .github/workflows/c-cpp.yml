@@ -179,39 +179,4 @@ jobs:
             ${{ matrix.config.packagePath || 'artifact/bin' }}
             ${{ !matrix.config.packagePath && 'artifact/lib/libretro' || '' }}
 
-<<<<<<< HEAD
       # Removed Sentry and Rclone steps until they are properly setup for Hollycast
-=======
-      - name: Setup Rclone
-        uses: AnimMouse/setup-rclone@v1
-        with:
-          rclone_config: ${{ secrets.RCLONE_CONFIG }}
-
-      - name: Upload to S3
-        run: rclone copy artifact/bin scaleway:flycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
-        shell: bash
-        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.config.destDir != ''
-
-      - name: Setup Sentry CLI
-        uses: matbour/setup-sentry-cli@v3
-        env:
-          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-        with:
-          url: https://sentry.io
-          token: ${{ env.SENTRY_TOKEN }}
-          organization: flycast
-          project: minidump
-          version: 2.21.2
-        if: ${{ env.SENTRY_TOKEN != '' }}
-
-      - name: Upload symbols to Sentry (Windows, macOS, Linux)
-        run: |
-          VERSION=$(git describe --tags --always)
-          sentry-cli releases new "$VERSION"
-          sentry-cli releases set-commits "$VERSION" --auto
-          sentry-cli debug-files upload symbols
-        shell: bash
-        env:
-          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-        if: ${{ env.SENTRY_TOKEN != '' && (matrix.config.name == 'x86_64-w64-mingw32' || matrix.config.name == 'apple-darwin' || matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu') && github.event_name == 'push' }}
->>>>>>> flycast/dev

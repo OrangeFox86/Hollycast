@@ -1,11 +1,6 @@
-<<<<<<< HEAD
 # Portions Copyright 2026 The Hollycast Authors
-
-if(APPLE AND NOT LIBRETRO)
-=======
 # APPLE is set from the host before project(), so exclude Android builds on macOS hosts
 if(APPLE AND NOT LIBRETRO AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
->>>>>>> flycast/dev
 	# Requirement from SDL
 	# Minimum version for $<LINK_LIBRARY:feature,library-list>
 	cmake_minimum_required(VERSION 3.24)
