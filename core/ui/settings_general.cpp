@@ -170,11 +170,14 @@ void gui_settings_general()
 	}
 	UILanguages[] = {
 		{ T("System Default"), "" },
+		{ "Deutsch", "de" },
 		{ "English", "en" },
+		{ "Español", "es" },
 		{ "Français", "fr" },
 		{ "Magyar", "hu" },
 		{ "日本語", "ja" },
 		{ "Português (Brasil)", "pt_BR" },
+		{ "Română", "ro" },
 		{ "Svenska", "sv" },
 		{ "Türkçe", "tr" },
 		{ "简体中文", "zh_CN" },

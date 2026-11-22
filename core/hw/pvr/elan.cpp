@@ -1761,23 +1761,21 @@ int schedCallback(int tag, int cycles, int lag, void *arg)
 {
 	// DMA done
 	reg74 |= 1;
+	// Needed by initdo (avoids texture corruption on start screen)
+	// but doesn't seem to be used by other game.
+	asic_RaiseInterruptBothCLX(holly_YUV_DMA);
 	return 0;
 }
 
 void init()
 {
+	if (!settings.platform.isNaomi2())
+		return;
 	if (schedId == -1)
 		schedId = sh4_sched_register(0, schedCallback);
-}
-
-void reset(bool hard)
-{
-	if (hard)
-	{
-		memset(RAM, 0, ERAM_SIZE);
-		state.reset();
-		state.resetProjectionMatrix();
-	}
+	memset(RAM, 0, ERAM_SIZE);
+	state.reset();
+	state.resetProjectionMatrix();
 }
 
 void term()
@@ -1788,6 +1786,8 @@ void term()
 
 void vmem_init()
 {
+	if (!settings.platform.isNaomi2())
+		return;
 	elanRegHandler = addrspace::registerHandler(nullptr, nullptr, read_elanreg, nullptr, nullptr, write_elanreg);
 	elanCmdHandler = addrspace::registerHandler(nullptr, nullptr, nullptr, nullptr, nullptr, write_elancmd);
 	elanRamHandler = addrspaceRegisterHandlerTemplate(read_elanram, write_elanram);

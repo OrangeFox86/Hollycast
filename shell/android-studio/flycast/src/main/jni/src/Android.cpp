@@ -21,6 +21,7 @@
 #include "http_client.h"
 #include "achievements/achievements.h"
 #include "android_locale.h"
+#include "oslib/i18n.h"
 
 #include <android/log.h>
 #include <android/native_window.h>
@@ -59,6 +60,7 @@ extern jmethodID showScreenKeyboardMid;
 static jmethodID onGameStateChangeMid;
 extern jmethodID setVGamepadEditModeMid;
 static jmethodID showAlertDialogMid;
+static jmethodID onGameLoadedMid;
 
 static void emuEventCallback(Event event, void *)
 {
@@ -73,6 +75,11 @@ static void emuEventCallback(Event event, void *)
 		game_started = true;
 		if (g_activity != nullptr)
 			jni::env()->CallVoidMethod(g_activity, onGameStateChangeMid, true);
+		break;
+	case Event::Start:
+	case Event::Terminate:
+		if (g_activity != nullptr)
+			jni::env()->CallVoidMethod(g_activity, onGameLoadedMid, event == Event::Start);
 		break;
 	default:
 		break;
@@ -168,6 +175,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_hollycast_emulator_emu_JNIdc_initE
         // Do one-time initialization
     	EventManager::listen(Event::Pause, emuEventCallback);
     	EventManager::listen(Event::Resume, emuEventCallback);
+    	EventManager::listen(Event::Start, emuEventCallback);
+    	EventManager::listen(Event::Terminate, emuEventCallback);
         jstring msg = nullptr;
         int rc = flycast_init(0, nullptr);
         if (rc == -1)
@@ -374,7 +383,49 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiSetIn
 	gui_set_insets(left, right, top, bottom);
 }
 
+<<<<<<< HEAD
 extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
+=======
+extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_emu_JNIdc_isVmuSecondaryScreenEnabled(JNIEnv *env, jobject obj)
+{
+	return config::VmuSecondaryScreen;
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_JNIdc_getVmuSecondaryScreenScaling(JNIEnv *env, jobject obj)
+{
+	return config::VmuSecondaryScreenScaling;
+}
+
+// Copies the screen of the given VMU into dst as Android ARGB pixels (48x32).
+// Returns the last change timestamp, or 0 if the VMU screen isn't active.
+extern "C" JNIEXPORT jlong JNICALL Java_com_flycast_emulator_emu_JNIdc_getVmuScreen(JNIEnv *env, jobject obj, jint vmuId, jintArray dst)
+{
+	constexpr int PixelCount = 48 * 32;
+	if (dst == nullptr || env->GetArrayLength(dst) < PixelCount)
+		return 0;
+	u32 pixels[PixelCount];
+	u64 stamp = getVmuScreen(vmuId, pixels);
+	if (stamp == 0)
+		return 0;
+	// RGBA (R in the low byte) -> ARGB
+	// VMU rows are stored bottom-up (GL texture order): flip vertically.
+	u32 argb[PixelCount];
+	for (int y = 0; y < 32; y++)
+	{
+		const u32 *src = &pixels[(31 - y) * 48];
+		u32 *out = &argb[y * 48];
+		for (int x = 0; x < 48; x++)
+		{
+			u32 p = src[x];
+			out[x] = (p & 0xff00ff00u) | ((p & 0xffu) << 16) | ((p >> 16) & 0xffu);
+		}
+	}
+	env->SetIntArrayRegion(dst, 0, PixelCount, (const jint *)argb);
+	return (jlong)stamp;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
+>>>>>>> flycast/dev
 {
     if (g_jvm == NULL)
         env->GetJavaVM(&g_jvm);
@@ -506,6 +557,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_BaseGLActivity_reg
         onGameStateChangeMid = env->GetMethodID(actClass, "onGameStateChange", "(Z)V");
         setVGamepadEditModeMid = env->GetMethodID(actClass, "setVGamepadEditMode", "(Z)V");
         showAlertDialogMid = env->GetMethodID(actClass, "showAlertDialog", "(Ljava/lang/String;)V");
+        onGameLoadedMid = env->GetMethodID(actClass, "onGameLoaded", "(Z)V");
     }
 }
 
@@ -548,6 +600,7 @@ std::string getFilesPath()
 
 void dc_exit()
 {
+	gui_cancel_load();
 	settings.content.path.clear();
 	if (g_activity != nullptr)
 	{

@@ -410,15 +410,11 @@ static void termMappings()
 		aica::aica_ram.free();
 		free_pages(elan::RAM);
 		elan::RAM = nullptr;
-		// Don't leave the address map pointing at freed memory. A null entry
-		// routes accesses to handler 0 (not mapped), which touches nothing.
-		memset(memInfo_ptr, 0, sizeof(memInfo_ptr));
 	}
 }
 
 void initMappings()
 {
-	termMappings();
 	// Fallback to statically allocated buffers, this results in slow-ops being generated.
 	if (ram_base == nullptr)
 	{
@@ -429,7 +425,6 @@ void initMappings()
 #if FEAT_SHREC != DYNAREC_NONE
 		bm_vmem_pagefill((void**)p_sh4rcb->fpcb, sizeof(p_sh4rcb->fpcb));
 #endif
-		memset(&p_sh4rcb->cntx, 0, sizeof(p_sh4rcb->cntx));
 
 		mem_b.alloc(RAM_SIZE);
 		vram.alloc(VRAM_SIZE);
@@ -466,6 +461,7 @@ void initMappings()
 	}
 
 	// Clear out memory
+	memset(&p_sh4rcb->cntx, 0, sizeof(p_sh4rcb->cntx));
 	aica::aica_ram.zero();
 	vram.zero();
 	mem_b.zero();

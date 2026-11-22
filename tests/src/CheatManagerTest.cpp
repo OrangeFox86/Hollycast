@@ -5,14 +5,18 @@
 #include "cheats.h"
 #include "emulator.h"
 #include "hw/sh4/sh4_mem.h"
+#include "oslib/i18n.h"
 
 class CheatManagerTest : public ::testing::Test {
 protected:
 	void SetUp() override
 	{
-		if (!addrspace::reserve())
-			die("addrspace::reserve failed");
-		emu.init();
+		i18n::init();
+        emu.init(DC_PLATFORM_DREAMCAST);
+	}
+
+	void TearDown() override {
+		emu.term();
 	}
 };
 
@@ -286,8 +290,6 @@ cheats = "2"
 	CheatManager mgr;
 	mgr.reset("TESTSUB8");
 	mgr.loadCheatFile("test.cht");
-	mem_map_default();
-	emu.dc_reset(true);
 
 	mgr.enableCheat(0, true);
 	WriteMem8_nommu(0x8c010000, 0xFA);

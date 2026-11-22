@@ -42,7 +42,7 @@ static u32 lightgun_hpos;
 static bool maple_int_pending;
 
 #ifdef LIBRETRO
-extern bool retro_refresh_av_info(double fps);
+extern void retro_setfps(double fps);
 #endif
 
 void CalculateSync()
@@ -64,7 +64,7 @@ void CalculateSync()
 	sh4_sched_request(vblank_schid, Line_Cycles);
 
 #ifdef LIBRETRO
-	retro_refresh_av_info((double)SH4_MAIN_CLOCK / ((double)Line_Cycles * (double)pvr_numscanlines));
+	retro_setfps((double)SH4_MAIN_CLOCK / ((double)Line_Cycles * (double)pvr_numscanlines));
 #endif
 }
 
@@ -265,6 +265,7 @@ bool spg_Init()
 {
 	render_end_schid = sh4_sched_register(0, &rend_end_render);
 	vblank_schid = sh4_sched_register(0, &spg_line_sched);
+	spg_Reset();
 
 	return true;
 }
@@ -277,7 +278,7 @@ void spg_Term()
 	vblank_schid = -1;
 }
 
-void spg_Reset(bool hard)
+void spg_Reset()
 {
 	CalculateSync();
 

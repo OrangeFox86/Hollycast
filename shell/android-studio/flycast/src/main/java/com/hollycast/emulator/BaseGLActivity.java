@@ -27,12 +27,22 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 
+<<<<<<< HEAD:shell/android-studio/flycast/src/main/java/com/hollycast/emulator/BaseGLActivity.java
 import com.hollycast.emulator.config.Config;
 import com.hollycast.emulator.emu.AudioBackend;
 import com.hollycast.emulator.emu.HttpClient;
 import com.hollycast.emulator.emu.JNIdc;
 import com.hollycast.emulator.periph.InputDeviceManager;
 import com.hollycast.emulator.periph.SipEmulator;
+=======
+import com.flycast.emulator.config.Config;
+import com.flycast.emulator.emu.AudioBackend;
+import com.flycast.emulator.emu.HttpClient;
+import com.flycast.emulator.emu.JNIdc;
+import com.flycast.emulator.periph.InputDeviceManager;
+import com.flycast.emulator.periph.SipEmulator;
+import com.flycast.emulator.vmu.SecondaryDisplayManager;
+>>>>>>> flycast/dev:shell/android-studio/flycast/src/main/java/com/flycast/emulator/BaseGLActivity.java
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,6 +69,7 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
     private String pendingIntentUrl;
     private boolean hasKeyboard = false;
     private AndroidStorage storage;
+    private SecondaryDisplayManager secondaryDisplayManager;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -134,6 +145,7 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         InputDeviceManager.getInstance().startListening(getApplicationContext());
         register(this);
         audioBackend = new AudioBackend();
+        secondaryDisplayManager = new SecondaryDisplayManager(this);
         onConfigurationChanged(getResources().getConfiguration());
 
         // Back button handling on Android 13+
@@ -210,6 +222,8 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         paused = true;
         InputDeviceManager.getInstance().stopListening();
         register(null);
+        if (secondaryDisplayManager != null)
+            secondaryDisplayManager.stop();
         if (audioBackend != null)
             audioBackend.release();
         Emulator.setCurrentActivity(null);
@@ -221,6 +235,8 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         super.onPause();
         resumedCalled = false;
         handleStateChange(true);
+        if (secondaryDisplayManager != null)
+            secondaryDisplayManager.stop();
     }
 
     @Override
@@ -228,6 +244,8 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         super.onResume();
         resumedCalled = true;
         handleStateChange(false);
+        if (secondaryDisplayManager != null)
+            secondaryDisplayManager.start();
     }
 
     @Override
@@ -468,7 +486,18 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 else
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                // The secondary display option may have been changed in the settings
+                if (secondaryDisplayManager != null)
+                    secondaryDisplayManager.update();
             }
+        });
+    }
+
+    // Called from native code when a game is loaded or unloaded
+    public void onGameLoaded(boolean loaded) {
+        runOnUiThread(() -> {
+            if (secondaryDisplayManager != null)
+                secondaryDisplayManager.setGameLoaded(loaded);
         });
     }
 
