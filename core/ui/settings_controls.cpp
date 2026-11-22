@@ -1186,24 +1186,13 @@ public:
 	{
 		// We should only get here if using a Sega VMU, or DreamPotato, or DreamPicoPort
 		verify(config::MapleExpansionDevices[bus][port] == MDT_SegaVMU || config::DreamLinkSelect[bus][port]);
-
-		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
-		bool isMapleLink = dynamic_cast<MapleLinkDevice*>(deviceSharedPtr.get()) != nullptr;
-		// Detect if the device configuration is out of sync with settings and re-create device if necessary.
 		// https://github.com/OrangeFox86/Hollycast/issues/121
-		// Extract helper and verify correctness.
-		bool recreate = isMapleLink != MapleLinkRegistry::GetMapleLink(bus, port).has_value()
-			|| (!isMapleLink && deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU);
-		if (recreate)
-			deviceSharedPtr = nullptr;
+		// We should detect any mismatch between a pre-existing maple device, and the device type specified in settings,
+		// and re-create devices accordingly.
+		FinalizeMapleChanges(true);
+		mcfg_CreateDevices();
 
-		// Create device if it doesn't exist
-		// TODO2: we need to recreate all steps performed when the settings dialog is closed at this point.
-		//     Extract helper from 'gui_display_settings_header' and make the arrays global (or file-static).
-		if (deviceSharedPtr == nullptr)
-			mcfg_CreateDevices();
-
-		maple_base* dev = dynamic_cast<maple_base*>(deviceSharedPtr.get());
+		maple_base* dev = dynamic_cast<maple_base*>(MapleDevices[bus][port].get());
 		if (dev != nullptr)
 			vmuFiles.push_back(std::make_unique<vmufs::FileSystem>(dev));
 

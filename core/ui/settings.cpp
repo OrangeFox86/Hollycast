@@ -269,7 +269,37 @@ public:
 	}
 };
 
-void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
+static std::array<bool, 4> mapleDevicesChanges;
+static std::array<std::array<bool, 2>, 4> expDevicesChanges;
+
+void FinalizeMapleChanges(bool reconnect)
+{
+	dreampotato::update();
+	if (reconnect)
+	{
+		for (unsigned bus = 0; bus < mapleDevicesChanges.size(); bus++)
+		{
+			if (mapleDevicesChanges[bus]) {
+				maple_ReconnectDevice(bus, 5);
+			}
+			else
+			{
+				if (expDevicesChanges[bus][0]) {
+					maple_ReconnectDevice(bus, 0);
+					reset_vmus();
+				}
+				if (expDevicesChanges[bus][1]) {
+					maple_ReconnectDevice(bus, 1);
+					reset_vmus();
+				}
+			}
+		}
+	}
+	mapleDevicesChanges = {};
+	expDevicesChanges = {};
+}
+
+void gui_display_settings_header(ImVec2 normal_padding)
 {
 	ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
 	ImGui::PushFont(settingsTitleFont, 0.0f);
@@ -286,29 +316,9 @@ void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& map
     		gui_setState(GuiState::Commands);
     	else
     		gui_setState(GuiState::Main);
-    	dreampotato::update();
- 		if (game_started && settings.platform.isConsole())
-		{
-			for (unsigned bus = 0; bus < mapleDevicesChanges.size(); bus++)
-			{
-				if (mapleDevicesChanges[bus]) {
-					maple_ReconnectDevice(bus, 5);
-				}
-				else
-				{
-					if (expDevicesChanges[bus][0]) {
-						maple_ReconnectDevice(bus, 0);
-						reset_vmus();
-					}
-					if (expDevicesChanges[bus][1]) {
-						maple_ReconnectDevice(bus, 1);
-						reset_vmus();
-					}
-				}
-			}
-    	}
-    	mapleDevicesChanges = {};
-    	expDevicesChanges = {};
+
+		bool reconnect = game_started && settings.platform.isConsole();
+		FinalizeMapleChanges(reconnect);
        	SaveSettings();
     }
 	if (game_started)
@@ -337,8 +347,6 @@ void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& map
 
 void gui_display_settings()
 {
-	static std::array<bool, 4> mapleDevicesChanges;
-	static std::array<std::array<bool, 2>, 4> expDevicesChanges;
 	static VerticalTabBar settingsTabBar;
 
 	fullScreenWindow(false);
@@ -356,7 +364,7 @@ void gui_display_settings()
 
     if (settingsTabBar.BeginTabBar("settings"))
     {
-		gui_display_settings_header(normal_padding, mapleDevicesChanges, expDevicesChanges);
+		gui_display_settings_header(normal_padding);
 
 		if (settingsTabBar.BeginTab(ICON_FA_TOOLBOX, "General"))
 		{
