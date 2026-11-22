@@ -23,6 +23,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include "cfg/option.h"
 #include "hw/maple/maple_devs.h"
 #include "maplelink.h"
 #include "oslib/oslib.h"
@@ -116,7 +117,7 @@ namespace vmufs
             return std::nullopt;
 
 		u16 nextBlockID = fatBlock->GetSuccessorBlockID(blockID);
-        u8* nextBlock = fileSystem->GetBlock(nextBlockID);
+        u8* nextBlock = nextBlockID < vmufs::BlocksCount ? fileSystem->GetBlock(nextBlockID) : nullptr;
         if (nextBlock == nullptr)
             return std::nullopt;
 
@@ -222,7 +223,7 @@ namespace vmufs
     // begin class FileSystem
     u8* FileSystem::GetBlock(u16 blockID)
     {
-        verify(blockID == static_cast<u8>(blockID));
+        verify(blockID < vmufs::BlocksCount);
         auto it = flashBlocks.find(blockID);
         if (it != flashBlocks.end())
             return it->second.data();
@@ -299,10 +300,15 @@ namespace vmufs
 
 	std::string FileSystem::description()
 	{
-		// https://github.com/OrangeFox86/Hollycast/issues/111
-		// Use a richer description depending on specifics of the vmu device.
-		// For example a DreamLink could maybe use the description of the link.
-		// Share some "get file name" helper with storage.cpp?
+        auto* mapleDev = dynamic_cast<MapleLinkDevice*>(vmuDevice);
+        if (mapleDev != nullptr)
+        {
+            std::string productName = mapleDev->link.dreamlink->getProductName();
+            // TODO2: checking the product name seems a bit hacky.
+            if (productName != "DreamPotato" || !config::DreamPotatoIntegratedMode)
+                return productName + " " + vmuDevice->logical_port;
+        }
+
 		std::string path = hostfs::getVmuPath(vmuDevice->logical_port, true);
 		auto slash = get_last_slash_pos(path);
 		if (slash != std::string::npos && slash < path.size() - 1)
