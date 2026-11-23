@@ -286,11 +286,12 @@ namespace vmufs
 
     bool FileSystem::IsExternalDeviceDisconnected()
     {
-        // TODO2: Should we use a RawDma here to simply ask directly about what device is connected?
-        // physicalLinkStatus is probably wrong here.
-        // The subtypes seem to run some subtle and important logic in the overrides of 'linkStatus()'.
-        MapleLinkDevice* mapleLinkDevOpt = dynamic_cast<MapleLinkDevice*>(vmuDevice);
-		return mapleLinkDevOpt != nullptr && mapleLinkDevOpt->link.storageEnabled() && !mapleLinkDevOpt->physicalLinkStatus();
+        // TODO2: we are missing the reconnect here and not clearing our own cache.
+        // Maybe we should get rid of our own caches here and assume the maple dev caching the expensive part (reading from external device) is good enough.
+        // One weird problem here is that if we *don't* have a gap where we treat it as temporarily disconnected, we can actually get inconsistent answers.
+        // Could we possibly insert a mechanism where, if things drop out mid frame, we can at least make all the other reads fail until the next frame starts?
+        // This would make weird races involving 'sendFilePath', selecting a file on the DP, etc. at least avoid some inconsistent state.
+		return !vmuDevice->linkStatus();
     }
 
     void FileSystem::ClearCachedBlocks()

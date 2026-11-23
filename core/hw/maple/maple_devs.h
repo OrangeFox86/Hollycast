@@ -206,6 +206,8 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
 	virtual bool linkStatus()
 	{
+		return true; // TODO2: delete temporary hack.
+
 		if (reconnect_requested) {
 			// Reconnect in 100 ms
 			reconnect_time = sh4_sched_now64() + (SH4_MAIN_CLOCK / 10);
