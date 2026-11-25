@@ -229,7 +229,6 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	void deserialize(Deserializer& deser) override;
 
 	//! @return true iff this device is physically present
-
 	bool physicalLinkStatus() override
 	{
 		if (!MapleLinkDeviceBase<maple_sega_vmu>::physicalLinkStatus())

@@ -29,10 +29,10 @@
 
 namespace vmufs
 {
-    // General pattern in this file: Most classes are thin wrappers.
-    // 'FileSystem' specifically is the exception to this. It caches blocks read from the underlying device.
-    // They wrap either the maple device, or a pointer to a specific data structure.
-    // Methods on the class allow interpreting the data. Conversion is performed "on demand".
+    // General pattern in this file:
+    // - 'FileSystem' internally caches blocks from the underlying device. Its associated APIs can pass around pointers to those blocks.
+    // - Other classes are thin wrappers around the FileSystem or aforementioned pointers. They can be passed by value if desired.
+    // - Other class methods allow interpreting the data. Conversion is performed "on demand".
 
     class VMSHeader;
     class DirectoryEntry;
@@ -51,6 +51,7 @@ namespace vmufs
         //! Most recently seen content version of the 'vmuDevice'.
         u32 reconnectVersion = 0;
         //! Read blocks cached from the underlying device.
+        // Note: a map is used rather than an array because we anticipate most blocks will not be used most of the time.
         std::map<u8, std::array<u8, vmufs::BlockSize>> flashBlocks;
     public:
         explicit FileSystem(maple_base* vmuDevice)

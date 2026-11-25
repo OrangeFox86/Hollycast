@@ -1008,9 +1008,10 @@ class VmuManagerPopup
 private:
 	// List of file names found on the VMU(s). Used to clean up associated resources on close.
 	std::vector<std::string> allFileNames;
-	// Currently hovered VMS file. Note: must be reset to null if the associated FileSystem block is freed.
+	// Currently hovered VMS file. Note: must be reset to nullopt if the associated FileSystem block is freed.
 	std::optional<vmufs::DirectoryEntry> hoveredEntry;
 
+	// List of VMU files currently available in the popup.
 	// Use vector of unique_ptrs, rather than just vector of `FileSystem`s, to reduce guesswork around how long `FileSystem*`s remain valid.
 	std::vector<std::unique_ptr<vmufs::FileSystem>> vmuFiles;
 

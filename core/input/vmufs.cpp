@@ -284,7 +284,7 @@ namespace vmufs
 
     std::optional<RootBlock> FileSystem::GetRootBlock()
     {
-        u8* block = GetBlock(FATBlockID);
+        u8* block = GetBlock(RootBlockID);
         return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
     }
 
