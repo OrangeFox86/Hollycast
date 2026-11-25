@@ -10,6 +10,7 @@ jobs:
   build:
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
+    continue-on-error: true
 
     defaults:
       run:
@@ -88,12 +89,18 @@ jobs:
 
       - name: Compile universal dependencies (macOS)
         run: |
+          # Homebrew no longer installs a formula from a file path: the formulae go into a local tap.
+          brew tap-new --no-git local/flycast
+          tap_formula_dir="$(brew --repo local/flycast)/Formula"
           for formula in ./shell/apple/libpng-flycast.rb; do
             libname=$(basename "$formula" .rb)
-            HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew install --build-from-source --formula "$formula" || \
-            HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew reinstall --build-from-source --formula "$formula"
+            cp "$formula" "$tap_formula_dir/"
+            # A homebrew/core keg of the same name would block the tap's one.
+            brew uninstall --ignore-dependencies --formula "$libname" 2>/dev/null || true
+            HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew install --build-from-source --formula "local/flycast/$libname" || \
+            HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 HOMEBREW_DEVELOPER=1 brew reinstall --build-from-source --formula "local/flycast/$libname"
 
-            prefix=$(brew --prefix $libname)
+            prefix=$(brew --prefix "local/flycast/$libname")
             # Find and verify the static library
             libfile=$(find "$prefix/lib" -name "*.a" | head -n1)
             lipo -info "$libfile"
@@ -178,4 +185,39 @@ jobs:
             ${{ matrix.config.packagePath || 'artifact/bin' }}
             ${{ !matrix.config.packagePath && 'artifact/lib/libretro' || '' }}
 
+<<<<<<< HEAD
       # Removed Sentry and Rclone steps until they are properly setup for Hollycast
+=======
+      - name: Setup Rclone
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.RCLONE_CONFIG }}
+
+      - name: Upload to S3
+        run: rclone copy artifact/bin scaleway:flycast-builds/${{ matrix.config.destDir }}/${GITHUB_REF#refs/}-$GITHUB_SHA
+        shell: bash
+        if: github.repository == 'flyinghead/flycast' && github.event_name == 'push' && matrix.config.destDir != ''
+
+      - name: Setup Sentry CLI
+        uses: matbour/setup-sentry-cli@v3
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+        with:
+          url: https://sentry.io
+          token: ${{ env.SENTRY_TOKEN }}
+          organization: flycast
+          project: minidump
+          version: 2.21.2
+        if: ${{ env.SENTRY_TOKEN != '' }}
+
+      - name: Upload symbols to Sentry (Windows, macOS, Linux)
+        run: |
+          VERSION=$(git describe --tags --always)
+          sentry-cli releases new "$VERSION"
+          sentry-cli releases set-commits "$VERSION" --auto
+          sentry-cli debug-files upload symbols
+        shell: bash
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+        if: ${{ env.SENTRY_TOKEN != '' && (matrix.config.name == 'x86_64-w64-mingw32' || matrix.config.name == 'apple-darwin' || matrix.config.name == 'x86_64-pc-linux-gnu' || matrix.config.name == 'arm64-pc-linux-gnu') && github.event_name == 'push' }}
+>>>>>>> flycast/dev

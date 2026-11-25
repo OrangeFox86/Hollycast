@@ -4,13 +4,14 @@
 #include "hw/sh4/sh4_if.h"
 #include "hw/sh4/sh4_mmr.h"
 #include "hw/sh4/sh4_sched.h"
+#include "emulator.h"
 
 class TimerTest : public ::testing::Test {
 	void SetUp() override {
-		tmu.init();
+		emu.init(DC_PLATFORM_DREAMCAST);
 	}
 	void TearDown() override {
-		tmu.term();
+		emu.term();
 	}
 
 protected:

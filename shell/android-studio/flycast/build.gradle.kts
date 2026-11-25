@@ -9,19 +9,29 @@ fun gitVersionName(): String {
 }
 
 android {
+<<<<<<< HEAD
     namespace = "com.hollycast.emulator"
     ndkVersion = "29.0.14206865"
+=======
+    namespace = "com.flycast.emulator"
+    ndkVersion = "30.0.16248370"
+>>>>>>> flycast/dev
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
+<<<<<<< HEAD
         applicationId = "com.hollycast.emulator"
         minSdk = 24
         targetSdk = 36
         versionCode = 10
+=======
+        applicationId = "com.flycast.emulator"
+        minSdk = 21
+        targetSdk = 37
+        versionCode = 8
+>>>>>>> flycast/dev
         versionName = gitVersionName()
         vectorDrawables.useSupportLibrary = true
 

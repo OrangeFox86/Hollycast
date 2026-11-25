@@ -2,6 +2,7 @@
 <!-- Portions Copyright 2026 The Hollycast Authors -->
 <resources>
     <string name="OK">OK</string>
+<<<<<<< HEAD
     <string name="storage_error">Storage Error</string>
     <string name="folder_permissions">Can\'t get permissions to access this folder.\nPlease select a different one.</string>
     <string name="file_manager_not_found">File Manager not found</string>
@@ -15,4 +16,19 @@
     <string name="init_failed_message">Initialization failed. Please try again or reinstall.\n\nError: </string>
     <string name="exit">Exit</string>
     <string name="copying">Copying</string>
+=======
+    <string name="storage_error">Speicherfehler</string>
+    <string name="folder_permissions">Zugriffsberechtigung für diesen Ordner konnte nicht eingeholt werden.\nBitte wähle einen anderen Ordner.</string>
+    <string name="file_manager_not_found">Dateimanager nicht gefunden</string>
+    <string name="no_file_manager_android10">Auf deinem Gerät wurde kein geeigneter Dateimanager gefunden.\nBitte installiere einen mit dem Storage Access Framework kompatiblen Dateimanager</string>
+    <string name="no_file_manager_android9">Auf deinem Gerät wurde kein geeigneter Dateimanager gefunden.\nBitte installiere einen Dateimanager oder deaktiviere in den allgemeinen Einstellungen \'SAF-Dateiauswahl verwenden\'</string>
+    <string name="select_an_export_folder">Exportordner auswählen</string>
+    <string name="exporting_home_folder">Home-Ordner wird exportiert</string>
+    <string name="select_an_import_folder">Importordner auswählen</string>
+    <string name="importing_home_folder">Home-Ordner wird importiert</string>
+    <string name="flycast_error">Flycast-Fehler</string>
+    <string name="init_failed_message">Initialisierung fehlgeschlagen. Bitte versuche es erneut oder installiere die App neu.\n\nFehler: </string>
+    <string name="exit">Beenden</string>
+    <string name="copying">Wird kopiert</string>
+>>>>>>> flycast/dev
 </resources>

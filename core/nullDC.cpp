@@ -21,6 +21,7 @@
 #include "oslib/i18n.h"
 #include "input/maplelinkregistry.h"
 #include "input/maplelink.h"
+#include "achievements/achievements.h"
 #ifdef TARGET_UWP
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.Foundation.h>
@@ -80,11 +81,6 @@ int flycast_init(int argc, char* argv[])
 	settings.aica.muteAudio = true;
 #endif
 	try {
-		if (!addrspace::reserve())
-		{
-			ERROR_LOG(VMEM, "Failed to alloc mem");
-			return -1;
-		}
 		config::parseCommandLine(argc, argv);
 		if (config::loadInt("naomi", "BoardId") != 0)
 		{
@@ -131,6 +127,7 @@ int flycast_init(int argc, char* argv[])
 #ifndef __ANDROID__
 void dc_exit()
 {
+	gui_cancel_load();
 	try {
 		emu.unloadGame();
 	} catch (...) { }
@@ -171,10 +168,11 @@ void SaveSettings()
 
 void flycast_term()
 {
+	achievements::term();
 	gui_cancel_load();
 	SaveSettings();
 	lua::term();
-	emu.term();
+	emu.unloadGame();
 	os_DestroyWindow();
 	gui_term();
 	os_TermInput();
