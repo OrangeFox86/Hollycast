@@ -223,6 +223,10 @@ namespace vmufs
     // begin class FileSystem
     u8* FileSystem::GetBlock(u16 blockID)
     {
+        // Do not read the block, if caller hasn't indicated they're ready to observe the new version.
+        if (reconnectVersion != vmuDevice->reconnect_version)
+            return nullptr;
+
         verify(blockID < vmufs::BlocksCount);
         auto it = flashBlocks.find(blockID);
         if (it != flashBlocks.end())
@@ -284,14 +288,18 @@ namespace vmufs
         return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
     }
 
-    bool FileSystem::IsExternalDeviceDisconnected()
+    // TODO2: most likely, this should send a dma and simply ask if the device has the Storage function
+    bool FileSystem::IsStorageDeviceConnected() { return vmuDevice->physicalLinkStatus(); }
+
+    bool FileSystem::UpdateReconnectVersion()
     {
-        // TODO2: we are missing the reconnect here and not clearing our own cache.
-        // Maybe we should get rid of our own caches here and assume the maple dev caching the expensive part (reading from external device) is good enough.
-        // One weird problem here is that if we *don't* have a gap where we treat it as temporarily disconnected, we can actually get inconsistent answers.
-        // Could we possibly insert a mechanism where, if things drop out mid frame, we can at least make all the other reads fail until the next frame starts?
-        // This would make weird races involving 'sendFilePath', selecting a file on the DP, etc. at least avoid some inconsistent state.
-		return !vmuDevice->linkStatus();
+        if (reconnectVersion != vmuDevice->reconnect_version)
+        {
+            reconnectVersion = vmuDevice->reconnect_version;
+            return true;
+        }
+
+        return false;
     }
 
     void FileSystem::ClearCachedBlocks()

@@ -164,7 +164,7 @@ struct DppMapleLinkDevice : public MapleLinkDeviceBase<maple_base>
 	DppMapleLinkDevice(const MapleLink& link, u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~DppMapleLinkDevice();
 	void OnSetup() override;
-	bool linkStatus() override;
+	bool physicalLinkStatus() override;
 	void requestReconnect() override;
 	MapleDeviceType get_device_type() override;
 	static MapleDeviceType fnCodeToMapleDeviceType(u32 fnCodeMask);
@@ -1183,9 +1183,9 @@ void DppMapleLinkDevice::OnSetup()
 	maple_base::OnSetup();
 }
 
-bool DppMapleLinkDevice::linkStatus()
+bool DppMapleLinkDevice::physicalLinkStatus()
 {
-	if (!maple_base::linkStatus())
+	if (!maple_base::physicalLinkStatus())
 		return false;
 
 	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();

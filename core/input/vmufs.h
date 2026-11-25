@@ -48,6 +48,8 @@ namespace vmufs
     {
         //! Underlying maple device. We try to treat this as a black box which we talk to via 'RawDma()'.
         maple_base* const vmuDevice;
+        //! Most recently seen content version of the 'vmuDevice'.
+        u32 reconnectVersion = 0;
         //! Read blocks cached from the underlying device.
         std::map<u8, std::array<u8, vmufs::BlockSize>> flashBlocks;
     public:
@@ -66,7 +68,12 @@ namespace vmufs
         DirectoryTable GetDirectoryTable();
         std::optional<FATBlock> GetFATBlock();
         std::optional<RootBlock> GetRootBlock();
-        bool IsExternalDeviceDisconnected();
+        //! Indicates that the associated external storage device is connected.
+        bool IsStorageDeviceConnected();
+        //! Indicates this FileSystem is ready to observe new content changes.
+        // This step is required to prevent observing an inconsistent state when a remote VMU changes mid-frame
+        bool UpdateReconnectVersion();
+        //! Note: this invalidates all pointers received from associated APIs such as GetBlock.
         void ClearCachedBlocks();
         bool operator!=(FileSystem& other);
         std::string description();

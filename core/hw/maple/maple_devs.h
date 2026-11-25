@@ -183,6 +183,9 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	bool reconnect_requested;
 	// When >0, currently shown as disconnected, and the time will be when to reconnect
 	u64 reconnect_time;
+	// Incremented when a reconnect is requested.
+	// Allows device user to check whether a reconnect happened since the most recent time they queried the device.
+	u32 reconnect_version;
 
 	MapleConfigMap* config;
 
@@ -204,10 +207,11 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	virtual MapleDeviceType get_device_type() = 0;
 	virtual bool get_lightgun_pos() { return false; }
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
-	virtual bool linkStatus()
-	{
-		return true; // TODO2: delete temporary hack.
 
+	//! @return true iff this device is physically present (i.e., ignoring the simulated reconnect mechanism)
+	virtual bool physicalLinkStatus() { return true; }
+	bool logicalLinkStatus()
+	{
 		if (reconnect_requested) {
 			// Reconnect in 100 ms
 			reconnect_time = sh4_sched_now64() + (SH4_MAIN_CLOCK / 10);
@@ -228,9 +232,11 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 
 		return false;
 	}
+	bool linkStatus() { return logicalLinkStatus() && physicalLinkStatus(); }
 	virtual void requestReconnect()
 	{
 		reconnect_requested = true;
+		reconnect_version++;
 	}
 };
 

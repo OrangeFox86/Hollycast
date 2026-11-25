@@ -105,13 +105,6 @@ struct MapleLinkDevice
 	//! @return true iff this MapleLink is setup to accept this type
 	virtual bool deserializingFor(MapleDeviceType type) = 0;
 
-	//! @return true iff this device is physically present
-	// i.e. ignores the simulated reconnect mechanism in `maple_device.linkStatus()`
-	bool physicalLinkStatus()
-	{
-		return (link.isConnected() && (link.getFunctionCodesMask() != 0));
-	}
-
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice
 	//! @param[in] deser The deserializer to pull data from
@@ -163,12 +156,6 @@ struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 	//! Constructor
 	//! @param[in] link The link to set
 	explicit inline MapleLinkDeviceBase(const MapleLink& link) : MapleLinkDevice(link) {}
-
-	//! @return true iff this device is physically and logically present
-	bool linkStatus() override
-	{
-		return (MapleDeviceBase::linkStatus() && physicalLinkStatus());
-	}
 
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice, defined when the MapleDeviceBase is a maple_sega_vmu
@@ -241,10 +228,11 @@ struct MapleLinkVmu : MapleLinkDeviceBase<maple_sega_vmu>
 	//! Performs deserialization and writes deserialized LCD
 	void deserialize(Deserializer& deser) override;
 
-	//! @return true iff this device is currently present
-	bool linkStatus() override
+	//! @return true iff this device is physically present
+
+	bool physicalLinkStatus() override
 	{
-		if (!MapleLinkDeviceBase<maple_sega_vmu>::linkStatus())
+		if (!MapleLinkDeviceBase<maple_sega_vmu>::physicalLinkStatus())
 			return false;
 
 		if (link.storageEnabled())
@@ -290,7 +278,7 @@ struct MapleLinkStub : MapleLinkDeviceBase<maple_base>
 
 	inline MapleDeviceType get_device_type() override { return MapleDeviceType::MDT_None; }
 	inline u32 dma(u32 cmd) override { return MDRS_JVSNone; }
-	inline bool linkStatus() override { return false; }
+	inline bool physicalLinkStatus() override { return false; }
 	inline bool deserializingFor(MapleDeviceType type) override { return false; }
 	inline void serialize(Serializer& ser) const override
 	{

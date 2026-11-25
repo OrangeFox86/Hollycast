@@ -1218,6 +1218,10 @@ ImTextureID ImguiVmsFileTexture::getId()
 				if (vmsIconData.has_value())
 					iconData = *vmsIconData;
 			}
+			else
+			{
+				iconData.fill(0xAAAAAAAA); // No icon available, show a gray box instead.
+			}
 
 			texid = imguiDriver->updateTexture(name, (const u8 *)iconData.data(), 32, 32, false);
 			allFileNames->push_back(name);

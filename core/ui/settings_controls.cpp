@@ -1217,16 +1217,17 @@ public:
 			return;
 		}
 
-		// To manage an external VMU, it must either be physically connected or not using storage
-		// TODO2: manually test the ejected but not using physical memory case
-		// TODO2: DreamPotato Integrated is not getting populated until a game is launched
-		// TODO2: we need to invalidate what we have cached at the outer layer, if we observe an external vmu is ejected.
 		vmufs::FileSystem& fileSystem = *vmuFiles.front();
-		if (fileSystem.IsExternalDeviceDisconnected())
+		bool storageDisconnected = !fileSystem.IsStorageDeviceConnected();
+		bool reconnected = fileSystem.UpdateReconnectVersion();
+		if (storageDisconnected || reconnected)
 		{
 			hoveredEntry = std::nullopt;
 			fileSystem.ClearCachedBlocks();
+		}
 
+		if (storageDisconnected)
+		{
 			if (ImGui::Button(T("Done")))
 				Close();
 

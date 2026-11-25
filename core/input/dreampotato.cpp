@@ -198,7 +198,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		return MapleLinkVmu::dma(cmd);
 	}
 
-	bool linkStatus() override;
+	bool physicalLinkStatus() override;
 
 	void requestReconnect() override
 	{
@@ -459,12 +459,12 @@ public:
 	}
 };
 
-bool DreamPotatoVmu::linkStatus()
+bool DreamPotatoVmu::physicalLinkStatus()
 {
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
 	if (potato->portNeedsReconnect(link.port))
 		requestReconnect();
-	if (!MapleLinkVmu::linkStatus())
+	if (!MapleLinkVmu::physicalLinkStatus())
 		return false;
 
 	if (link.storageEnabled())
