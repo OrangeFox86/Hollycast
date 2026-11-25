@@ -1,4 +1,4 @@
-package com.flycast.emulator.vmu;
+package com.hollycast.emulator.vmu;
 
 import android.app.Presentation;
 import android.content.Context;

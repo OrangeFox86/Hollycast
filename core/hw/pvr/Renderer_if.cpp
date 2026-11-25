@@ -550,10 +550,6 @@ void Renderer::processGpuCleanupOperations()
 
 void rend_init()
 {
-<<<<<<< HEAD
-	FinishRender(true);
-=======
->>>>>>> flycast/dev
 	render_called = false;
 	pend_rend = false;
 	FrameCount = 1;

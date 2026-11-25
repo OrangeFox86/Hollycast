@@ -1,4 +1,4 @@
-package com.flycast.emulator.vmu;
+package com.hollycast.emulator.vmu;
 
 import android.app.Activity;
 import android.content.Context;
@@ -9,7 +9,7 @@ import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
-import com.flycast.emulator.emu.JNIdc;
+import com.hollycast.emulator.emu.JNIdc;
 
 /**
  * Shows the VMU screen of controller A on a secondary display (such as the

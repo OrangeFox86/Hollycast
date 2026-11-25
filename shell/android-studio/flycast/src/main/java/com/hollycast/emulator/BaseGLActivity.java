@@ -27,22 +27,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 
-<<<<<<< HEAD:shell/android-studio/flycast/src/main/java/com/hollycast/emulator/BaseGLActivity.java
 import com.hollycast.emulator.config.Config;
 import com.hollycast.emulator.emu.AudioBackend;
 import com.hollycast.emulator.emu.HttpClient;
 import com.hollycast.emulator.emu.JNIdc;
 import com.hollycast.emulator.periph.InputDeviceManager;
 import com.hollycast.emulator.periph.SipEmulator;
-=======
-import com.flycast.emulator.config.Config;
-import com.flycast.emulator.emu.AudioBackend;
-import com.flycast.emulator.emu.HttpClient;
-import com.flycast.emulator.emu.JNIdc;
-import com.flycast.emulator.periph.InputDeviceManager;
-import com.flycast.emulator.periph.SipEmulator;
-import com.flycast.emulator.vmu.SecondaryDisplayManager;
->>>>>>> flycast/dev:shell/android-studio/flycast/src/main/java/com/flycast/emulator/BaseGLActivity.java
+import com.hollycast.emulator.vmu.SecondaryDisplayManager;
 
 import java.io.File;
 import java.util.ArrayList;

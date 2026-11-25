@@ -1,4 +1,4 @@
-package com.flycast.emulator.vmu;
+package com.hollycast.emulator.vmu;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -9,7 +9,7 @@ import android.graphics.Rect;
 import android.view.Choreographer;
 import android.view.View;
 
-import com.flycast.emulator.emu.JNIdc;
+import com.hollycast.emulator.emu.JNIdc;
 
 /**
  * Draws the LCD screen of a VMU, scaled to the view according to the scaling mode.

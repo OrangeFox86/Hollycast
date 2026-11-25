@@ -54,17 +54,17 @@ void push_vmu_screen(int bus_id, int bus_port, u8* buffer)
 	vmuLastChanged[vmu_id] = getTimeMs();
 }
 
-<<<<<<< HEAD
 void reset_vmu_screen(int bus_id, int bus_port)
 {
 #ifndef LIBRETRO
 	int vmu_id = bus_id * 2 + bus_port;
 	if (vmu_id < 0 || vmu_id >= (int)std::size(vmu_lcd_data))
 		return;
+	std::lock_guard<std::mutex> _(vmuMutex);
 	vmu_lcd_status[vmu_id] = false;
 #endif
 }
-=======
+
 #ifndef LIBRETRO
 u64 getVmuScreen(int vmu_id, u32 *dst)
 {
@@ -77,7 +77,6 @@ u64 getVmuScreen(int vmu_id, u32 *dst)
 	return vmuLastChanged[vmu_id];
 }
 #endif
->>>>>>> flycast/dev
 
 static const int lightgunCrosshairData[16 * 16] =
 {

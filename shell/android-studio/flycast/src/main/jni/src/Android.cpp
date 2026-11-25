@@ -383,22 +383,19 @@ extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_guiSetIn
 	gui_set_insets(left, right, top, bottom);
 }
 
-<<<<<<< HEAD
-extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
-=======
-extern "C" JNIEXPORT jboolean JNICALL Java_com_flycast_emulator_emu_JNIdc_isVmuSecondaryScreenEnabled(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jboolean JNICALL Java_com_hollycast_emulator_emu_JNIdc_isVmuSecondaryScreenEnabled(JNIEnv *env, jobject obj)
 {
 	return config::VmuSecondaryScreen;
 }
 
-extern "C" JNIEXPORT jint JNICALL Java_com_flycast_emulator_emu_JNIdc_getVmuSecondaryScreenScaling(JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jint JNICALL Java_com_hollycast_emulator_emu_JNIdc_getVmuSecondaryScreenScaling(JNIEnv *env, jobject obj)
 {
 	return config::VmuSecondaryScreenScaling;
 }
 
 // Copies the screen of the given VMU into dst as Android ARGB pixels (48x32).
 // Returns the last change timestamp, or 0 if the VMU screen isn't active.
-extern "C" JNIEXPORT jlong JNICALL Java_com_flycast_emulator_emu_JNIdc_getVmuScreen(JNIEnv *env, jobject obj, jint vmuId, jintArray dst)
+extern "C" JNIEXPORT jlong JNICALL Java_com_hollycast_emulator_emu_JNIdc_getVmuScreen(JNIEnv *env, jobject obj, jint vmuId, jintArray dst)
 {
 	constexpr int PixelCount = 48 * 32;
 	if (dst == nullptr || env->GetArrayLength(dst) < PixelCount)
@@ -424,8 +421,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_flycast_emulator_emu_JNIdc_getVmuScr
 	return (jlong)stamp;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
->>>>>>> flycast/dev
+extern "C" JNIEXPORT void JNICALL Java_com_hollycast_emulator_emu_JNIdc_postRestore(JNIEnv *env, jobject obj, jobject jfilesPath)
 {
     if (g_jvm == NULL)
         env->GetJavaVM(&g_jvm);
