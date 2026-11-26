@@ -600,8 +600,7 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 {
 	if (ec) {
 		WARN_LOG(INPUT, "DreamPotato[%d] connection failed: %s", bus, ec.message().c_str());
-		assert(!sock.is_open());
-		connectionStatus = ConnectionStatus::Disconnected;
+		disconnect();
 		return;
 	}
 
