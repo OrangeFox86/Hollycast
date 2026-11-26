@@ -23,6 +23,7 @@
 #include "cfg/option.h"
 #include "hw/aica/aica_if.h"
 #include "imgread/common.h"
+#include "imgread/isofs.h"
 #include "hw/naomi/naomi_cart.h"
 #include "reios/reios.h"
 #include "hw/sh4/modules/mmu.h"
@@ -59,6 +60,17 @@
 
 settings_t settings;
 constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
+
+extern Disc *disc;
+
+// ISO9660 volume ID of the current disc
+static std::string getVolumeId()
+{
+	if (disc == nullptr)
+		return {};
+	IsoFs isofs(disc);
+	return isofs.getVolumeId();
+}
 
 static void loadSpecialSettings()
 {
@@ -244,6 +256,13 @@ static void loadSpecialSettings()
 		}
 		else
 			WARN_LOG(BOOT, "No region specified in IP.BIN");
+		// Broadcast left on Default follows the region, the way Region's own
+		// Default follows IP.BIN above: PAL for Europe, NTSC otherwise.
+		// fixUpDCFlash() skips the out-of-range Default value, which left the
+		// flash byte at the factory setting (NTSC) or at whatever the last
+		// explicit choice wrote.
+		if (config::Broadcast == 4)
+			config::Broadcast.override(config::Region == 2 ? 1 : 0);
 		if (config::Cable <= 1 && (!ip_meta.supportsVGA()
 				|| prod_id == "T-12504N"	// Caesar's Palace (NTSC)
 				|| prod_id == "12502D-50"))	// Caesar's Palace (PAL)
@@ -358,6 +377,11 @@ static void loadSpecialSettings()
 			NOTICE_LOG(BOOT, "Disabling Native Depth Interpolation");
 			config::NativeDepthInterpolation.override(false);
 		}
+		// The copy protection of these games relies on TLB misses raised by store queue writes.
+		settings.content.fullMmu = prod_id == "T65181N"		// Ghost Blade, Pier Solar and the Great Architects
+				|| prod_id == "GANRYU";
+		if (settings.content.fullMmu)
+			NOTICE_LOG(BOOT, "Enabling full MMU");
 		// Per-pixel transparent layers
 		int layers = 0;
 		if (prod_id == "MK-51011"			// Time Stalkers (US)
@@ -425,6 +449,9 @@ static void loadSpecialSettings()
 				|| prod_id == "MK-5118450")	// Shenmue II (EU)
 				&& !memcmp(ip_meta.disk_num, "4/4  ", 5))
 			config::WidescreenGameHacks.override(false);
+		if (prod_id == "T-8113N"			// Ducati World (US)
+				|| prod_id == "T-8121D-50")	// Ducati World (EU)
+			config::VSync.override(false);
 	}
 	else if (settings.platform.isArcade())
 	{
@@ -462,25 +489,16 @@ static void loadSpecialSettings()
 	}
 }
 
-void Emulator::dc_reset(bool hard)
+void Emulator::softReset()
 {
-	if (hard)
-	{
-		NetworkHandshake::term();
-		memwatch::unprotect();
-		memwatch::reset();
-	}
-	sh4_sched_reset(hard);
-	pvr::reset(hard);
-	aica::reset(hard);
-	getSh4Executor()->Reset(true);
-	mem_Reset(hard);
+	pvr::reset();
+	aica::reset();
+	getSh4Executor()->Reset();
+	mem_Reset();
 }
 
 static void setPlatform(int platform)
 {
-	if (VRAM_SIZE != 0)
-		addrspace::unprotectVram(0, VRAM_SIZE);
 	elan::ERAM_SIZE = 0;
 	switch (platform)
 	{
@@ -528,23 +546,22 @@ static void setPlatform(int platform)
 	settings.platform.ram_mask = settings.platform.ram_size - 1;
 	settings.platform.vram_mask = settings.platform.vram_size - 1;
 	settings.platform.aram_mask = settings.platform.aram_size - 1;
-	addrspace::initMappings();
 }
 
-void Emulator::init()
+void Emulator::init(int platform)
 {
 	if (state != Uninitialized)
-	{
-		verify(state == Init);
 		return;
-	}
-	// Default platform
-	setPlatform(DC_PLATFORM_DREAMCAST);
 
+	addrspace::reserve();
+	setPlatform(platform);
+	addrspace::initMappings();
+	sh4_sched_init();
 	libGDR_init();
 	pvr::init();
 	aica::init();
 	mem_Init();
+	mem_map_default();
 	reios_init();
 
 	// the recompiler may start generating code at this point and needs a fully configured machine
@@ -604,7 +621,6 @@ int getGamePlatform(const std::string& filename)
 
 void Emulator::loadGame(const char *path, LoadProgress *progress)
 {
-	init();
 	try {
 		DEBUG_LOG(BOOT, "Loading game %s", path == nullptr ? "(nil)" : path);
 
@@ -628,13 +644,11 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 			settings.content.path.clear();
 			settings.content.fileName.clear();
 		}
-
-		setPlatform(getGamePlatform(settings.content.fileName));
-		mem_map_default();
-
 		config::Settings::instance().reset();
 		config::Settings::instance().load(false);
-		dc_reset(true);
+
+		init(getGamePlatform(settings.content.fileName));
+
 		memset(&settings.network.md5, 0, sizeof(settings.network.md5));
 
 		if (settings.platform.isConsole())
@@ -771,7 +785,7 @@ void Emulator::runInternal()
 				if (resetRequested)
 				{
 					nvmem::saveFiles();
-					dc_reset(false);
+					softReset();
 					if (!restartCpu())
 						resetRequested = false;
 				}
@@ -795,11 +809,9 @@ void Emulator::unloadGame()
 				&& !settings.naomi.multiboard && !config::GGPOEnable && !naomiNetworkSupported())
 			gui_saveState(false);
 #endif
-		try {
-			dc_reset(true);
-		} catch (const FlycastException& e) {
-			ERROR_LOG(COMMON, "%s", e.what());
-		}
+		NetworkHandshake::term();
+
+		EventManager::event(Event::Terminate);
 		// Flush the VMU files to disk
 		mcfg_DestroyDevices(true);
 		config::Settings::instance().reset();
@@ -808,13 +820,12 @@ void Emulator::unloadGame()
 		settings.platform.system = DC_PLATFORM_DREAMCAST;
 		custom_texture.terminate();
 		state = Init;
-		EventManager::event(Event::Terminate);
 	}
+	term();
 }
 
 void Emulator::term()
 {
-	unloadGame();
 	if (state == Init)
 	{
 		debugger::term();
@@ -837,10 +848,11 @@ void Emulator::term()
 		mem_Term();
 		libGDR_term();
 		ice::term();
+		sh4_sched_term();
+		addrspace::release();
 
-		state = Terminated;
+		state = Uninitialized;
 	}
-	addrspace::release();
 }
 
 void Emulator::stop()
@@ -899,6 +911,14 @@ void loadGameSpecificSettings()
 		settings.content.gameId = trim_trailing_ws(std::string(ip_meta.product_number, sizeof(ip_meta.product_number)));
 		// in case there is a null character followed by garbage, which happens
 		settings.content.gameId = settings.content.gameId.c_str();
+		// generic UID so use the ISO volume id instead
+		if (settings.content.gameId == "T0000"
+				|| (settings.content.gameId == "T0000M" && strncmp(ip_meta.software_name, "TNN MOTORSPORTS HARDCORE HEAT", 29) != 0))
+		{
+			std::string volumeId = getVolumeId();
+			if (volumeId != "CDROM" && volumeId != "ISO")
+				settings.content.gameId = volumeId;
+		}
 
 		if (settings.content.gameId.empty())
 			return;
@@ -1145,7 +1165,7 @@ void Emulator::vblank()
 	EventManager::event(Event::VBlank);
 	runner.execTasks(sh4_sched_now64());
 	// Time out if a frame hasn't been rendered for 50 ms
-	if (sh4_sched_now64() - startTime <= 50_sh4ms)
+	if (!config::VblankPacing && sh4_sched_now64() - startTime <= 50_sh4ms)
 		return;
 	if (ggpo::active())
 		ggpo::endOfFrame();

@@ -368,8 +368,6 @@ void retro_init()
 	first_run = true;
 	memset(device_type, -1, sizeof(device_type));
 	
-	static bool emuInited;
-
 	// Logging
 	struct retro_log_callback log;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
@@ -404,9 +402,6 @@ void retro_init()
         set_user_data_dir(std::string(data_dir) + "/");
 #endif
 
-	if (!addrspace::reserve())
-		ERROR_LOG(VMEM, "Cannot reserve memory space");
-
 #if defined(__linux__) || defined(__FreeBSD__)
 	// SDL evdev keyboard driver installs a SIGSEGV signal handler by default, which replaces flycast's one.
 	// Make sure to avoid this if SDL is initialized after the core (which happens).
@@ -415,14 +410,6 @@ void retro_init()
 	os_InstallFaultHandler();
 	MapleConfigMap::UpdateVibration = updateVibration;
 	i18n::init();
-
-#if defined(__APPLE__) || (defined(__GNUC__) && defined(__linux__) && !defined(__ANDROID__))
-	if (!emuInited)
-#else
-	(void)emuInited;
-#endif
-		emu.init();
-	emuInited = true;
 }
 
 void retro_deinit()
@@ -437,12 +424,7 @@ void retro_deinit()
 		std::lock_guard<std::mutex> lock(mtx_serialization);
 	}
 	os_UninstallFaultHandler();
-	
-#if defined(__APPLE__) || (defined(__GNUC__) && defined(__linux__) && !defined(__ANDROID__))
-	addrspace::release();
-#else
-	emu.term();
-#endif
+
 	libretro_supports_bitmasks = false;
 	led_state_cb = NULL;
 	memset(retro_led_state, 0, sizeof(retro_led_state));
@@ -765,15 +747,18 @@ bool setAVInfo(retro_system_av_info& avinfo)
 	return true;
 }
 
-bool retro_refresh_av_info(double fps)
+void retro_setfps(double fps)
+{
+	if (fps > 0 && fps < 100)
+		fps_spg = fps;
+}
+
+static bool retro_refresh_av_info()
 {
 	retro_system_av_info avinfo;
 
 	if (first_run || game_data.empty())
 		return false;
-
-	if (fps > 0 && fps < 100)
-		fps_spg = fps;
 
 	if (setAVInfo(avinfo))
 	{
@@ -806,7 +791,7 @@ void retro_resize_renderer(int w, int h, float aspectRatio)
 	else
 	{
 		// Check if timing change is needed instead
-		if (retro_refresh_av_info(0))
+		if (retro_refresh_av_info())
 			return;
 
 		retro_game_geometry geometry;
@@ -875,8 +860,9 @@ static void update_variables(bool first_startup)
 		char str[100];
 		snprintf(str, sizeof(str), "%s", var.value);
 
-		char *pch = strtok(str, "x");
-		pch = strtok(NULL, "x");
+		char *saveptr;
+		char *pch = strtok_r(str, "x", &saveptr);
+		pch = strtok_r(NULL, "x", &saveptr);
 		if (pch != nullptr)
 			config::RenderResolution = strtoul(pch, NULL, 0);
 
@@ -2919,7 +2905,7 @@ static void updateLightgunCoordinates(u32 port)
 	lightgun_params[port].y = mo_y_abs[port];
 }
 
-void updateLightgunCoordinatesFromAnalogStick(int port)
+static void updateLightgunCoordinatesFromAnalogStick(int port)
 {
 	int x = input_cb(port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
 	mo_x_abs[port] = 320 + x * 320 / 32767;

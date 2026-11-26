@@ -34,6 +34,10 @@ static void warmUpSwitchExceptions()
 	}
 }
 
+namespace virtmem {
+void realDestroy();
+}
+
 int main(int argc, char *argv[])
 {
 	socketInitializeDefault();
@@ -70,6 +74,7 @@ int main(int argc, char *argv[])
 	}
 
 	flycast_term();
+	virtmem::realDestroy();
 
 	nifmExit();
 	socketExit();

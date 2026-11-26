@@ -84,7 +84,9 @@ inline static void JITWriteProtect(bool enabled) {
 
 #include "log/Log.h"
 
-#ifndef _MSC_VER
+#ifdef _MSC_VER
+#define strtok_r strtok_s
+#else
 #define stricmp strcasecmp
 #endif
 
@@ -176,6 +178,8 @@ struct settings_t
 		std::string fileName;
 		std::string title;
 		bool windowsCE;
+		// Enable the full MMU as soon as the game enables address translation
+		bool fullMmu;
 
 		void reset()
 		{
@@ -184,6 +188,7 @@ struct settings_t
 			fileName.clear();
 			title.clear();
 			windowsCE = false;
+			fullMmu = false;
 		}
 	} content;
 

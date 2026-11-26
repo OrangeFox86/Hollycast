@@ -10,17 +10,15 @@ fun gitVersionName(): String {
 
 android {
     namespace = "com.hollycast.emulator"
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "30.0.16248370"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.hollycast.emulator"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 10
         versionName = gitVersionName()
         vectorDrawables.useSupportLibrary = true

@@ -89,6 +89,8 @@ public:
 	virtual void compile(RuntimeBlockInfo* block, bool smc_checks, bool optimise) = 0;
 	// Signal the dynarec that the code buffer has been cleared. It should re-generate its main loop if needed.
 	virtual void reset() {}
+	// Release all resources.
+	virtual void term() {}
 	// Run the code.
 	// cntx points right after the Sh4RCB struct, which corresponds to the start of the 512 MB virtual address space
 	// (if available).
@@ -133,11 +135,11 @@ public:
 	}
 	void Run() override;
 	void ResetCache() override;
-	void Reset(bool hard) override;
+	void Reset() override;
 	void Init() override;
 	void Term() override;
 
-	void clear_temp_cache(bool full);
+	void clearTempCache(bool full);
 
 	static Sh4Recompiler *Instance;
 };

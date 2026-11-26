@@ -58,7 +58,8 @@ constexpr int RX_POLL_CYCLES = 5_sh4ms;
 static int rxDeliver(int tag, int cycles, int jitter, void *arg)
 {
 	u8 frame[MAX_ETH_FRAME_SIZE];
-	while (rtl8139_can_receive(rtl8139device))
+	// Drop packets if online and board can't receive
+	while (rtl8139_can_receive(rtl8139device) || (settings.network.online && !rtl8139_enabled(rtl8139device)))
 	{
 		const u32 size = net::modbba::sendEthFrame(frame);
 		if (size == 0)
@@ -84,8 +85,10 @@ void pci_set_irq(PCIDevice *pci_dev, int level)
 	setInterrupt();
 }
 
-static void bba_Init()
+void bba_Init()
 {
+	if (!config::EmulateBBA || !(settings.platform.isConsole() || settings.platform.isAtomiswave()))
+		return;
 	NICConf nicConf = { 0xc, 0xa, 0xf, 0xe, 0, 0 };
 	rtl8139device = rtl8139_init(&nicConf);
 	pci_rtl8139_realize(PCI_DEVICE(rtl8139device));
@@ -108,16 +111,6 @@ void bba_Term()
 	}
 	sh4_sched_unregister(rxSchedId);
 	rxSchedId = -1;
-}
-
-void bba_Reset(bool hard)
-{
-	if (hard)
-	{
-		bba_Term();
-		if (config::EmulateBBA && (settings.platform.isConsole() || settings.platform.isAtomiswave()))
-			bba_Init();
-	}
 }
 
 u32 bba_ReadMem(u32 addr, u32 sz)
@@ -251,6 +244,8 @@ void pci_dma_write(PCIDevice *dev, dma_addr_t addr, const void *buf, dma_addr_t 
 
 void bba_Serialize(Serializer& ser)
 {
+	if (rtl8139device == nullptr)
+		return;
 	ser << GAPS_regs;
 	ser << GAPS_ram;
 	ser << dmaOffset;
@@ -260,6 +255,8 @@ void bba_Serialize(Serializer& ser)
 
 void bba_Deserialize(Deserializer& deser)
 {
+	if (rtl8139device == nullptr)
+		return;
 	deser >> GAPS_regs;
 	deser >> GAPS_ram;
 	deser >> dmaOffset;

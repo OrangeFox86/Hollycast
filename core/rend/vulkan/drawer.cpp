@@ -49,7 +49,7 @@ void BaseDrawer::SetBaseScissor(const vk::Extent2D& viewport) {
 void BaseDrawer::scaleAndWriteFramebuffer(vk::CommandBuffer commandBuffer, FramebufferAttachment *finalFB)
 {
 	static const float scopeColor[4] = { 0.25f, 0.25f, 0.25f, 0.25f };
-	CommandBufferDebugScope _(commandBuffer, "scaleAndWriteFramebuffer", scopeColor);
+	CommandBufferDebugScope cmdBufDebug(commandBuffer, "scaleAndWriteFramebuffer", scopeColor);
 
 	u32 width = rendContext->globClip.x;
 	u32 height = rendContext->globClip.y;
@@ -102,7 +102,7 @@ void BaseDrawer::scaleAndWriteFramebuffer(vk::CommandBuffer commandBuffer, Frame
 			vk::WholeSize);
 	commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
 					vk::PipelineStageFlagBits::eHost, {}, nullptr, bufferMemoryBarrier, nullptr);
-
+	cmdBufDebug.end();
 	commandBuffer.end();
 	commandPool->EndFrameAndWait();
 
@@ -484,6 +484,8 @@ vk::CommandBuffer TextureDrawer::BeginRenderPass()
 		depthAttachment->Init(width, height, GetContext()->GetDepthFormat(),
 				vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransientAttachment,
 				"RTT DEPTH ATTACHMENT");
+		setImageLayout(commandBuffer, depthAttachment->GetImage(), GetContext()->GetDepthFormat(),
+				1, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 	}
 	vk::Image colorImage;
 	vk::ImageView colorImageView;
@@ -639,6 +641,8 @@ void ScreenDrawer::createAttachments(vk::CommandBuffer cmdBuffer)
 		depthAttachment->Init(viewport.width, viewport.height, GetContext()->GetDepthFormat(),
 				vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransientAttachment,
 				"DEPTH ATTACHMENT");
+		setImageLayout(cmdBuffer, depthAttachment->GetImage(), GetContext()->GetDepthFormat(),
+				1, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 	}
 
 	while (colorAttachments.size() < GetSwapChainSize())
@@ -778,42 +782,45 @@ bool ClassicRender::beforeDrawPoly(const vk::CommandBuffer& cmdBuffer, u32 listT
 void ScreenClassicRender::init(Drawer *drawer)
 {
 	ClassicRender::init(drawer);
-	std::array<vk::AttachmentDescription, 2> attachmentDescriptions = {
-			// Color attachment
-			vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vk::Format::eR8G8B8A8Unorm, vk::SampleCountFlagBits::e1,
-					vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,
-					vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-					config::EmulateFramebuffer ? vk::ImageLayout::eTransferSrcOptimal : vk::ImageLayout::eShaderReadOnlyOptimal,
-					config::EmulateFramebuffer ? vk::ImageLayout::eTransferSrcOptimal : vk::ImageLayout::eShaderReadOnlyOptimal),
-			// Depth attachment
-			vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vkCtx()->GetDepthFormat(), vk::SampleCountFlagBits::e1,
-					vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
-					vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
-					vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal),
-	};
-	vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-	vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+	if (!renderPassLoad)
+	{
+		std::array<vk::AttachmentDescription, 2> attachmentDescriptions = {
+				// Color attachment
+				vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vk::Format::eR8G8B8A8Unorm, vk::SampleCountFlagBits::e1,
+						vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,
+						vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+						config::EmulateFramebuffer ? vk::ImageLayout::eTransferSrcOptimal : vk::ImageLayout::eShaderReadOnlyOptimal,
+						config::EmulateFramebuffer ? vk::ImageLayout::eTransferSrcOptimal : vk::ImageLayout::eShaderReadOnlyOptimal),
+				// Depth attachment
+				vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), vkCtx()->GetDepthFormat(), vk::SampleCountFlagBits::e1,
+						vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
+						vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
+						vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal),
+		};
+		vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
+		vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
-	vk::SubpassDescription subpass(vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics,
-					nullptr,
-					colorReference,
-					nullptr,
-					&depthReference);
+		vk::SubpassDescription subpass(vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics,
+						nullptr,
+						colorReference,
+						nullptr,
+						&depthReference);
 
-	vk::SubpassDependency dependency(0, vk::SubpassExternal, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader,
-			vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,vk::DependencyFlagBits::eByRegion);
+		vk::SubpassDependency dependency(0, vk::SubpassExternal, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader,
+				vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,vk::DependencyFlagBits::eByRegion);
 
-	renderPassLoad = vkCtx()->GetDevice().createRenderPassUnique(vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(),
-			attachmentDescriptions,
-			subpass,
-			dependency));
+		renderPassLoad = vkCtx()->GetDevice().createRenderPassUnique(vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(),
+				attachmentDescriptions,
+				subpass,
+				dependency));
 
-	attachmentDescriptions[0].loadOp = vk::AttachmentLoadOp::eClear;
-	renderPassClear = vkCtx()->GetDevice().createRenderPassUnique(vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(),
-			attachmentDescriptions,
-			subpass,
-			dependency));
-	drawer->pipelineManager->setRenderPass(*renderPassClear);
+		attachmentDescriptions[0].loadOp = vk::AttachmentLoadOp::eClear;
+		renderPassClear = vkCtx()->GetDevice().createRenderPassUnique(vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(),
+				attachmentDescriptions,
+				subpass,
+				dependency));
+		drawer->pipelineManager->setRenderPass(*renderPassClear);
+	}
 }
 
 void ScreenClassicRender::term()
@@ -903,6 +910,8 @@ void DynamicRender::beginRender(vk::CommandBuffer cmdBuffer, int index)
 					| vk::ImageUsageFlagBits::eInputAttachment,
 				"2ND ACCUM");
 		drawer->secAccumView = secAccum->GetImageView();
+		setImageLayout(cmdBuffer, secAccum->GetImage(), vk::Format::eR8G8B8A8Unorm,
+				1, vk::ImageLayout::eUndefined, vk::ImageLayout::eRenderingLocalReadKHR);
 	}
 	vk::RenderingAttachmentInfoKHR colorAttachments[2] {};
 	colorAttachments[0].imageView = renderTarget;

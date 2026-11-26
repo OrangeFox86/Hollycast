@@ -170,11 +170,14 @@ void gui_settings_general()
 	}
 	UILanguages[] = {
 		{ T("System Default"), "" },
+		{ "Deutsch", "de" },
 		{ "English", "en" },
+		{ "Español", "es" },
 		{ "Français", "fr" },
 		{ "Magyar", "hu" },
 		{ "日本語", "ja" },
 		{ "Português (Brasil)", "pt_BR" },
+		{ "Română", "ro" },
 		{ "Svenska", "sv" },
 		{ "Türkçe", "tr" },
 		{ "简体中文", "zh_CN" },
@@ -410,7 +413,7 @@ void gui_Achievements()
 		DisabledScope _(!config::EnableAchievements);
 		ImGui::Indent();
 		OptionCheckbox(T("Show Achievement Popups"), config::ShowAchievementPopups,
-					   T("Shows achievement popups ingame."));
+					   T("Shows achievement popups in game."));
 		OptionCheckbox(T("Hardcore Mode"), config::AchievementsHardcoreMode,
 				T("Enable RetroAchievements hardcore mode. Using cheats and loading a state are not allowed in this mode."));
 		InputText(T("Username"), &config::AchievementsUserName.get(),
