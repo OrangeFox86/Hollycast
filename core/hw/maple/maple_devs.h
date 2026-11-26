@@ -205,6 +205,7 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	}
 
 	virtual MapleDeviceType get_device_type() = 0;
+	virtual std::string description() { return std::string(logical_port); }
 	virtual bool get_lightgun_pos() { return false; }
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
 
@@ -445,6 +446,7 @@ struct maple_sega_vmu: maple_base
 	void OnSetup() override;
 	~maple_sega_vmu() override;
 	u32 dma(u32 cmd) override;
+	std::string description() override;
 	const void *getData(size_t& size) const override;
 
 	void setLcd();

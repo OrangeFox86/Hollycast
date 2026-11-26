@@ -207,6 +207,11 @@ protected:
 			);
 		}
 	}
+
+	inline std::string description() override
+	{
+		return std::string(link.dreamlink->getProductName()) + " " + MapleDeviceBase::logical_port;
+	}
 };
 
 //! Basic maple link VMU device which relays only screen and timer data to the MapleLink

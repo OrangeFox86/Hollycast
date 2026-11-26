@@ -77,7 +77,7 @@ namespace vmufs
         //! Note: this invalidates all pointers received from associated APIs such as GetBlock.
         void ClearCachedBlocks();
         bool operator!=(FileSystem& other);
-        std::string description();
+        std::string Description();
     };
 
     enum class FileCopyProtection : u8

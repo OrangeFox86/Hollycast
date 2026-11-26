@@ -800,6 +800,12 @@ u32 maple_sega_vmu::dma(u32 cmd)
 	}
 }
 
+std::string maple_sega_vmu::description()
+{
+	std::string path = hostfs::getVmuPath(logical_port, true);
+	return hostfs::storage().getFileInfo(path).name;
+}
+
 const void *maple_sega_vmu::getData(size_t& size) const
 {
 	size = sizeof(flash_data);

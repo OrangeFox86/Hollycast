@@ -309,24 +309,7 @@ namespace vmufs
 
     bool FileSystem::operator!=(FileSystem& other) { return vmuDevice != other.vmuDevice; }
 
-	std::string FileSystem::description()
-	{
-        auto* mapleDev = dynamic_cast<MapleLinkDevice*>(vmuDevice);
-        if (mapleDev != nullptr)
-        {
-            std::string productName = mapleDev->link.dreamlink->getProductName();
-            // TODO2: checking the product name seems a bit hacky.
-            if (productName != "DreamPotato" || !config::DreamPotatoIntegratedMode)
-                return productName + " " + vmuDevice->logical_port;
-        }
-
-		std::string path = hostfs::getVmuPath(vmuDevice->logical_port, true);
-		auto slash = get_last_slash_pos(path);
-		if (slash != std::string::npos && slash < path.size() - 1)
-			path = path.substr(slash + 1);
-
-		return path;
-	}
+	std::string FileSystem::Description() { return vmuDevice->description(); }
     // end class FileSystem
 
     // begin class DirectoryTable::Iterator

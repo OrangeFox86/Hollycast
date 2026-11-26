@@ -1086,7 +1086,7 @@ private:
 		ImGui::PushFont(settingsTitleFont, 0.0f);
 		close = ImGui::Button(T("Done"));
 
-		ImGui::TextUnformatted(fileSystem.description().c_str());
+		ImGui::TextUnformatted(fileSystem.Description().c_str());
 		ImGui::PopFont();
 
 		RenderFreeSpaceMeter(fileSystem);

@@ -211,6 +211,14 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 		maple_base::requestReconnect();
 	}
+
+	std::string description() override
+	{
+		if (config::DreamPotatoIntegratedMode)
+			return maple_sega_vmu::description();
+
+		return MapleLinkVmu::description();
+	}
 };
 
 class DreamPotato : public BaseDreamLink
