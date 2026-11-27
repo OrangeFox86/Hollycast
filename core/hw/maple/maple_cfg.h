@@ -121,6 +121,7 @@ struct MapleInputState
 extern MapleInputState mapleInputState[4];
 
 void mcfg_CreateDevices();
+void mcfg_DestroyDevice(int bus, int port);
 void mcfg_DestroyDevices(bool full = true);
 void mcfg_SerializeDevices(Serializer& ser);
 void mcfg_DeserializeDevices(Deserializer& deser);

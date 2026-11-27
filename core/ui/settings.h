@@ -33,7 +33,7 @@ void gui_settings_video();
 void gui_settings_audio();
 void gui_settings_network();
 void gui_settings_about();
-void FinalizeMapleChanges(bool reconnect);
+void FinalizeMapleChanges();
 void reset_vmus();
 void error_popup();
 
