@@ -1086,7 +1086,10 @@ private:
 		ImGui::PushFont(settingsTitleFont, 0.0f);
 		close = ImGui::Button(T("Done"));
 
-		ImGui::TextUnformatted(fileSystem.Description().c_str());
+		std::string description = fileSystem.Description();
+		std::string shrunkDescription = middleEllipsis(description, ImGui::GetContentRegionAvail().x);
+		ImGui::TextUnformatted(shrunkDescription.c_str());
+		ImGui::SetItemTooltip("%s", description.c_str());
 		ImGui::PopFont();
 
 		RenderFreeSpaceMeter(fileSystem);
