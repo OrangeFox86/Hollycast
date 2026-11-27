@@ -242,6 +242,8 @@ namespace vmufs
 
         MapleMsg rxMsg;
         vmuDevice->RawDma((u32*)&msg, sizeof(msg), (u32*)&rxMsg);
+        // Note: we are sending the 'BlockRead' command, even if the device didn't say it has a storage function.
+        // In this case, we are expecting the read to simply fail.
         if (rxMsg.command != MDRS_DataTransfer)
             return nullptr;
 
@@ -288,7 +290,8 @@ namespace vmufs
         return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
     }
 
-    // TODO2: most likely, this should send a dma and simply ask if the device has the Storage function
+    // Note: we would normally prefer to RawDma() here.
+    // But, dma'ing to query attached devices, will run thru logicalLinkStatus(), which we don't want.
     bool FileSystem::IsStorageDeviceConnected() { return vmuDevice->physicalLinkStatus(); }
 
     bool FileSystem::UpdateReconnectVersion()
