@@ -297,19 +297,6 @@ public:
         Iterator begin();
         Iterator end();
 
-        std::vector<DirectoryEntry> GetFiles()
-        {
-            std::vector<DirectoryEntry> result;
-            for (auto entry : *this)
-            {
-                if (entry == std::nullopt)
-                    return std::vector<DirectoryEntry>{}; // Block read failed, just bail out entirely.
-
-                if (entry->GetFileType() != FileType::None)
-                    result.push_back(*entry);
-            }
-
-            return result;
-        };
+        std::vector<DirectoryEntry> GetFiles();
     };
 }
