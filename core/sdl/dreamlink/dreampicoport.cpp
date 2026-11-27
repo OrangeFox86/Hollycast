@@ -1366,13 +1366,17 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		if (isMemoryRead) {
 			success = (rxMsg.size >= 130 && rxMsg.command == MDRS_DataTransfer);
 			if (success) {
+				assert(virtualVmu != nullptr);
 				// Mirror read data to the virtual VMU
 				memcpy(&virtualVmu->flash_data[memoryBlock * 512], &rxMsg.data[8], 512);
 			}
 		} else {
 			success = (rxMsg.command == MDRS_DeviceReply);
 		}
-		virtualVmu->accessed_blocks[memoryBlock] = success;
+		assert(!success || virtualVmu != nullptr);
+		if (virtualVmu != nullptr) {
+			virtualVmu->accessed_blocks[memoryBlock] = success;
+		}
 	}
 
 	// If doing write operation, save time at this point
