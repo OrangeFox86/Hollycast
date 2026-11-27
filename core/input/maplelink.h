@@ -90,16 +90,6 @@ public:
 //! Virtual class which describes additional interfaces for a MapleLinkDevice
 struct MapleLinkDevice
 {
-	//! The linked device
-	MapleLink link;
-
-	//! Default constructor (deleted)
-	MapleLinkDevice() = delete;
-
-	//! Constructor
-	//! @param[in] link The link to set
-	explicit inline MapleLinkDevice(const MapleLink& link) : link(link) {}
-
 	//! This is called by the deserialization process to relay what deserialization virtual device type
 	//! @param[in] type The type that should be assumed for subsequent deserialize
 	//! @return true iff this MapleLink is setup to accept this type
@@ -150,12 +140,21 @@ template <
 >
 struct MapleLinkDeviceBase: public MapleDeviceBase, public MapleLinkDevice
 {
+	//! The linked device
+	MapleLink link;
+
 	//! Default constructor (deleted)
 	MapleLinkDeviceBase() = delete;
 
 	//! Constructor
 	//! @param[in] link The link to set
-	explicit inline MapleLinkDeviceBase(const MapleLink& link) : MapleLinkDevice(link) {}
+	explicit inline MapleLinkDeviceBase(const MapleLink& link) : link(link) {}
+
+	//! @return true iff this device is physically present
+	bool physicalLinkStatus() override
+	{
+		return (MapleDeviceBase::physicalLinkStatus() && link.isConnected() && (link.getFunctionCodesMask() != 0));
+	}
 
 protected:
 	//! Deserializes VMU data for a MapleLinkDevice, defined when the MapleDeviceBase is a maple_sega_vmu

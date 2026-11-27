@@ -290,8 +290,8 @@ namespace vmufs
         return block == nullptr ? std::nullopt : std::optional(RootBlock(block));
     }
 
-    // Note: we would normally prefer to RawDma() here.
-    // But, dma'ing to query attached devices, will run thru logicalLinkStatus(), which we don't want.
+    // Note: we would normally prefer to RawDma() here. We don't because dma'ing to query attached devices,
+    // will run thru logicalLinkStatus(), which would get stuck as disconnected, since the sh4 is not running.
     bool FileSystem::IsStorageDeviceConnected() { return vmuDevice->physicalLinkStatus(); }
 
     bool FileSystem::UpdateReconnectVersion()
