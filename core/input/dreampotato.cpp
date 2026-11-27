@@ -600,7 +600,7 @@ void DreamPotato::connectComplete(const asio::error_code& ec)
 {
 	if (ec) {
 		WARN_LOG(INPUT, "DreamPotato[%d] connection failed: %s", bus, ec.message().c_str());
-		disconnect();
+		connectionStatus = ConnectionStatus::Disconnected;
 		return;
 	}
 
@@ -647,7 +647,7 @@ bool DreamPotato::send(const MapleMsg& msg)
 	if (ec)
 	{
 		WARN_LOG(INPUT, "DreamPotato[%d] send failed: %s", bus, ec.message().c_str());
-		disconnect();
+		connectionStatus = ConnectionStatus::Disconnected;
 		return false;
 	}
 	lastMsg = getTimeMs();
@@ -661,7 +661,7 @@ bool DreamPotato::sendReceive(const MapleMsg& txMsg, MapleMsg& rxMsg)
 
 	if (auto ec = receiveMsg(rxMsg, sock, ioContext)) {
 		WARN_LOG(INPUT, "DreamPotato[%d] receive error: %s", bus, ec.message().c_str());
-		disconnect();
+		connectionStatus = ConnectionStatus::Disconnected;
 		return false;
 	}
 	return true;
