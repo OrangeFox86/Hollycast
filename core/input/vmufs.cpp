@@ -292,7 +292,7 @@ namespace vmufs
 
     // Note: we would normally prefer to RawDma() here. We don't because dma'ing to query attached devices,
     // will run thru logicalLinkStatus(), which would get stuck as disconnected if the sh4 is not running.
-    bool FileSystem::IsStorageDeviceConnected() { return vmuDevice->physicalLinkStatus(); }
+    bool FileSystem::IsDeviceLinked() { return vmuDevice->physicalLinkStatus(); }
 
     bool FileSystem::UpdateReconnectVersion()
     {

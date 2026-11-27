@@ -1222,15 +1222,15 @@ public:
 		}
 
 		vmufs::FileSystem& fileSystem = *vmuFiles.front();
-		bool storageDisconnected = !fileSystem.IsStorageDeviceConnected();
+		bool deviceDisconnected = !fileSystem.IsDeviceLinked();
 		bool reconnected = fileSystem.UpdateReconnectVersion();
-		if (storageDisconnected || reconnected)
+		if (deviceDisconnected || reconnected)
 		{
 			hoveredEntry = std::nullopt;
 			fileSystem.ClearCachedBlocks();
 		}
 
-		if (storageDisconnected)
+		if (deviceDisconnected)
 		{
 			if (ImGui::Button(T("Done")))
 				Close();

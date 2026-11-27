@@ -69,8 +69,8 @@ namespace vmufs
         DirectoryTable GetDirectoryTable();
         std::optional<FATBlock> GetFATBlock();
         std::optional<RootBlock> GetRootBlock();
-        //! Indicates that the associated external storage device is connected.
-        bool IsStorageDeviceConnected();
+        //! Indicates the vmuDevice is physically present.
+        bool IsDeviceLinked();
         //! Indicates this FileSystem is ready to observe new content changes.
         // This step is required to prevent observing an inconsistent state when a remote VMU changes mid-frame
         bool UpdateReconnectVersion();
