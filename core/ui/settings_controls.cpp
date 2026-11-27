@@ -1013,6 +1013,9 @@ private:
 
 	// List of VMU files currently available in the popup.
 	// Use vector of unique_ptrs, rather than just vector of `FileSystem`s, to reduce guesswork around how long `FileSystem*`s remain valid.
+	//
+	// TODO2: perhaps either make more VMUs available here, or, revert to single instance for now.
+	// It's unclear what the story for selecting alternate VMU file looks like (do we put new/delete/... funcs? Can you stick vmu_save_B2.bin into slot A1? Do we need a "simple file backed" flavor of FileSystem? etc)
 	std::vector<std::unique_ptr<vmufs::FileSystem>> vmuFiles;
 
 	void Close()
