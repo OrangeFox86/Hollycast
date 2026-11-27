@@ -1193,6 +1193,7 @@ public:
 		// https://github.com/OrangeFox86/Hollycast/issues/121
 		// We should detect any mismatch between a pre-existing maple device, and the device type specified in settings,
 		// and re-create devices accordingly.
+		// TODO2: This call might run before sh4 is initialized and dereference a null 'p_sh4rcb'. But what should be done instead?
 		FinalizeMapleChanges(true);
 		mcfg_CreateDevices();
 
