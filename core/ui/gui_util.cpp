@@ -1211,9 +1211,19 @@ ImTextureID ImguiVmsFileTexture::getId()
 	{
 		try {
 			// https://github.com/OrangeFox86/Hollycast/issues/111: adjust 'ReadIconData' so it uses 'iconIndex'
-			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData{};
+			bool success = false;
+			std::array<u32, vmufs::VMSHeader::IconSizePixels> iconData;
 			if (vmsHeader.GetIconCount() > iconIndex)
-				iconData = vmsHeader.ReadIconData();
+			{
+				auto vmsIconData = vmsHeader.ReadIconData();
+				if (vmsIconData.has_value())
+				{
+					iconData = *vmsIconData;
+					success = true;
+				}
+			}
+			if (!success)
+				iconData.fill(0xAAAAAAAA); // No icon available, show a gray box instead.
 
 			texid = imguiDriver->updateTexture(name, (const u8 *)iconData.data(), 32, 32, false);
 			allFileNames->push_back(name);

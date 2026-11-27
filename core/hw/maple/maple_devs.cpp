@@ -52,6 +52,7 @@ void maple_device::Setup(u32 bus, u32 port, int playerNum, bool install)
 	player_num = playerNum == -1 ? bus_id : playerNum;
 	reconnect_requested = false;
 	reconnect_time = 0;
+	reconnect_version = 0;
 
 	config = new MapleConfigMap(this);
 	OnSetup();
@@ -799,19 +800,16 @@ u32 maple_sega_vmu::dma(u32 cmd)
 	}
 }
 
+std::string maple_sega_vmu::description()
+{
+	std::string path = hostfs::getVmuPath(logical_port, true);
+	return hostfs::storage().getFileInfo(path).name;
+}
+
 const void *maple_sega_vmu::getData(size_t& size) const
 {
 	size = sizeof(flash_data);
 	return flash_data;
-}
-
-u8* maple_sega_vmu::GetBlock(u16 blockID)
-{
-	// https://github.com/OrangeFox86/Hollycast/issues/111
-	// We could consider returning nullptr and having caller display an error, in case a corrupt VMU file is used
-	verify(blockID < vmufs::BlocksCount);
-	// Base implementation assumes flash_data is already populated
-	return &flash_data[blockID * BlockSize];
 }
 
 void maple_sega_vmu::setLcd()

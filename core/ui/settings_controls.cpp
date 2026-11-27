@@ -1008,7 +1008,15 @@ class VmuManagerPopup
 private:
 	// List of file names found on the VMU(s). Used to clean up associated resources on close.
 	std::vector<std::string> allFileNames;
+	// Currently hovered VMS file. Note: must be reset to nullopt if the associated FileSystem block is freed.
 	std::optional<vmufs::DirectoryEntry> hoveredEntry;
+
+	// List of VMU files currently available in the popup.
+	// Use vector of unique_ptrs, rather than just vector of `FileSystem`s, to reduce guesswork around how long `FileSystem*`s remain valid.
+	//
+	// TODO2: perhaps either make more VMUs available here, or, revert to single instance for now.
+	// It's unclear what the story for selecting alternate VMU file looks like (do we put new/delete/... funcs? Can you stick vmu_save_B2.bin into slot A1? Do we need a "simple file backed" flavor of FileSystem? etc)
+	std::vector<std::unique_ptr<vmufs::FileSystem>> vmuFiles;
 
 	void Close()
 	{
@@ -1019,10 +1027,18 @@ private:
 		}
 		allFileNames.clear();
 		hoveredEntry = std::nullopt;
+		vmuFiles.clear();
 	}
 
-	void RenderFreeSpaceMeter(vmufs::FileSystem fileSystem)
+	void RenderFreeSpaceMeter(vmufs::FileSystem& fileSystem)
 	{
+		auto fatBlock = fileSystem.GetFATBlock();
+		if (!fatBlock.has_value())
+		{
+			ImGui::TextUnformatted(T("Failed to read VMU"));
+			return;
+		}
+
 		constexpr ImU32 usedSpaceColor = 0xff4924a4;
 		// https://github.com/OrangeFox86/Hollycast/issues/111
 		// This color is based on the DC BIOS, but, hard to read without a more contrasting font.
@@ -1037,7 +1053,7 @@ private:
 			ImGui::GetColorU32(ImGuiCol_FrameBg),
 			ImGui::GetStyle().FrameRounding);
 
-		int freeBlocks = fileSystem.GetFATBlock().CountUserFreeBlocks();
+		int freeBlocks = fatBlock->CountUserFreeBlocks();
 		float usedProportion = (float)(vmufs::UserRegionSizeBlocks - freeBlocks) / vmufs::UserRegionSizeBlocks;
 		ImVec2 usedSize = ImVec2(fullSize.x * usedProportion, fullSize.y);
 
@@ -1064,7 +1080,7 @@ private:
 		ImGui::PopFont();
 	}
 
-	void RenderVmuList(vmufs::FileSystem fileSystem, bool& close)
+	void RenderVmuList(vmufs::FileSystem& fileSystem, bool& close)
 	{
 		// https://github.com/OrangeFox86/Hollycast/issues/111
 		// Eventually this section will contain a list of available VMU files.
@@ -1073,7 +1089,10 @@ private:
 		ImGui::PushFont(settingsTitleFont, 0.0f);
 		close = ImGui::Button(T("Done"));
 
-		ImGui::TextUnformatted(fileSystem.description().c_str());
+		std::string description = fileSystem.Description();
+		std::string shrunkDescription = middleEllipsis(description, ImGui::GetContentRegionAvail().x);
+		ImGui::TextUnformatted(shrunkDescription.c_str());
+		ImGui::SetItemTooltip("%s", description.c_str());
 		ImGui::PopFont();
 
 		RenderFreeSpaceMeter(fileSystem);
@@ -1113,15 +1132,16 @@ private:
 		ImGui::EndGroup();
 	}
 
-	void RenderVmsFileList(vmufs::FileSystem fileSystem)
+	void RenderVmsFileList(vmufs::FileSystem& fileSystem)
 	{
 		vmufs::DirectoryTable table = fileSystem.GetDirectoryTable();
 
 		bool first = true;
-		for (vmufs::DirectoryEntry entry : table)
+		for (vmufs::DirectoryEntry entry : table.GetFiles())
 		{
-			if (entry.GetFileType() == vmufs::FileType::None)
-				continue;
+			std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(entry);
+			if (!header.has_value())
+				break; // Failed to read, bail out.
 
 			if (!first)
 			{
@@ -1131,27 +1151,28 @@ private:
 					ImGui::NewLine();
 			}
 			first = false;
-
-			vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
-			RenderVmsFileIcon(entry, header);
+			RenderVmsFileIcon(entry, *header);
 		}
 	}
 
-	void RenderHoveredVmsFileDescription(vmufs::FileSystem fileSystem)
+	void RenderHoveredVmsFileDescription(vmufs::FileSystem& fileSystem)
 	{
 		if (!hoveredEntry.has_value())
 			return;
 
 		vmufs::DirectoryEntry entry = hoveredEntry.value();
-		vmufs::VMSHeader header = fileSystem.GetVMSHeader(entry);
+		std::optional<vmufs::VMSHeader> header = fileSystem.GetVMSHeader(entry);
+		if (!header.has_value())
+			return;
+
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::TextUnformatted(header.GetDreamcastDescription().c_str());
+		ImGui::TextUnformatted(header->GetDreamcastDescription().c_str());
 		ImGui::SameLine();
 		ImGui::TextUnformatted(entry.GetFileTypeString().c_str());
 
 		ImGui::TextUnformatted(entry.GetFilename().c_str());
 		ImGui::SameLine();
-		ImGui::TextUnformatted(header.GetVMUDescription().c_str());
+		ImGui::TextUnformatted(header->GetVMUDescription().c_str());
 
 		vmufs::BCDDate dateBcd = entry.GetDate();
 		// MM/DD/YYYY HH:MM
@@ -1168,8 +1189,20 @@ private:
 	}
 
 public:
-	void Open()
+	void Open(int bus, int port)
 	{
+		// We should only get here if using a Sega VMU, or DreamPotato, or DreamPicoPort
+		verify(config::MapleExpansionDevices[bus][port] == MDT_SegaVMU || config::DreamLinkSelect[bus][port]);
+		// https://github.com/OrangeFox86/Hollycast/issues/121
+		// We should detect any mismatch between a pre-existing maple device, and the device type specified in settings,
+		// and re-create devices accordingly.
+		FinalizeMapleChanges();
+		mcfg_CreateDevices();
+
+		maple_base* dev = dynamic_cast<maple_base*>(MapleDevices[bus][port].get());
+		if (dev != nullptr)
+			vmuFiles.push_back(std::make_unique<vmufs::FileSystem>(dev));
+
 		ImGui::OpenPopup(T("VMU Manager"));
 	}
 
@@ -1181,26 +1214,7 @@ public:
 		if (!ImGui::BeginPopupModal(T("VMU Manager")))
 			return;
 
-		auto configDeviceType = config::MapleExpansionDevices[bus][port];
-		verify(configDeviceType == MDT_SegaVMU);
-
-		std::shared_ptr<maple_device>& deviceSharedPtr = MapleDevices[bus][port];
-		if (deviceSharedPtr != nullptr && deviceSharedPtr->get_device_type() != MDT_SegaVMU)
-		{
-			// Devices are out of sync with config, perhaps due to loading a save state which had different settings.
-			// Need to delete and re-create.
-			// https://github.com/OrangeFox86/Hollycast/issues/111
-			// Once DreamLink is supported with this UI, then, this check should also look for DreamLink related state
-			// such as 'config::DreamLinkSelect', and potentially downcast and further inspect the vmu device
-			deviceSharedPtr = nullptr;
-		}
-		if (deviceSharedPtr == nullptr)
-		{
-			mcfg_CreateDevices();
-		}
-
-		maple_sega_vmu* dev = dynamic_cast<maple_sega_vmu*>(deviceSharedPtr.get());
-		if (dev == nullptr)
+		if (vmuFiles.empty())
 		{
 			if (ImGui::Button(T("Done")))
 				Close();
@@ -1210,7 +1224,25 @@ public:
 			return;
 		}
 
-		vmufs::FileSystem fileSystem(dev);
+		vmufs::FileSystem& fileSystem = *vmuFiles.front();
+		bool deviceDisconnected = !fileSystem.IsDeviceLinked();
+		bool reconnected = fileSystem.UpdateReconnectVersion();
+		if (deviceDisconnected || reconnected)
+		{
+			hoveredEntry = std::nullopt;
+			fileSystem.ClearCachedBlocks();
+		}
+
+		if (deviceDisconnected)
+		{
+			if (ImGui::Button(T("Done")))
+				Close();
+
+			ImGui::TextUnformatted(T("Please connect the external VMU to continue."));
+			ImGui::EndPopup();
+			return;
+		}
+
 		bool close = false;
 		if (ImGui::BeginChild("vmuList", ScaledVec2(150, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling))
 		{
@@ -1549,11 +1581,11 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						ImGui::EndCombo();
 					}
 					static VmuManagerPopup vmuManagerPopup;
-					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato)
+					if (subtype == MDT_SegaVMU || subtype == MDT_DreamPotato || subtype == MDT_DreamLink)
 					{
 						ImGui::SameLine();
 						if (ImGui::Button(ICON_FA_ELLIPSIS))
-							vmuManagerPopup.Open();
+							vmuManagerPopup.Open(bus, port);
 					}
 					vmuManagerPopup.Render(bus, port); // ID stack ensures that Open() only affects the Render() of the same device ID
 				}

@@ -193,10 +193,12 @@ struct DreamPotatoVmu : public MapleLinkVmu
 				}
 			}
 		}
+
+		DEBUG_LOG(INPUT, "DreamPotato[%s] DMA block[%d]", logical_port, inMsg->data[7]);
 		return MapleLinkVmu::dma(cmd);
 	}
 
-	bool linkStatus() override;
+	bool physicalLinkStatus() override;
 
 	void requestReconnect() override
 	{
@@ -208,6 +210,15 @@ struct DreamPotatoVmu : public MapleLinkVmu
 		}
 
 		maple_base::requestReconnect();
+	}
+
+	std::string description() override
+	{
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+		if (config::DreamPotatoIntegratedMode)
+			return maple_sega_vmu::description();
+#endif
+		return MapleLinkVmu::description();
 	}
 };
 
@@ -353,6 +364,7 @@ public:
 			WARN_LOG(INPUT, "DreamPotato[%d] sendFilePath error: %s", bus, ec.message().c_str());
 			disconnect();
 		}
+		DEBUG_LOG(INPUT, "DreamPotato[%s] sendFilePath: %s", logical_port.c_str(), path.c_str());
 	}
 #endif
 
@@ -456,12 +468,12 @@ public:
 	}
 };
 
-bool DreamPotatoVmu::linkStatus()
+bool DreamPotatoVmu::physicalLinkStatus()
 {
 	auto* potato = dynamic_cast<DreamPotato*>(link.dreamlink.get());
 	if (potato->portNeedsReconnect(link.port))
 		requestReconnect();
-	if (!MapleLinkVmu::linkStatus())
+	if (!MapleLinkVmu::physicalLinkStatus())
 		return false;
 
 	if (link.storageEnabled())

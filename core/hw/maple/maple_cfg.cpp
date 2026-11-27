@@ -594,6 +594,20 @@ void mcfg_CreateDevices()
 	vmuDigest();
 }
 
+void mcfg_DestroyDevice(int bus, int port)
+{
+	if (port == 5)
+	{
+		// main device
+		for (int i = 0; i <= 5; i++)
+			MapleDevices[bus][i].reset();
+	}
+	else {
+		// sub device
+		MapleDevices[bus][port].reset();
+	}
+}
+
 // Don't destroy the JVS MIE or DreamLink if full is false
 void mcfg_DestroyDevices(bool full)
 {

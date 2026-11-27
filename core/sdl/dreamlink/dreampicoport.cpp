@@ -164,7 +164,7 @@ struct DppMapleLinkDevice : public MapleLinkDeviceBase<maple_base>
 	DppMapleLinkDevice(const MapleLink& link, u32 supportedFns = std::numeric_limits<u32>::max());
 	virtual ~DppMapleLinkDevice();
 	void OnSetup() override;
-	bool linkStatus() override;
+	bool physicalLinkStatus() override;
 	void requestReconnect() override;
 	MapleDeviceType get_device_type() override;
 	static MapleDeviceType fnCodeToMapleDeviceType(u32 fnCodeMask);
@@ -1183,9 +1183,9 @@ void DppMapleLinkDevice::OnSetup()
 	maple_base::OnSetup();
 }
 
-bool DppMapleLinkDevice::linkStatus()
+bool DppMapleLinkDevice::physicalLinkStatus()
 {
-	if (!maple_base::linkStatus())
+	if (!maple_base::physicalLinkStatus())
 		return false;
 
 	std::shared_ptr<DreamPicoPort> linkedDpp = linkedDppWptr.lock();
@@ -1366,13 +1366,18 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		if (isMemoryRead) {
 			success = (rxMsg.size >= 130 && rxMsg.command == MDRS_DataTransfer);
 			if (success) {
+				assert(virtualVmu != nullptr);
 				// Mirror read data to the virtual VMU
 				memcpy(&virtualVmu->flash_data[memoryBlock * 512], &rxMsg.data[8], 512);
 			}
 		} else {
 			success = (rxMsg.command == MDRS_DeviceReply);
 		}
-		virtualVmu->accessed_blocks[memoryBlock] = success;
+		// A memory command is expected to fail if the virtualVmu is not present
+		assert(!success || virtualVmu != nullptr);
+		if (virtualVmu != nullptr) {
+			virtualVmu->accessed_blocks[memoryBlock] = success;
+		}
 	}
 
 	// If doing write operation, save time at this point

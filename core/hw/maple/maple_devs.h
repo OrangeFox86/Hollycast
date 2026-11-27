@@ -183,6 +183,9 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	bool reconnect_requested;
 	// When >0, currently shown as disconnected, and the time will be when to reconnect
 	u64 reconnect_time;
+	// Incremented when a reconnect is requested.
+	// Allows device user to check whether a reconnect happened since the most recent time they queried the device.
+	u32 reconnect_version;
 
 	MapleConfigMap* config;
 
@@ -202,9 +205,13 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 	}
 
 	virtual MapleDeviceType get_device_type() = 0;
+	virtual std::string description() { return std::string(logical_port); }
 	virtual bool get_lightgun_pos() { return false; }
 	virtual const void *getData(size_t& size) const { size = 0; return nullptr; }
-	virtual bool linkStatus()
+
+	//! @return true iff this device is physically present (i.e., ignoring the simulated reconnect mechanism)
+	virtual bool physicalLinkStatus() { return true; }
+	bool logicalLinkStatus()
 	{
 		if (reconnect_requested) {
 			// Reconnect in 100 ms
@@ -226,9 +233,11 @@ struct maple_device : public std::enable_shared_from_this<maple_device>
 
 		return false;
 	}
+	bool linkStatus() { return logicalLinkStatus() && physicalLinkStatus(); }
 	virtual void requestReconnect()
 	{
 		reconnect_requested = true;
+		reconnect_version++;
 	}
 };
 
@@ -437,10 +446,8 @@ struct maple_sega_vmu: maple_base
 	void OnSetup() override;
 	~maple_sega_vmu() override;
 	u32 dma(u32 cmd) override;
+	std::string description() override;
 	const void *getData(size_t& size) const override;
-
-	static constexpr int BlockSize = 0x200;
-	virtual u8* GetBlock(u16 blockID);
 
 	void setLcd();
 };
