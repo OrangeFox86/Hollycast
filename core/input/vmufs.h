@@ -52,7 +52,7 @@ namespace vmufs
         u32 reconnectVersion = 0;
         //! Read blocks cached from the underlying device.
         // Note: a map is used rather than an array because we anticipate most blocks will not be used most of the time.
-        std::map<u8, std::array<u8, vmufs::BlockSize>> flashBlocks;
+        std::map<u16, std::array<u8, vmufs::BlockSize>> flashBlocks;
     public:
         explicit FileSystem(maple_base* vmuDevice)
             : vmuDevice(vmuDevice) { }

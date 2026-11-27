@@ -1373,6 +1373,7 @@ u32 DppMapleLinkDevice::dma(u32 cmd)
 		} else {
 			success = (rxMsg.command == MDRS_DeviceReply);
 		}
+		// A memory command is expected to fail if the virtualVmu is not present
 		assert(!success || virtualVmu != nullptr);
 		if (virtualVmu != nullptr) {
 			virtualVmu->accessed_blocks[memoryBlock] = success;
