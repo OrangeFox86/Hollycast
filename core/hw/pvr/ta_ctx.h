@@ -380,7 +380,8 @@ extern TA_context* ta_ctx;
 extern tad_context ta_tad;
 
 TA_context* tactx_Pop(u32 addr);
-void tactx_Term();
+void tactx_init();
+void tactx_term();
 TA_context *tactx_Alloc();
 
 /*
@@ -413,6 +414,7 @@ u32 ta_get_tileclip();
 void ta_set_tileclip(u32 tileclip);
 u32 ta_get_list_type();
 void ta_set_list_type(u32 listType);
+void ta_parse_init();
 void ta_parse_reset();
 void getRegionTileAddrAndSize(u32& address, u32& size);
 void setTileClipping(rend_context& ctx);

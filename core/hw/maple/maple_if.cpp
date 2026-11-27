@@ -186,14 +186,17 @@ static void maple_DoDma()
 		{
 #ifdef STRICT_MODE
 			if (!check_mdapro(header_2) || !check_mdapro(addr + (2 + plen) * sizeof(u32) - 1))
-			{
+				header_2 = 0;
 #else
 			if (GetMemPtr(header_2, 1) == nullptr)
 			{
+				// Stop here instead of walking through memory. Some Datel cheat discs
+				// send a command list without the end bit and rely on this.
 				INFO_LOG(MAPLE, "DMA Error: destination not in system ram: %x", header_2);
-#endif
-				header_2 = 0;
+				last = true;
+				break;
 			}
+#endif
 
 			u32* p_data = (u32 *)GetMemPtr(addr + 8, plen * sizeof(u32));
 			if (p_data == nullptr)
@@ -346,7 +349,6 @@ static void maple_SB_MDAPRO_Write(u32 addr, u32 data)
 		SB_MDAPRO = data & 0x00007f7f;
 }
 
-//Init registers :)
 void maple_Init()
 {
 	hollyRegs.setWriteHandler<SB_MDST_addr>(maple_SB_MDST_Write);
@@ -358,11 +360,12 @@ void maple_Init()
 #endif
 
 	maple_schid = sh4_sched_register(0, maple_schd);
+	maple_Reset();
 }
 
 static u64 reconnect_time;
 
-void maple_Reset(bool hard)
+void maple_Reset()
 {
 	maple_ddt_pending_reset = false;
 	SB_MDTSEL = 0;

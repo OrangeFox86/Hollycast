@@ -59,6 +59,7 @@ public:
 	Game getCurrentGame();
 	std::vector<Achievement> getAchievementList();
 	bool canPause();
+	const std::string& getRichPresence() const { return lastRichPresence; }
 	void serialize(Serializer& ser);
 	void deserialize(Deserializer& deser);
 
@@ -110,7 +111,9 @@ private:
 	std::atomic_bool loadingGame {};
 	bool active = false;
 	bool paused = false;
+	bool gameStarted = false; // track emu start/terminate events
 	std::string lastError;
+	std::string lastRichPresence;
 	std::string cachePath;
 	std::unordered_map<u64, std::string> cacheMap;
 	std::mutex cacheMutex;
@@ -234,6 +237,7 @@ bool Achievements::init()
 bool Achievements::createClient()
 {
 	http::init();
+	taskThread.start();
 	rc_client = rc_client_create(clientReadMemory, clientServerCall);
 	if (rc_client == nullptr)
 	{
@@ -371,9 +375,9 @@ void Achievements::term()
 	if (rc_client == nullptr)
 		return;
 	unloadGame();
-	stopThreads();
 	rc_client_destroy(rc_client);
 	rc_client = nullptr;
+	stopThreads();
 }
 
 void Achievements::authenticationSuccess(const rc_client_user_t *user)
@@ -471,6 +475,9 @@ void Achievements::clientMessageCallback(const char* message, const rc_client_t*
 
 u32 Achievements::clientReadMemory(u32 address, u8* buffer, u32 num_bytes, rc_client_t* client)
 {
+	Achievements *achievements = (Achievements *)rc_client_get_userdata(client);
+	if (!achievements->gameStarted)
+		return 0;
 	if (address + num_bytes > RAM_SIZE)
 		return 0;
 	address += 0x0C000000;
@@ -614,7 +621,7 @@ void Achievements::handleUnlockEvent(const rc_client_event_t *event)
 	const rc_client_achievement_t* cheevo = event->achievement;
 	assert(cheevo != nullptr);
 
-	INFO_LOG(COMMON, "RA: Achievement %s (%u) for game %s unlocked", cheevo->title, cheevo->id, settings.content.title.c_str());
+	NOTICE_LOG(COMMON, "RA: Achievement %s (%u) for game %s unlocked", cheevo->title, cheevo->id, settings.content.title.c_str());
 	std::string title(cheevo->title);
 	std::string description(cheevo->description);
 	std::string url(512, '\0');
@@ -702,6 +709,7 @@ void Achievements::handleUpdateLeaderboardTracker(const rc_client_event_t *event
 void Achievements::handleGameCompleted(const rc_client_event_t *event)
 {
 	const rc_client_game_t* game = rc_client_get_game_info(rc_client);
+	NOTICE_LOG(COMMON, "RA: Game %s (%u) %s", game->title, game->id, rc_client_get_hardcore_enabled(rc_client) ? "mastered" : "completed");
 	std::string text1 = strprintf(rc_client_get_hardcore_enabled(rc_client) ? i18n::T("Mastered %s") : i18n::T("Completed %s"), game->title);
 	rc_client_user_game_summary_t summary;
 	rc_client_get_user_game_summary(rc_client, &summary);
@@ -835,6 +843,7 @@ void Achievements::pauseGame()
 
 void Achievements::resumeGame()
 {
+	gameStarted = true;
 	paused = false;
 	if (config::EnableAchievements && !settings.naomi.slave)
 	{
@@ -864,6 +873,17 @@ void Achievements::emuEventCallback(Event event, void *arg)
 		break;
 	case Event::VBlank:
 		rc_client_do_frame(instance->rc_client);
+		if (rc_client_has_rich_presence(instance->rc_client))
+		{
+			char rp[512];
+			rc_client_get_rich_presence_message(instance->rc_client, rp, sizeof(rp));
+			if (instance->lastRichPresence != rp)
+			{
+				instance->lastRichPresence = rp;
+				NOTICE_LOG(COMMON, "Rich presence updated: %s", instance->lastRichPresence.c_str());
+				EventManager::event(Event::RichPresence);
+			}
+		}
 		break;
 	case Event::Pause:
 		instance->pauseGame();
@@ -887,6 +907,7 @@ void Achievements::loadGame()
 		loadingGame = false;
 		return;
 	}
+	taskThread.start();
 	if (!init() || !isLoggedOn()) {
 		if (!isLoggedOn())
 			INFO_LOG(COMMON, "Not logged on. Not loading game yet");
@@ -967,14 +988,18 @@ void Achievements::gameLoaded(int result, const char *errorMessage)
 
 void Achievements::unloadGame()
 {
+	// A game might be started then stopped before RA is active (slow network, error, ...)
+	gameStarted = false;
 	if (!active)
 		return;
 	active = false;
 	paused = false;
+	lastRichPresence.clear();
 	EventManager::unlisten(Event::VBlank, emuEventCallback, this);
 	// wait for all async tasks before unloading the game
 	stopThreads();
 	rc_client_unload_game(rc_client);
+    NOTICE_LOG(COMMON, "RA: game unloaded");
 	settings.raHardcoreMode = false;
 }
 
@@ -1112,7 +1137,10 @@ void Achievements::deserialize(Deserializer& deser)
 		}
 	}
 }
-
+std::string getRichPresence()
+{
+    return Achievements::Instance().getRichPresence();
+}
 }	// namespace achievements
 
 #else	// !USE_RACHIEVEMENTS

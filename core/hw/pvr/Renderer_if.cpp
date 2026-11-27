@@ -270,7 +270,7 @@ private:
 		if (renderer->Present())
 		{
 			presented = true;
-			if (!config::ThreadedRendering && !ggpo::active())
+			if (!config::ThreadedRendering && !config::VblankPacing && !ggpo::active())
 				emu.getSh4Executor()->Stop();
 #ifdef LIBRETRO
 			retro_rend_present();
@@ -548,9 +548,8 @@ void Renderer::processGpuCleanupOperations()
 	}
 }
 
-void rend_reset()
+void rend_init()
 {
-	FinishRender(true);
 	render_called = false;
 	pend_rend = false;
 	FrameCount = 1;
@@ -560,6 +559,9 @@ void rend_reset()
 	fbAddrHistory[0] = 1;
 	fbAddrHistory[1] = 1;
 	swapIntervalDetector.reset();
+	presented = false;
+	renderEnd.Reset();
+	rend_disable_rollback();
 }
 
 void rend_start_render()

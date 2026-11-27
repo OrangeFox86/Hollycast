@@ -198,6 +198,23 @@ void gui_settings_video()
 		ImGui::Unindent();
 #endif
     	OptionCheckbox(T("Show VMU In-game"), config::FloatVMUs, T("Show the VMU LCD screens while in-game"));
+#ifdef __ANDROID__
+    	OptionCheckbox(T("Show VMU on Secondary Display"), config::VmuSecondaryScreen,
+    			T("Show the VMU LCD screen of controller A on the secondary display, if any"));
+    	{
+    		DisabledScope scope(!config::VmuSecondaryScreen);
+    		ImGui::Indent();
+			const char* preview = ComboBox2Col::Preview(config::VmuSecondaryScreenScaling, { T("Fit"), T("Integer"), T("Stretch") });
+			if (ComboBox2Col::BeginCombo(T("Secondary Display Scaling:"), preview))
+			{
+				ComboBox2Col::Selectable(T("Fit"), config::VmuSecondaryScreenScaling, 0, T("Scale the VMU screen to fill as much of the display as possible while keeping its aspect ratio"));
+				ComboBox2Col::Selectable(T("Integer"), config::VmuSecondaryScreenScaling, 1, T("Scale the VMU screen by the largest whole number that fits, for evenly sized pixels"));
+				ComboBox2Col::Selectable(T("Stretch"), config::VmuSecondaryScreenScaling, 2, T("Stretch the VMU screen to fill the whole display, ignoring its aspect ratio"));
+				ComboBox2Col::EndCombo();
+			}
+    		ImGui::Unindent();
+    	}
+#endif
     	OptionCheckbox(T("Full Framebuffer Emulation"), config::EmulateFramebuffer,
     			T("Fully accurate VRAM framebuffer emulation. Helps games that directly access the framebuffer for special effects. "
     			"Very slow and incompatible with upscaling and wide screen."));

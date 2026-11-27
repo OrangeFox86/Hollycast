@@ -21,6 +21,7 @@
 #include "emulator.h"
 #include "cfg/option.h"
 #include "gui.h"
+#include "achievements/achievements.h"
 #include "discord_rpc.h"
 #include <cstring>
 #include <ctime>
@@ -36,6 +37,7 @@ public:
 		EventManager::listen(Event::Terminate, handleEmuEvent, this);
 		EventManager::listen(Event::Resume, handleEmuEvent, this);
 		EventManager::listen(Event::Network, handleEmuEvent, this);
+		EventManager::listen(Event::RichPresence, handleEmuEvent, this);
 	}
 
 	~DiscordPresence()
@@ -45,6 +47,7 @@ public:
 		EventManager::unlisten(Event::Terminate, handleEmuEvent, this);
 		EventManager::unlisten(Event::Resume, handleEmuEvent, this);
 		EventManager::unlisten(Event::Network, handleEmuEvent, this);
+		EventManager::unlisten(Event::RichPresence, handleEmuEvent, this);
 	}
 
 private:
@@ -81,8 +84,18 @@ private:
         	discordPresence.largeImageKey = "icon-512";
 		discordPresence.largeImageText = "Hollycast is a Dreamcast, Naomi and Atomiswave emulator";
         }
+        std::string details;
         if (settings.network.online)
-        	discordPresence.details = "Online";
+            details = "Online";
+        std::string rp = achievements::getRichPresence();
+        if (!rp.empty())
+        {
+            if (!details.empty())
+                details += " - ";
+            details += rp;
+        }
+        if (!details.empty())
+            discordPresence.details = details.c_str();
         Discord_UpdatePresence(&discordPresence);
 	}
 
@@ -97,9 +110,10 @@ private:
 			inst->startTimestamp = time(nullptr);
 			[[fallthrough]];
 		case Event::Network:
-			if (config::DiscordPresence)
-				inst->sendPresence();
-			break;
+        case Event::RichPresence:
+            if (config::DiscordPresence)
+                inst->sendPresence();
+            break;
 		case Event::Resume:
 			if (config::DiscordPresence && !inst->initialized)
 				// Discord presence enabled
