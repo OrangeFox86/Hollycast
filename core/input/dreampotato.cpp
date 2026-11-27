@@ -214,9 +214,10 @@ struct DreamPotatoVmu : public MapleLinkVmu
 
 	std::string description() override
 	{
+#ifdef DREAMPOTATO_INTEGRATED_MODE
 		if (config::DreamPotatoIntegratedMode)
 			return maple_sega_vmu::description();
-
+#endif
 		return MapleLinkVmu::description();
 	}
 };
