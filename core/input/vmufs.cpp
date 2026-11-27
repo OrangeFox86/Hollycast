@@ -248,7 +248,7 @@ namespace vmufs
         // rxMsg starts with function code (32 bits), then block number (32 bits), then block data
         verify(rxMsg.getDataSize() >= BlockSize + 8);
         // Insert key 'blockID' into 'flashBlocks' and get pointer to value.
-        // Key assumption: Inserting into map does not invalidate pointers to other map values.
+        // Assumption: Inserting into map does not invalidate pointers to other map values.
         u8* block = flashBlocks[blockID].data();
         memcpy(block, &rxMsg.data[8], BlockSize);
 
